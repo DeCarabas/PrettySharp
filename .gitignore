@@ -1,0 +1,5 @@
+paket_files
+bin
+obj
+src/prettiercs/bin
+src/prettiercs/obj
