@@ -28,20 +28,20 @@ type Tree = Node of string*Tree list
 
 let rec showTree t =
     match t with
-    | Node (s,ts) -> group <| concat (text s) (nest s.Length (showBracket ts))
+    | Node (s,ts) -> group  ((text s) <+> (nest s.Length (showBracket ts)))
 and showBracket ts =
     match ts with
     | [] -> nil
-    | ts -> concatAll [text "["; nest 1 (showTrees ts); text "]"]
+    | ts -> text "[" <+> nest 1 (showTrees ts) <+> text "]"
 and showTrees ts =
     match ts with
     | [t] -> showTree t
-    | t::ts -> concatAll [showTree t; text ","; line; showTrees ts]
+    | t::ts -> (showTree t) <+> text "," <+> line <+> showTrees ts
     | [] -> nil
 
 // PRINTING THEM
 System.Console.WriteLine(
-    pretty 30 <|
+    pretty 20 <|
     showTree (
         Node ("aaa", [
             Node ("bbb", [

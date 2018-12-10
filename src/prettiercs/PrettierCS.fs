@@ -1,42 +1,32 @@
 ﻿module PrettierCS
 open System.Xml.Serialization
 
+type DOC = NIL
+         | CONCAT of DOC*DOC
+         | NEST of int*DOC
+         | TEXT of string
+         | LINE
+         | UNION of DOC*DOC
+
 type Doc = Nil
          | Text of string*Doc
          | Line of int*Doc
-         | Union of Doc*Doc
 
-let nil = Nil
-let text str = Text (str,nil)
-let line = Line (0,nil)
-let rec concat x y =
-    match x with
-    | Text (s,xi) -> Text (s, concat xi y)
-    | Line (i,xi) -> Line (i, concat xi y)
-    | Nil -> y
-    | Union(xi, yi) -> Union ((concat xi y), (concat yi y))
+let nil = NIL
+let (<+>) x y  = CONCAT (x,y)
+let nest i x = NEST (i,x)
+let text str = TEXT str
+let line = LINE
 
-let rec concatAll xs = Seq.reduce (concat) xs
-
-let rec nest i x =
+let rec group x = flatten <| UNION (x,x)
+and flatten x =
     match x with
-    | Text (s,xi) -> Text (s, nest i xi)
-    | Line (j,xi) -> Line (i+j, nest i xi)
-    | Nil -> Nil
-    | Union (xi, yi) -> Union((nest i xi), (nest i yi))
-
-let rec group x = 
-    match x with
-    | Nil -> Nil
-    | Line (i,xi) -> Union ((Text (" ", flatten xi)), x)
-    | Text (s,xi) -> Text (s, group xi)
-    | Union (xi, yi) -> Union((group xi), yi)
-and flatten x = 
-    match x with
-    | Nil -> Nil
-    | Line (i,xi) -> Text (" ", flatten xi)
-    | Text (s, xi) -> Text (s, flatten xi)
-    | Union (xi, yi) -> flatten xi
+    | NIL -> NIL
+    | CONCAT (xi, yi) -> CONCAT ((flatten xi), (flatten yi))
+    | NEST (_, xi) -> flatten xi
+    | TEXT str -> TEXT str
+    | LINE -> NIL
+    | UNION (xi, _) -> flatten xi
 
 let rec fits w x =
     if w < 0 then false 
@@ -44,23 +34,27 @@ let rec fits w x =
          | Nil -> true
          | Text (s, xi) -> fits (w - s.Length) xi
          | Line (i, xi) -> true
-         | Union (_) -> failwith "Not Implemented"
 
 let better w k x y = if fits (w-k) x then x else y
 
-let rec best w k x =
+let rec be w k x =
     match x with
-    | Nil -> Nil
-    | Line (i,xi) -> Line (i, best w i xi)
-    | Text (s, xi) -> Text (s, best w (k + s.Length) xi)
-    | Union (xi, yi) -> better w k (best w k xi) (best w k yi)
+    | [] -> Nil
+    | (i, NIL)::z -> be w k z
+    | (i, CONCAT(xi, yi))::z -> be w k ((i,xi)::(i,yi)::z)
+    | (i, NEST (j, xi))::z -> be w k ((i + j, xi)::z)
+    | (i, TEXT s)::z -> Text (s, (be w (k+s.Length) z))
+    | (i, LINE)::z -> Line (i, (be w i z))
+    | (i, UNION(xi, yi))::z -> better w k (be w k ((i, xi)::z))
+                                          (be w k ((i, yi)::z))
+
+let best w k x = be w k [(0,x)]
 
 let rec layout x =
     match x with
     | Text (s,xi) -> s + layout xi
     | Line (i,xi) -> "\n" + (new string(' ', i)) + layout xi
     | Nil -> ""
-    | Union (_) -> failwith "Not Implemented"
 
 let pretty w x = layout (best w 0 x)
 
