@@ -1,5 +1,4 @@
 ﻿module PrettierCS
-open System.Xml.Serialization
 
 type DOC = NIL
          | CONCAT of DOC*DOC
@@ -7,10 +6,6 @@ type DOC = NIL
          | TEXT of string
          | LINE
          | UNION of DOC*DOC
-
-type Doc = Nil
-         | Text of string*Doc
-         | Line of int*Doc
 
 let nil = NIL
 let (<+>) x y  = CONCAT (x,y)
@@ -27,6 +22,10 @@ and flatten x =
     | TEXT str -> TEXT str
     | LINE -> NIL
     | UNION (xi, _) -> flatten xi
+
+type Doc = Nil
+         | Text of string*Doc
+         | Line of int*Doc
 
 let rec fits w x =
     if w < 0 then false 
