@@ -7,11 +7,11 @@
 open System
 open Microsoft.CodeAnalysis
 open Microsoft.CodeAnalysis.CSharp
-open PrettierCS
+open PrettierCS.Core
 
-let path = @"c:\src\onceandfuture\onceandfuture\syndication\feedparser.cs"
-let tree = CSharpSyntaxTree.ParseText (System.IO.File.ReadAllText path)
-let root = tree.GetRoot ()
+// let path = @"c:\src\onceandfuture\onceandfuture\syndication\feedparser.cs"
+// let tree = CSharpSyntaxTree.ParseText (System.IO.File.ReadAllText path)
+// let root = tree.GetRoot ()
 
 // HMMMMMMMMM WHAT. 
 // There are hundreds of node types; I want to avoid writing handlers for every 
@@ -19,20 +19,20 @@ let root = tree.GetRoot ()
 // have the literal text, so if the general plan is to just stick groups in 
 // places where line breaks need to happen, then woohoo! I think the prettier
 // design is probably right; with hard breaks and stuff like that.
-let fmt (x:SyntaxNode) = 
-    match x.Kind() with
-    | SyntaxKind.None -> nil
-    | SyntaxKind.AbstractKeyword -> text "abstract"
-    | SyntaxKind.AccessorList -> nil
-    | SyntaxKind.AddAccessorDeclaration -> nil
-    | SyntaxKind.AddAssignmentExpression -> nil
-    | SyntaxKind.AddExpression -> nil
-    | SyntaxKind.AddKeyword -> nil
-    | SyntaxKind.AddressOfExpression -> nil
-    | SyntaxKind.AliasKeyword -> nil
-    | SyntaxKind.AliasQualifiedName -> nil
-    | SyntaxKind.AmpersandAmpersandToken -> nil
-    | SyntaxKind.AndAssignmentExpression -> nil
+// let fmt (x:SyntaxNode) = 
+//     match x.Kind() with
+//     | SyntaxKind.None -> nil
+//     | SyntaxKind.AbstractKeyword -> text "abstract"
+//     | SyntaxKind.AccessorList -> nil
+//     | SyntaxKind.AddAccessorDeclaration -> nil
+//     | SyntaxKind.AddAssignmentExpression -> nil
+//     | SyntaxKind.AddExpression -> nil
+//     | SyntaxKind.AddKeyword -> nil
+//     | SyntaxKind.AddressOfExpression -> nil
+//     | SyntaxKind.AliasKeyword -> nil
+//     | SyntaxKind.AliasQualifiedName -> nil
+//     | SyntaxKind.AmpersandAmpersandToken -> nil
+//     | SyntaxKind.AndAssignmentExpression -> nil
 
 // type TreeNode = Token of string | Node of seq<TreeNode>
 
@@ -57,21 +57,17 @@ and showBracket ts =
 and showTrees ts =
     match ts with
     | [t] -> showTree t
-    | t::ts -> (showTree t) <+> text "," <+> line <+> showTrees ts
+    | t::ts -> (showTree t) <+> text ", " <+> line <+> showTrees ts
     | [] -> nil
 
+let testTree = 
+    Node(
+        "aaa", [
+            Node("bbb", [ Node ("ccc", []); Node ("dd", []) ]);
+            Node("eee", []);
+            Node("ffff", [ Node ("gg", []); Node ("hhh", []); Node ("ii", []) ])
+        ]
+    )
+
 // PRINTING THEM
-System.Console.WriteLine(
-    pretty 20 <|
-    showTree (
-        Node ("aaa", [
-            Node ("bbb", [
-                Node ("ccc", []);
-                Node ("dd", []);
-            ]);
-            Node ("eee", []);
-            Node ("ffff", [
-                Node ("gg", []);
-                Node ("hhh", []);
-                Node ("ii", []);
-            ])])))
+System.Console.WriteLine (pretty 40 (showTree testTree))
