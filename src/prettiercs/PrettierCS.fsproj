@@ -7,7 +7,7 @@
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="PrettierCS.fs" />
+    <Compile Include="Core.fs" />
     <None Include="App.config" />
   </ItemGroup>
   <Import Project="..\..\.paket\Paket.targets" />
