@@ -1,16 +1,15 @@
-open Microsoft.CodeAnalysis.CSharp
-open Microsoft.CodeAnalysis.CSharp
 #r "netstandard"
 #r @"System.Text.Encoding"
 #r @"../../packages/Microsoft.CodeAnalysis.Common/lib/netstandard1.3/Microsoft.CodeAnalysis.dll"
 #r @"../../packages/Microsoft.CodeAnalysis.CSharp/lib/netstandard1.3/Microsoft.CodeAnalysis.CSharp.dll"
-#r @"../../bin/PrettierCS.dll"
+
+#load "./Core.fs"
+open PrettierCS.Core
 
 open System
 open Microsoft.CodeAnalysis
 open Microsoft.CodeAnalysis.CSharp
 open Microsoft.CodeAnalysis.CSharp.Syntax
-open PrettierCS.Core
 
 // let path = @"c:\src\onceandfuture\onceandfuture\syndication\feedparser.cs"
 // let tree = CSharpSyntaxTree.ParseText (System.IO.File.ReadAllText path)
@@ -53,6 +52,10 @@ type PrintVisitor() =
         then text (nodeOrToken.AsToken().Text)
         else this.Visit(nodeOrToken.AsNode())
 
+    member this.VisitList l x s r =
+        let contents = Seq.map (this.Visit) x |> listJoin s
+        bracket l contents r
+
     /// Basic formatting, no line breaks: tokens become text separated by
     /// spaces, recurse on nodes.
     override this.DefaultVisit(node:SyntaxNode) =
@@ -61,8 +64,8 @@ type PrintVisitor() =
             |> Seq.reduce (<++>)
 
     override this.VisitArgumentList(node:ArgumentListSyntax) =
-        let args = Seq.map (this.Visit) node.Arguments |> listJoin ","
-        bracket "(" args ")"
+        this.VisitList "(" node.Arguments "," ")"
+
 
 // type TreeNode = Token of string | Node of seq<TreeNode>
 
