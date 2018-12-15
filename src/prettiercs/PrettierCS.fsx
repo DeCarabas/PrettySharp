@@ -2,7 +2,7 @@
 #r @"System.Text.Encoding"
 #r @"../../packages/Microsoft.CodeAnalysis.Common/lib/netstandard1.3/Microsoft.CodeAnalysis.dll"
 #r @"../../packages/Microsoft.CodeAnalysis.CSharp/lib/netstandard1.3/Microsoft.CodeAnalysis.CSharp.dll"
-#r @"./bin/Debug/netcoreapp2.2/PrettierCS.dll"
+#r @"../../bin/PrettierCS.dll"
 
 open System
 open Microsoft.CodeAnalysis
@@ -13,13 +13,13 @@ open PrettierCS.Core
 // let tree = CSharpSyntaxTree.ParseText (System.IO.File.ReadAllText path)
 // let root = tree.GetRoot ()
 
-// HMMMMMMMMM WHAT. 
-// There are hundreds of node types; I want to avoid writing handlers for every 
-// single node type. But that's how these things work, I think. Of course, I 
-// have the literal text, so if the general plan is to just stick groups in 
+// HMMMMMMMMM WHAT.
+// There are hundreds of node types; I want to avoid writing handlers for every
+// single node type. But that's how these things work, I think. Of course, I
+// have the literal text, so if the general plan is to just stick groups in
 // places where line breaks need to happen, then woohoo! I think the prettier
 // design is probably right; with hard breaks and stuff like that.
-// let fmt (x:SyntaxNode) = 
+// let fmt (x:SyntaxNode) =
 //     match x.Kind() with
 //     | SyntaxKind.None -> nil
 //     | SyntaxKind.AbstractKeyword -> text "abstract"
@@ -60,7 +60,7 @@ and showTrees ts =
     | t::ts -> (showTree t) <+> text ", " <+> line <+> showTrees ts
     | [] -> nil
 
-let testTree = 
+let testTree =
     Node(
         "aaa", [
             Node("bbb", [ Node ("ccc", []); Node ("dd", []) ]);

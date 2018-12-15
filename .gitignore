@@ -2,5 +2,6 @@ bin
 obj
 packages
 paket_files
+.fake
 src/prettiercs/bin
 src/prettiercs/obj
