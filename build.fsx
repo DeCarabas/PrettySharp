@@ -27,8 +27,7 @@ Target.create "Default" (fun _ ->
 
 open Fake.Core.TargetOperators
 
-"Clean"
-    ==> "BuildApp"
+"BuildApp"
     ==> "Default"
 
 Target.runOrDefault "Default"

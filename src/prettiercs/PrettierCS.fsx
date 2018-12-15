@@ -1,3 +1,5 @@
+open Microsoft.CodeAnalysis.CSharp
+open Microsoft.CodeAnalysis.CSharp
 #r "netstandard"
 #r @"System.Text.Encoding"
 #r @"../../packages/Microsoft.CodeAnalysis.Common/lib/netstandard1.3/Microsoft.CodeAnalysis.dll"
@@ -7,6 +9,7 @@
 open System
 open Microsoft.CodeAnalysis
 open Microsoft.CodeAnalysis.CSharp
+open Microsoft.CodeAnalysis.CSharp.Syntax
 open PrettierCS.Core
 
 // let path = @"c:\src\onceandfuture\onceandfuture\syndication\feedparser.cs"
@@ -19,7 +22,7 @@ open PrettierCS.Core
 // have the literal text, so if the general plan is to just stick groups in
 // places where line breaks need to happen, then woohoo! I think the prettier
 // design is probably right; with hard breaks and stuff like that.
-// let fmt (x:SyntaxNode) =
+// let fmt (x:CSharpSyntaxNode) =
 //     match x.Kind() with
 //     | SyntaxKind.None -> nil
 //     | SyntaxKind.AbstractKeyword -> text "abstract"
@@ -33,6 +36,33 @@ open PrettierCS.Core
 //     | SyntaxKind.AliasQualifiedName -> nil
 //     | SyntaxKind.AmpersandAmpersandToken -> nil
 //     | SyntaxKind.AndAssignmentExpression -> nil
+
+let indentLevel = 4
+let bracket = PrettierCS.Core.bracket indentLevel
+
+let listJoin sep =
+    Seq.reduce (fun x y -> x <+> text sep <+> line <+> y)
+
+type PrintVisitor() =
+    inherit CSharpSyntaxVisitor<DOC>()
+
+    /// Handle a syntax node or token: if it's a token, return the text,
+    /// otherwise if it's a node then recurse.
+    member this.VisitNodeOrToken(nodeOrToken:SyntaxNodeOrToken) =
+        if nodeOrToken.IsToken
+        then text (nodeOrToken.AsToken().Text)
+        else this.Visit(nodeOrToken.AsNode())
+
+    /// Basic formatting, no line breaks: tokens become text separated by
+    /// spaces, recurse on nodes.
+    override this.DefaultVisit(node:SyntaxNode) =
+        node.ChildNodesAndTokens()
+            |> Seq.map this.VisitNodeOrToken
+            |> Seq.reduce (<++>)
+
+    override this.VisitArgumentList(node:ArgumentListSyntax) =
+        let args = Seq.map (this.Visit) node.Arguments |> listJoin ","
+        bracket "(" args ")"
 
 // type TreeNode = Token of string | Node of seq<TreeNode>
 
