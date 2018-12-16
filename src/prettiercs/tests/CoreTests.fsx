@@ -17,4 +17,14 @@ let be expected actual =
 let should expectation value =
     expectation value
 
-5 |> should be 7
+
+let simple = (pretty 100 (text "foo")) |> should be "foo"
+
+let ``group flat`` = 
+    (pretty 100 (group (text "foo" <+> line <+> text "bar")))
+        |> should be "foo bar"
+let ``group fold`` = 
+    (pretty 3 (group (text "foo" <+> line <+> text "bar")))
+        |> should be "foo\nbar"
+
+let tests = [simple, ``group flat``, ``group fold``]
