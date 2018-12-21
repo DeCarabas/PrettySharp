@@ -1,5 +1,6 @@
 source https://www.nuget.org/api/v2
 nuget FSharp.Core
+nuget FSharp.Compiler.Service
 nuget Microsoft.CodeAnalysis.CSharp
 nuget Microsoft.NET.Test.Sdk
 nuget xunit
