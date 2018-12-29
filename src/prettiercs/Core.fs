@@ -132,7 +132,7 @@ let pretty w x =  layout (best w 0 x)
 /// Concatenate two documents with a space in between them.
 let ( <++> ) x y = x <+> text " " <+> y
 
-let bracket i l x r =
+let bracket i l r x =
     group (
         text l <+>
         nest i (softline <+> x) <+>
