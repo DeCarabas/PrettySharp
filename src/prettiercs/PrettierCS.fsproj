@@ -8,6 +8,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Core.fs" />
+    <Compile Include="PrettierCS.fs" />
     <None Include="App.config" />
   </ItemGroup>
   <Import Project="..\..\.paket\Paket.targets" />

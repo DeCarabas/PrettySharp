@@ -1,4 +1,4 @@
-﻿module PrettierCS.Core
+﻿module PrettySharp.Core
 
 /// The logical input type to the pretty-printer. Don't construct this directly:
 /// instead, use the various constructor functions below instead. They're safer.
@@ -13,6 +13,7 @@ type DOC =
     | TEXT of string
     | LINE of string
     | UNION of DOC*DOC
+    | BREAKPARENT
 
 
 // (See https://github.com/prettier/prettier/blob/master/commands.md for the
@@ -49,6 +50,10 @@ let line = LINE " "
 /// This is a soft newline; it will be replaced by a '' if we're flattening.
 let softline = LINE ""
 
+
+/// Uh.
+let breakParent = BREAKPARENT
+
 /// A group of documents: either on one line or on multiple lines.
 ///
 /// This is the core line-breaking thing; if you have something that might be
@@ -59,13 +64,20 @@ let rec group x =
     // flatten to the same value.)
     let rec flatten x =
         match x with
-        | NIL -> NIL
-        | CONCAT (xi, yi) -> CONCAT ((flatten xi), (flatten yi))
-        | NEST (i, xi) -> NEST (i, (flatten xi))
-        | TEXT str -> TEXT str
-        | LINE str -> TEXT str
+        | NIL -> (NIL, false)
+        | CONCAT (xi, yi) ->
+            let (xif, forcex) = flatten xi
+            let (yif, forcey) = flatten yi
+            (CONCAT (xif, yif), forcex || forcey)
+        | NEST (i, xi) ->
+            let (xif, forcex) = flatten xi
+            (NEST (i, xif), forcex)
+        | TEXT str -> (TEXT str, false)
+        | LINE str -> (TEXT str, false)
         | UNION (xi, _) -> flatten xi
-    UNION ((flatten x),x)
+        | BREAKPARENT -> (BREAKPARENT, true)
+    let (flat, force) = flatten x
+    if force then x else UNION(flat, x)
 
 /// A physical rendering of a document: just line breaks (with indentation) and
 /// strings, nothing fancy like unions or nests or anything like that. This form
@@ -103,6 +115,7 @@ let best w k x =
         | (i, NEST (j, xi))::z -> be w k ((i + j, xi)::z)
         | (_, TEXT s)::z -> Text (s, (be w (k+s.Length) z))
         | (i, LINE _)::z -> Line (i, (be w i z))
+        | (_, BREAKPARENT)::z -> be w k z
         | (i, UNION(xi, yi))::z ->
             // N.B.: In Wadler's paper he has a function called `better` which
             // abstracts this computation, but his code is in Haskell and so he
