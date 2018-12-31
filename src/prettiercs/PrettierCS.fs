@@ -410,7 +410,8 @@ let main argv =
     | path::_ ->
         let tree = CSharpSyntaxTree.ParseText (System.IO.File.ReadAllText path)
         let doc = visit tree
-        System.Console.WriteLine(pretty 80 doc)
+        let formatted = pretty 80 doc
+        printfn "%s" formatted
         0
     | _ ->
         printfn "Unknown command line arguments!"

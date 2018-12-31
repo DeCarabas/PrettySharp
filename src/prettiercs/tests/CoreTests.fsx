@@ -1,7 +1,7 @@
 #r "netstandard"
 
 #load "../Core.fs"
-open PrettierCS.Core
+open PrettySharp.Core
 
 type TestResult =
     | Pass
@@ -20,10 +20,10 @@ let should expectation value =
 
 let simple = (pretty 100 (text "foo")) |> should be "foo"
 
-let ``group flat`` = 
+let ``group flat`` =
     (pretty 100 (group (text "foo" <+> line <+> text "bar")))
         |> should be "foo bar"
-let ``group fold`` = 
+let ``group fold`` =
     (pretty 3 (group (text "foo" <+> line <+> text "bar")))
         |> should be "foo\nbar"
 

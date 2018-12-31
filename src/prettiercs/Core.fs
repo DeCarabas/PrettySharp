@@ -89,19 +89,25 @@ let rec group x =
 /// is simple to transform into a string, and is not optimized for further
 /// analysis. (That's what `DOC` is for.)
 type Doc =
-    | Nil
-    | Text of string*Doc
-    | Line of int*Doc
+    | Text of string
+    | Line of int
+
+
+/// Interpret the physical document `x` as a string.
+let rec layout x =
+    match x with
+    | [] -> ""
+    | Text (s)::z -> s + layout z
+    | Line (i)::z -> "\n" + (new string(' ', i)) + layout z
 
 
 /// `true` if the first line of physical document `x` fits in width `w`.
 let rec fits w x =
     if w < 0 then false
     else match x with
-         | Nil -> true
-         | Text (s, xi) -> fits (w - s.Length) xi
-         | Line (_) -> true
-
+         | [] -> true
+         | Text (s)::z -> fits (w - s.Length) z
+         | Line (_)::_ -> true
 
 /// Given a width `w` and an amount of space consumed `k`, produce the best
 /// physical representation of the document `x`.
@@ -112,15 +118,15 @@ let best w k x =
     // from the logical DOC to the physical Doc, and use Doc to answer questions
     // about whether things fit on the current line, always returning the best
     // answer for Doc.
-    let rec be w k x =
+    let rec be w k x res =
         match x with
-        | [] -> Nil
-        | (_, NIL)::z -> be w k z
-        | (i, CONCAT(xi, yi))::z -> be w k ((i,xi)::(i,yi)::z)
-        | (i, NEST (j, xi))::z -> be w k ((i + j, xi)::z)
-        | (_, TEXT s)::z -> Text (s, (be w (k+s.Length) z))
-        | (i, LINE _)::z -> Line (i, (be w i z))
-        | (_, BREAKPARENT)::z -> be w k z
+        | [] -> res
+        | (_, NIL)::z
+        | (_, BREAKPARENT)::z -> be w k z res
+        | (i, CONCAT(xi, yi))::z -> be w k ((i,xi)::(i,yi)::z) res
+        | (i, NEST (j, xi))::z -> be w k ((i + j, xi)::z) res
+        | (_, TEXT s)::z -> be w (k+s.Length) z ((Text s)::res)
+        | (i, LINE _)::z -> be w i z ((Line i)::res)
         | (i, UNION(xi, yi))::z ->
             // N.B.: In Wadler's paper he has a function called `better` which
             // abstracts this computation, but his code is in Haskell and so he
@@ -128,22 +134,16 @@ let best w k x =
             // by hand in F# since F# is eager. Note that we know that `xi` is
             // flattened, and longer than the first line of `yi`, by
             // construction.
-            let bestXi = (be w k ((i, xi)::z)) in
-            if fits (w - k) bestXi then bestXi else (be w k ((i, yi)::z))
+            let bestXi = be w k ((i, xi)::z) []
+            if fits (w - k) (List.rev bestXi)
+            then bestXi @ res
+            else be w k ((i, yi)::z) res
 
-    be w k [(0,x)]
-
-
-/// Interpret the physical document `x` as a string.
-let rec layout x =
-    match x with
-    | Text (s,xi) -> s + layout xi
-    | Line (i,xi) -> "\n" + (new string(' ', i)) + layout xi
-    | Nil -> ""
+    be w k [(0,x)] [] |> List.rev
 
 
 /// Pretty-print a document 'x' while fitting in 'w' characters, as best you can.
-let pretty w x =  layout (best w 0 x)
+let pretty w x =  best w 0 x |> layout
 
 // Helpers
 
