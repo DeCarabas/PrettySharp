@@ -18,12 +18,14 @@ let ( <+/+> ) x y = ifNotNil x y (x <+> line <+> y)
 let ( <+/!+> ) x y = ifNotNil x y (x <+> indent (line <+> y))
 let ( <+/*+> ) x y = ifNotNil x y (x <+> line <+> breakParent <+> y)
 
-let listJoin sep seq =
+let join sep seq =
     if Seq.isEmpty seq
     then nil
     else
-        let join x y = ifNotNil x y (x <+> text sep <+> line <+> y)
+        let join x y = ifNotNil x y (x <+> sep <+> y)
         seq |> Seq.reduce join
+
+let listJoin sep = join (text sep <+> line)
 
 let visitToken (token : SyntaxToken) =
     if token.Span.IsEmpty
