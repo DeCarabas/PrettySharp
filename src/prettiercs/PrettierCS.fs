@@ -353,8 +353,9 @@ type PrintVisitor() =
         let name = this.Visit node.Name
         let alias = this.VisitOptional node.Alias
         let static_ = visitToken node.StaticKeyword
-        group(text "using" <+/+> static_ <+/+> alias <+/+> name) <+/+>
-            endStatement
+
+        breakParent <+>
+        group (text "using" <+/+> static_ <+/+> alias <+/+> name <+> text ";")
 
     override this.VisitQualifiedName node =
         group(this.Visit node.Left <+> text "." <+> this.Visit node.Right)
