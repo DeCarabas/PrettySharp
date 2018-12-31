@@ -14,7 +14,10 @@ let ( <+/+> ) x y = x <+> line <+> y
 let ( <+/!+> ) x y = x <+> indent (line <+> y)
 let ( <+/*+> ) x y = x <+> line <+> breakParent <+> y
 
-let listJoin sep = Seq.reduce (fun x y -> x <+> text sep <+> line <+> y)
+let listJoin sep seq =
+    if Seq.isEmpty seq
+    then nil
+    else seq |> Seq.reduce (fun x y -> x <+> text sep <+> line <+> y)
 
 let visitToken (token : SyntaxToken) =
     if token.Span.IsEmpty
@@ -62,7 +65,7 @@ type PrintVisitor() =
             constraints)
 
     override this.DefaultVisit node =
-        failwith (sprintf "Could not visit a %A" (node.Kind()))
+        failwith (sprintf "Could not visit a %A %A" (node.Kind()) node)
 
     override this.VisitArgument node =
         let namecol_ = this.VisitOptional node.NameColon
@@ -73,6 +76,14 @@ type PrintVisitor() =
 
     override this.VisitArgumentList node =
         this.BracketedList "(" "," ")" node.Arguments
+
+    override this.VisitArrayType node =
+        let ranks =
+            node.RankSpecifiers |> Seq.map (this.Visit) |> Seq.reduce (<+>)
+        this.Visit node.ElementType <+> ranks
+
+    override this.VisitArrayRankSpecifier node =
+        this.BracketedList "[" "," "]" node.Sizes
 
     override this.VisitAssignmentExpression node =
         let left = this.Visit node.Left
@@ -165,6 +176,23 @@ type PrintVisitor() =
 
         attribs <+/+> mods <+/+> decl <+> endStatement
 
+    override this.VisitForEachStatement node =
+        // let await = visitToken node.AwaitKeyword
+        let type_ = this.Visit node.Type
+        let id = visitToken node.Identifier
+        let expr = this.Visit node.Expression
+        let statement =
+            if node.Statement.IsKind(SyntaxKind.Block)
+            then this.Visit node.Statement
+            else indent (this.Visit node.Statement)
+
+        breakParent <+>
+        text "foreach" <+/+>
+        bracket "(" ")" (
+            group (type_ <+/+> id <+/+> text "in") <+/+> indent (expr)
+        ) <+/+>
+        statement
+
     override this.VisitGenericName node =
         let id = visitToken node.Identifier
         let args = this.Visit node.TypeArgumentList
@@ -210,9 +238,11 @@ type PrintVisitor() =
         breakParent <+> group (mods <+/+> decl <+> text ";")
 
     override this.VisitMemberAccessExpression node =
-        group (
-            this.Visit node.Expression <+/!+>
-            (visitToken node.OperatorToken <+/+> this.Visit node.Name))
+        let expr = this.Visit node.Expression
+        let op = visitToken node.OperatorToken
+        let name = this.Visit node.Name
+
+        expr <+> softline <+> op <+> name
 
     override this.VisitMemberBindingExpression node =
         group (visitToken node.OperatorToken <+> this.Visit node.Name)
@@ -258,6 +288,9 @@ type PrintVisitor() =
 
         group (group (text "namespace" <+/+> name) <+/+> contents)
 
+    override this.VisitNullableType node =
+        group (this.Visit node.ElementType <+> text "?")
+
     override this.VisitObjectCreationExpression node =
         let type_ = this.VisitOptional node.Type
         let args = this.VisitOptional node.ArgumentList
@@ -267,8 +300,7 @@ type PrintVisitor() =
             initializer
         )
 
-    override this.VisitNullableType node =
-        group (this.Visit node.ElementType <+> text "?")
+    override this.VisitOmittedArraySizeExpression _ = nil
 
     override this.VisitParameter node =
         let attrs = this.VisitChunk node.AttributeLists
@@ -294,6 +326,9 @@ type PrintVisitor() =
         group (group(async <+/+> parameters <+/+> arrow) <+/+> body)
 
     override this.VisitPredefinedType node = visitToken node.Keyword
+
+    override this.VisitPrefixUnaryExpression node =
+        visitToken node.OperatorToken <+> this.Visit node.Operand
 
     override this.VisitUsingDirective node =
         let name = this.Visit node.Name

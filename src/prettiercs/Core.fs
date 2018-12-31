@@ -74,7 +74,7 @@ let rec group x =
             (NEST (i, xif), forcex)
         | TEXT str -> (TEXT str, false)
         | LINE str -> (TEXT str, false)
-        | UNION (xi, _) -> flatten xi
+        | UNION (xi, _) -> xi, false
         | BREAKPARENT -> (BREAKPARENT, true)
     let (flat, force) = flatten x
     if force then x else UNION(flat, x)

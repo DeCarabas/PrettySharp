@@ -19,4 +19,5 @@ let tree = CSharpSyntaxTree.ParseText (System.IO.File.ReadAllText path)
 open PrettySharp.Core
 open PrettySharp.CS
 
-pretty 80 (visit tree)
+let doc = visit tree
+Console.WriteLine(pretty 500 doc)
