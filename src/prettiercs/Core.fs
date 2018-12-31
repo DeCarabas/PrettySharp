@@ -59,25 +59,30 @@ let breakParent = BREAKPARENT
 /// This is the core line-breaking thing; if you have something that might be
 /// together on one line then use `group`.
 let rec group x =
+    let rec hasForce x =
+        match x with
+        | NIL -> false
+        | CONCAT (xi, yi) -> hasForce xi || hasForce yi
+        | NEST (_, xi) -> hasForce xi
+        | TEXT _ -> false
+        | LINE _ -> false
+        | UNION _ -> false
+        | BREAKPARENT -> true
+
     // Replace the line breaks in a document with spaces. (Note the neat trick
     // of UNION here: we only need to keep the left side, since they should both
     // flatten to the same value.)
     let rec flatten x =
         match x with
-        | NIL -> (NIL, false)
-        | CONCAT (xi, yi) ->
-            let (xif, forcex) = flatten xi
-            let (yif, forcey) = flatten yi
-            (CONCAT (xif, yif), forcex || forcey)
-        | NEST (i, xi) ->
-            let (xif, forcex) = flatten xi
-            (NEST (i, xif), forcex)
-        | TEXT str -> (TEXT str, false)
-        | LINE str -> (TEXT str, false)
-        | UNION (xi, _) -> xi, false
-        | BREAKPARENT -> (BREAKPARENT, true)
-    let (flat, force) = flatten x
-    if force then x else UNION(flat, x)
+        | NIL -> NIL
+        | CONCAT (xi, yi) -> CONCAT (flatten xi, flatten yi)
+        | NEST (i, xi) -> flatten xi
+        | TEXT str -> TEXT str
+        | LINE str -> TEXT str
+        | UNION (xi, _) -> xi
+        | BREAKPARENT -> failwith "Should not try to flatten with a break!"
+
+    if hasForce x then x else UNION(flatten x, x)
 
 /// A physical rendering of a document: just line breaks (with indentation) and
 /// strings, nothing fancy like unions or nests or anything like that. This form

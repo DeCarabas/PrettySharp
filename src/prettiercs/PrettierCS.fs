@@ -156,7 +156,7 @@ type PrintVisitor() =
 
         let members = this.BracketedList "{" "," "}" node.Members
 
-        group (decl <+/+> members)
+        breakParent <+> group (decl <+/+> members)
 
     override this.VisitEnumMemberDeclaration node =
         let equalsValue = this.VisitOptional node.EqualsValue
@@ -303,7 +303,7 @@ type PrintVisitor() =
             let members = this.VisitChunk node.Members
             bracket "{" "}" (usings <+/+> externs <+/+> members)
 
-        group (group (text "namespace" <+/+> name) <+/+> contents)
+        group (text "namespace" <+/+> name) <+/+> contents
 
     override this.VisitNullableType node =
         group (this.Visit node.ElementType <+> text "?")
