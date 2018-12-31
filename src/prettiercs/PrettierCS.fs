@@ -35,8 +35,6 @@ let visitModifiers mods =
     then nil
     else group (mods |> Seq.map (visitToken) |> Seq.reduce (<+/+>))
 
-let endStatement = text ";" <+/+> breakParent
-
 type PrintVisitor() =
     inherit CSharpSyntaxVisitor<DOC>()
 
@@ -168,14 +166,14 @@ type PrintVisitor() =
         text "=" <+/!+> this.Visit node.Value
 
     override this.VisitExpressionStatement node =
-        this.Visit node.Expression <+> endStatement
+        breakParent <+> this.Visit node.Expression <+> text ";"
 
     override this.VisitFieldDeclaration node =
         let attribs = this.VisitChunk node.AttributeLists
         let mods = visitModifiers node.Modifiers
         let decl = this.Visit node.Declaration
 
-        attribs <+/+> mods <+/+> decl <+> endStatement
+        breakParent <+> attribs <+/+> mods <+/+> decl <+> text ";"
 
     override this.VisitForEachStatement node =
         // let await = visitToken node.AwaitKeyword
@@ -266,10 +264,12 @@ type PrintVisitor() =
         let attrs = this.VisitChunk node.AttributeLists
         let mods = visitModifiers node.Modifiers
         let returnType = this.Visit node.ReturnType
-        let explicitInterface =
-            this.VisitOptional node.ExplicitInterfaceSpecifier
-        let name = visitToken node.Identifier
-        let typeParams = this.VisitOptional node.TypeParameterList
+        let name =
+            let explicitInterface =
+                this.VisitOptional node.ExplicitInterfaceSpecifier
+            let id = visitToken node.Identifier
+            let typeParams = this.VisitOptional node.TypeParameterList
+            group (explicitInterface <+> id <+> softline <+> typeParams)
         let parameterList = this.Visit node.ParameterList
         let constraints = this.VisitChunk node.ConstraintClauses
         let body = this.VisitOptional node.Body
@@ -280,11 +280,9 @@ type PrintVisitor() =
         group (
             group (
                 attrs <+/+>
-                group (
-                    mods <+/+>
-                    returnType <+/+>
-                    group (explicitInterface <+/+> name <+/+> typeParams)
-                ) <+/+>
+                group (mods <+/+> returnType) <+/+>
+                name <+>
+                softline <+>
                 parameterList <+/+>
                 constraints
             ) <+/+>
