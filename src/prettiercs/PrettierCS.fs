@@ -4,20 +4,26 @@ open PrettySharp.Core
 open Microsoft.CodeAnalysis
 open Microsoft.CodeAnalysis.CSharp
 open Microsoft.CodeAnalysis.CSharp.Syntax
-open Microsoft.CodeAnalysis.CSharp.Syntax
-open Microsoft.CodeAnalysis.CSharp.Syntax
+
+let ifNotNil x y xy =
+    match x,y with
+    | x, NIL -> x
+    | NIL, y -> y
+    | x, y -> xy
 
 let indentLevel = 4
 let bracket = PrettySharp.Core.bracket indentLevel
 let indent = nest indentLevel
-let ( <+/+> ) x y = x <+> line <+> y
-let ( <+/!+> ) x y = x <+> indent (line <+> y)
-let ( <+/*+> ) x y = x <+> line <+> breakParent <+> y
+let ( <+/+> ) x y = ifNotNil x y (x <+> line <+> y)
+let ( <+/!+> ) x y = ifNotNil x y (x <+> indent (line <+> y))
+let ( <+/*+> ) x y = ifNotNil x y (x <+> line <+> breakParent <+> y)
 
 let listJoin sep seq =
     if Seq.isEmpty seq
     then nil
-    else seq |> Seq.reduce (fun x y -> x <+> text sep <+> line <+> y)
+    else
+        let join x y = ifNotNil x y (x <+> text sep <+> line <+> y)
+        seq |> Seq.reduce join
 
 let visitToken (token : SyntaxToken) =
     if token.Span.IsEmpty
@@ -137,11 +143,12 @@ type PrintVisitor() =
 
     override this.VisitElseClause node =
         let statement =
-            if node.Statement.IsKind(SyntaxKind.Block)
-            then this.Visit node.Statement
-            else indent (this.Visit node.Statement)
+            match node.Statement.Kind() with
+            | SyntaxKind.Block -> line <+> this.Visit node.Statement
+            | SyntaxKind.IfStatement -> this.Visit node.Statement
+            | _ -> indent (line <+> this.Visit node.Statement)
 
-        breakParent <+> text "else" <+/+> statement
+        text "else" <+/+> statement
 
     override this.VisitEnumDeclaration node =
         let decl =
@@ -203,21 +210,39 @@ type PrintVisitor() =
         visitToken node.Identifier
 
     override this.VisitIfStatement node =
-        let condition = this.Visit node.Condition
-        let statement =
-            if node.Statement.IsKind(SyntaxKind.Block)
-            then this.Visit node.Statement
-            else indent (this.Visit node.Statement)
-        let else_ = this.VisitOptional node.Else
+        let formatInferior (node:SyntaxNode) =
+            if node.IsKind(SyntaxKind.Block)
+            then this.Visit node
+            else indent (this.Visit node)
 
-        breakParent <+>
-        group (
-            group (text "if" <+/+> text "(") <+/+>
-            indent (condition) <+/+>
-            text ")"
-        ) <+/+>
-        statement <+/+>
-        else_
+        let rec gatherIf (node:StatementSyntax) =
+            match node with
+            | :? IfStatementSyntax as if_ ->
+                let head = (if_.Condition, if_.Statement)
+                let tail = match if_.Else with
+                | null -> []
+                | _ -> gatherIf if_.Else.Statement
+                head :: tail
+            | _ -> [(null, node)]
+
+        let rec formatChain isFirst lst =
+            match isFirst, lst with
+            | _, [] -> nil
+            | true, (cond, stat)::tl ->
+                group (text "if" <+/+> bracket "(" ")" (this.Visit cond)) <+/+>
+                formatInferior stat <+/+>
+                formatChain false tl
+            | false, (null, stat)::_ -> text "else" <+/+> formatInferior stat
+            | false, (cond, stat)::tl ->
+                group (
+                    text "else" <+/+>
+                    text "if" <+/+>
+                    bracket "(" ")" (this.Visit cond)
+                ) <+/+>
+                formatInferior stat <+/+>
+                formatChain false tl
+
+        gatherIf node |> formatChain true
 
     override this.VisitInitializerExpression node =
         let left = node.OpenBraceToken.Text
