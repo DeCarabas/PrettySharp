@@ -9,7 +9,7 @@ open Microsoft.CodeAnalysis.CSharp
 open Microsoft.CodeAnalysis.CSharp.Syntax
 
 // TEST SETUP
-let path = @"c:\src\onceandfuture\onceandfuture\syndication\feedparser.cs"
+let path = @"./src/prettiercs/tests/VeryLongFields.cs"
 let tree = CSharpSyntaxTree.ParseText (System.IO.File.ReadAllText path)
 
 #load "./Core.fs"

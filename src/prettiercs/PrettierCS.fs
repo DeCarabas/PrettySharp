@@ -4,6 +4,7 @@ open PrettySharp.Core
 open Microsoft.CodeAnalysis
 open Microsoft.CodeAnalysis.CSharp
 open Microsoft.CodeAnalysis.CSharp.Syntax
+open Microsoft.CodeAnalysis.CSharp.Syntax
 
 let ifNotNil x y xy =
     match x,y with
@@ -68,10 +69,10 @@ type PrintVisitor() =
             baseList <+/+>
             constraints)
 
-    member this.VisitInferiorStatement (node:StatementSyntax) =
+    member this.VisitBody (node:SyntaxNode) =
         if node.IsKind(SyntaxKind.Block)
-        then this.Visit node
-        else indent (this.Visit node)
+        then line <+> this.Visit node
+        else indent (line <+> this.Visit node)
 
     override this.DefaultVisit node =
         failwith (sprintf "Could not visit a %A %A" (node.Kind()) node)
@@ -182,7 +183,7 @@ type PrintVisitor() =
         let type_ = this.Visit node.Type
         let id = visitToken node.Identifier
         let expr = this.Visit node.Expression
-        let statement = this.VisitInferiorStatement node.Statement
+        let body = this.VisitBody node.Statement
 
         breakParent <+>
         group (
@@ -190,8 +191,8 @@ type PrintVisitor() =
             bracket "(" ")" (
                 group (type_ <+/+> id <+/+> text "in") <+/+> indent (expr)
             )
-        ) <+/+>
-        statement
+        ) <+>
+        body
 
     override this.VisitGenericName node =
         let id = visitToken node.Identifier
@@ -218,18 +219,18 @@ type PrintVisitor() =
             match isFirst, lst with
             | _, [] -> nil
             | true, (cond, stat)::tl ->
-                group (text "if" <+/+> bracket "(" ")" (this.Visit cond)) <+/+>
-                this.VisitInferiorStatement stat <+/+>
+                group (text "if" <+/+> bracket "(" ")" (this.Visit cond)) <+>
+                this.VisitBody stat <+/+>
                 formatChain false tl
             | false, (null, stat)::_ ->
-                text "else" <+/+> this.VisitInferiorStatement stat
+                text "else" <+> this.VisitBody stat
             | false, (cond, stat)::tl ->
                 group (
                     text "else" <+/+>
                     text "if" <+/+>
                     bracket "(" ")" (this.Visit cond)
-                ) <+/+>
-                this.VisitInferiorStatement stat <+/+>
+                ) <+>
+                this.VisitBody stat <+/+>
                 formatChain false tl
 
         gatherIf node |> formatChain true
@@ -253,11 +254,25 @@ type PrintVisitor() =
         breakParent <+> group (mods <+/+> decl <+> text ";")
 
     override this.VisitMemberAccessExpression node =
-        let expr = this.Visit node.Expression
-        let op = visitToken node.OperatorToken
-        let name = this.Visit node.Name
+        let formatMember (maes:MemberAccessExpressionSyntax) =
+            let op = visitToken maes.OperatorToken
+            let name = this.Visit maes.Name
+            softline <+> op <+> name
 
-        expr <+> softline <+> op <+> name
+        // Explicitly Recursive here to group properly.
+        let rec gather memberList (node:SyntaxNode) =
+            match node with
+            | :? MemberAccessExpressionSyntax as maes ->
+                gather (maes::memberList) maes.Expression
+            | _ ->
+                let root = this.Visit node
+                let members =
+                    memberList
+                    |> List.map (formatMember)
+                    |> List.reduce (<+>)
+                group (root <+> indent (members))
+
+        gather [] node
 
     override this.VisitMemberBindingExpression node =
         group (visitToken node.OperatorToken <+> this.Visit node.Name)
@@ -338,9 +353,9 @@ type PrintVisitor() =
         let async = visitToken node.AsyncKeyword
         let parameters = this.Visit node.ParameterList
         let arrow = visitToken node.ArrowToken
-        let body = this.Visit node.Body
+        let body = this.VisitBody node.Body
 
-        group (group(async <+/+> parameters <+/+> arrow) <+/+> body)
+        group (group(async <+/+> parameters <+/+> arrow) <+> body)
 
     override this.VisitPredefinedType node = visitToken node.Keyword
 
@@ -391,5 +406,12 @@ let visit (tree:SyntaxTree) =
 
 [<EntryPoint>]
 let main argv =
-    printfn "%A" argv
-    0 // return an integer exit code
+    match Array.toList argv with
+    | path::_ ->
+        let tree = CSharpSyntaxTree.ParseText (System.IO.File.ReadAllText path)
+        let doc = visit tree
+        System.Console.WriteLine(pretty 80 doc)
+        0
+    | _ ->
+        printfn "Unknown command line arguments!"
+        -1
