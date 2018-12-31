@@ -104,10 +104,12 @@ let rec layout x =
 /// `true` if the first line of physical document `x` fits in width `w`.
 let rec fits w x =
     if w < 0 then false
-    else match x with
-         | [] -> true
-         | Text (s)::z -> fits (w - s.Length) z
-         | Line (_)::_ -> true
+    else match Seq.tryHead x with
+         | None -> true
+         | Some (Text (s)) -> fits (w - s.Length) (Seq.tail x)
+         | Some (Line (_)) -> true
+
+let better w k x y = if fits (w-k) x then x else y
 
 /// Given a width `w` and an amount of space consumed `k`, produce the best
 /// physical representation of the document `x`.
@@ -118,28 +120,19 @@ let best w k x =
     // from the logical DOC to the physical Doc, and use Doc to answer questions
     // about whether things fit on the current line, always returning the best
     // answer for Doc.
-    let rec be w k x res =
+    let rec be w k x =
         match x with
-        | [] -> res
+        | [] -> Seq.empty
         | (_, NIL)::z
-        | (_, BREAKPARENT)::z -> be w k z res
-        | (i, CONCAT(xi, yi))::z -> be w k ((i,xi)::(i,yi)::z) res
-        | (i, NEST (j, xi))::z -> be w k ((i + j, xi)::z) res
-        | (_, TEXT s)::z -> be w (k+s.Length) z ((Text s)::res)
-        | (i, LINE _)::z -> be w i z ((Line i)::res)
+        | (_, BREAKPARENT)::z -> be w k z
+        | (i, CONCAT(xi, yi))::z -> be w k ((i,xi)::(i,yi)::z)
+        | (i, NEST (j, xi))::z -> be w k ((i + j, xi)::z)
+        | (_, TEXT s)::z -> seq {yield Text s; yield! be w (k+s.Length) z}
+        | (i, LINE _)::z -> seq {yield Line i; yield! be w i z}
         | (i, UNION(xi, yi))::z ->
-            // N.B.: In Wadler's paper he has a function called `better` which
-            // abstracts this computation, but his code is in Haskell and so he
-            // gets the extra efficiency of lazy calculation. We need to do this
-            // by hand in F# since F# is eager. Note that we know that `xi` is
-            // flattened, and longer than the first line of `yi`, by
-            // construction.
-            let bestXi = be w k ((i, xi)::z) []
-            if fits (w - k) (List.rev bestXi)
-            then bestXi @ res
-            else be w k ((i, yi)::z) res
+            better w k (be w k ((i,xi)::z)) (be w k ((i,yi)::z))
 
-    be w k [(0,x)] [] |> List.rev
+    be w k [(0,x)] |> Seq.toList
 
 
 /// Pretty-print a document 'x' while fitting in 'w' characters, as best you can.

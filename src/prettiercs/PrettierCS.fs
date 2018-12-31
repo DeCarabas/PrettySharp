@@ -408,9 +408,16 @@ let visit (tree:SyntaxTree) =
 let main argv =
     match Array.toList argv with
     | path::_ ->
+        let timer = new System.Diagnostics.Stopwatch()
+        timer.Start()
         let tree = CSharpSyntaxTree.ParseText (System.IO.File.ReadAllText path)
+        printfn "Parsed in %i ms" timer.ElapsedMilliseconds
+        timer.Restart()
         let doc = visit tree
+        printfn "Visited in %i ms" timer.ElapsedMilliseconds
+        timer.Restart()
         let formatted = pretty 80 doc
+        printfn "Formatted in %i ms" timer.ElapsedMilliseconds
         printfn "%s" formatted
         0
     | _ ->
