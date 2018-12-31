@@ -70,6 +70,11 @@ type PrintVisitor() =
             baseList <+/+>
             constraints)
 
+    member this.VisitInferiorStatement (node:StatementSyntax) =
+        if node.IsKind(SyntaxKind.Block)
+        then this.Visit node
+        else indent (this.Visit node)
+
     override this.DefaultVisit node =
         failwith (sprintf "Could not visit a %A %A" (node.Kind()) node)
 
@@ -141,15 +146,6 @@ type PrintVisitor() =
 
         attribs <+/+> usings <+/+> externs <+/+> members
 
-    override this.VisitElseClause node =
-        let statement =
-            match node.Statement.Kind() with
-            | SyntaxKind.Block -> line <+> this.Visit node.Statement
-            | SyntaxKind.IfStatement -> this.Visit node.Statement
-            | _ -> indent (line <+> this.Visit node.Statement)
-
-        text "else" <+/+> statement
-
     override this.VisitEnumDeclaration node =
         let decl =
             let attribs = this.VisitChunk node.AttributeLists
@@ -188,15 +184,14 @@ type PrintVisitor() =
         let type_ = this.Visit node.Type
         let id = visitToken node.Identifier
         let expr = this.Visit node.Expression
-        let statement =
-            if node.Statement.IsKind(SyntaxKind.Block)
-            then this.Visit node.Statement
-            else indent (this.Visit node.Statement)
+        let statement = this.VisitInferiorStatement node.Statement
 
         breakParent <+>
-        text "foreach" <+/+>
-        bracket "(" ")" (
-            group (type_ <+/+> id <+/+> text "in") <+/+> indent (expr)
+        group (
+            text "foreach" <+/+>
+            bracket "(" ")" (
+                group (type_ <+/+> id <+/+> text "in") <+/+> indent (expr)
+            )
         ) <+/+>
         statement
 
@@ -210,18 +205,14 @@ type PrintVisitor() =
         visitToken node.Identifier
 
     override this.VisitIfStatement node =
-        let formatInferior (node:SyntaxNode) =
-            if node.IsKind(SyntaxKind.Block)
-            then this.Visit node
-            else indent (this.Visit node)
-
         let rec gatherIf (node:StatementSyntax) =
             match node with
             | :? IfStatementSyntax as if_ ->
                 let head = (if_.Condition, if_.Statement)
-                let tail = match if_.Else with
-                | null -> []
-                | _ -> gatherIf if_.Else.Statement
+                let tail =
+                    match if_.Else with
+                    | null -> []
+                    | _ -> gatherIf if_.Else.Statement
                 head :: tail
             | _ -> [(null, node)]
 
@@ -230,16 +221,17 @@ type PrintVisitor() =
             | _, [] -> nil
             | true, (cond, stat)::tl ->
                 group (text "if" <+/+> bracket "(" ")" (this.Visit cond)) <+/+>
-                formatInferior stat <+/+>
+                this.VisitInferiorStatement stat <+/+>
                 formatChain false tl
-            | false, (null, stat)::_ -> text "else" <+/+> formatInferior stat
+            | false, (null, stat)::_ ->
+                text "else" <+/+> this.VisitInferiorStatement stat
             | false, (cond, stat)::tl ->
                 group (
                     text "else" <+/+>
                     text "if" <+/+>
                     bracket "(" ")" (this.Visit cond)
                 ) <+/+>
-                formatInferior stat <+/+>
+                this.VisitInferiorStatement stat <+/+>
                 formatChain false tl
 
         gatherIf node |> formatChain true
@@ -288,14 +280,16 @@ type PrintVisitor() =
 
         breakParent <+>
         group (
-            attrs <+/+>
             group (
-                mods <+/+>
-                returnType <+/+>
-                group (explicitInterface <+/+> name <+/+> typeParams)
+                attrs <+/+>
+                group (
+                    mods <+/+>
+                    returnType <+/+>
+                    group (explicitInterface <+/+> name <+/+> typeParams)
+                ) <+/+>
+                parameterList <+/+>
+                constraints
             ) <+/+>
-            parameterList <+/+>
-            constraints <+/+>
             body <+/+>
             group (expressionBody <+> semi)
         )
