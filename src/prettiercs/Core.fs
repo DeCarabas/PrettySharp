@@ -123,8 +123,7 @@ let best w k x =
     let rec be w k x =
         match x with
         | [] -> Seq.empty
-        | (_, NIL)::z
-        | (_, BREAKPARENT)::z -> be w k z
+        | (_, NIL)::z | (_, BREAKPARENT)::z -> be w k z
         | (i, CONCAT(xi, yi))::z -> be w k ((i,xi)::(i,yi)::z)
         | (i, NEST (j, xi))::z -> be w k ((i + j, xi)::z)
         | (_, TEXT s)::z -> seq {yield Text s; yield! be w (k+s.Length) z}
