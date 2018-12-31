@@ -31,11 +31,9 @@ let visitToken (token : SyntaxToken) =
     else text token.Text
 
 let visitModifiers mods =
-    group (
-        mods
-        |> Seq.map (visitToken)
-        |> Seq.fold (<+/+>) nil
-    )
+    if Seq.isEmpty mods
+    then nil
+    else group (mods |> Seq.map (visitToken) |> Seq.reduce (<+/+>))
 
 let endStatement = text ";" <+/+> breakParent
 
@@ -167,7 +165,7 @@ type PrintVisitor() =
         group (id <+/+> equalsValue)
 
     override this.VisitEqualsValueClause node =
-        group (text "=" <+/!+> this.Visit node.Value)
+        text "=" <+/!+> this.Visit node.Value
 
     override this.VisitExpressionStatement node =
         this.Visit node.Expression <+> endStatement
@@ -376,13 +374,15 @@ type PrintVisitor() =
 
     override this.VisitVariableDeclarator node =
         let name = visitToken node.Identifier
-        let init = this.VisitOptional node.Initializer
-        group (name <+/+> init)
+        match node.Initializer with
+        | null -> name
+        | init ->
+            group (name <+/+> text "=") <+/!+> this.Visit init.Value
 
     override this.VisitVariableDeclaration node =
         let type_ = this.Visit node.Type
         let vars = node.Variables |> Seq.map (this.Visit) |> listJoin ","
-        group (type_ <+/+> group (vars))
+        type_ <+/!+> vars
 
 let visit (tree:SyntaxTree) =
     let visitor = new PrintVisitor()
