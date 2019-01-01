@@ -204,36 +204,30 @@ type PrintVisitor() =
         visitToken node.Identifier
 
     override this.VisitIfStatement node =
-        let rec gatherIf (node:StatementSyntax) =
+        let format (node:IfStatementSyntax) =
+            text "if " <+>
+            bracket "(" ")" (this.Visit node.Condition) <+>
+            this.VisitBody node.Statement
+
+        let rec gather chain (node:SyntaxNode) =
             match node with
-            | :? IfStatementSyntax as if_ ->
-                let head = (if_.Condition, if_.Statement)
-                let tail =
-                    match if_.Else with
-                    | null -> []
-                    | _ -> gatherIf if_.Else.Statement
-                head :: tail
-            | _ -> [(null, node)]
+            | :? IfStatementSyntax as if_ -> gather (if_::chain) if_.Else
+            | :? ElseClauseSyntax as else_ -> gather chain else_.Statement
+            | last ->
+                let trailingElse =
+                    match last with
+                    | null -> nil
+                    | _ -> text "else" <+> this.VisitBody last
 
-        let rec formatChain isFirst lst =
-            match isFirst, lst with
-            | _, [] -> nil
-            | true, (cond, stat)::tl ->
-                group (text "if" <+/+> bracket "(" ")" (this.Visit cond)) <+>
-                this.VisitBody stat <+/+>
-                formatChain false tl
-            | false, (null, stat)::_ ->
-                text "else" <+> this.VisitBody stat
-            | false, (cond, stat)::tl ->
-                group (
-                    text "else" <+/+>
-                    text "if" <+/+>
-                    bracket "(" ")" (this.Visit cond)
-                ) <+>
-                this.VisitBody stat <+/+>
-                formatChain false tl
+                let ifElseChain =
+                    chain
+                    |> List.rev
+                    |> List.map (format)
+                    |> List.reduce (fun x y -> x <+/+> text "else " <+> y)
 
-        gatherIf node |> formatChain true
+                ifElseChain <+> trailingElse
+
+        gather [] node
 
     override this.VisitInitializerExpression node =
         let left = node.OpenBraceToken.Text

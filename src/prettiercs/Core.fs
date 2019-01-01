@@ -109,6 +109,7 @@ let rec fits w x =
          | Some (Text (s)) -> fits (w - s.Length) (Seq.tail x)
          | Some (Line (_)) -> true
 
+/// Returns the better of `x` or `y`, depending on whether `x` fits or not.
 let better w k x y = if fits (w-k) x then x else y
 
 /// Given a width `w` and an amount of space consumed `k`, produce the best
