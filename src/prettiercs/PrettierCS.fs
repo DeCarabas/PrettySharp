@@ -102,14 +102,14 @@ type PrintVisitor() =
         let op = visitToken node.OperatorToken
         let right = this.Visit node.Right
 
-        group (group (left <+/+> op) <+/+> right)
+        group (left <+> text " " <+> op <+/+> right)
 
     override this.VisitBinaryExpression node =
         let left = this.Visit node.Left
         let op = visitToken node.OperatorToken
         let right = this.Visit node.Right
 
-        group (group (left <+/+> op) <+/+> right)
+        group (left <+> text " " <+> op <+/+> right)
 
     override this.VisitBlock node =
         if Seq.isEmpty node.Statements
