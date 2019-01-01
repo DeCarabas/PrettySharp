@@ -1,6 +1,6 @@
 #r "netstandard"
 
-#load "../Core.fs"
+#load "../src/Core.fs"
 open PrettySharp.Core
 
 type TestResult =

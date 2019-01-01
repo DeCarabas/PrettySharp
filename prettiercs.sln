@@ -5,7 +5,7 @@ VisualStudioVersion = 15.0.26124.0
 MinimumVisualStudioVersion = 15.0.26124.0
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{98C12DAA-A3E1-4265-B86E-35072F697688}"
 EndProject
-Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "PrettierCS", "src\prettiercs\PrettierCS.fsproj", "{7437C805-FF4C-4B95-B5FD-D3B673D5EB7F}"
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "PrettierCS", "src\PrettySharp.fsproj", "{7437C805-FF4C-4B95-B5FD-D3B673D5EB7F}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

@@ -1,9 +1,9 @@
 #r "netstandard"
 #r "System.Text.Encoding"
-#r "../../packages/FSharp.Compiler.Service/lib/netstandard2.0/FSharp.Compiler.Service.dll"
+#r "../packages/FSharp.Compiler.Service/lib/netstandard2.0/FSharp.Compiler.Service.dll"
 #load "./Core.fs"
 
-open PrettierCS.Core
+open PrettySharp.Core
 open Microsoft.FSharp.Compiler.Ast
 open Microsoft.FSharp.Compiler.SourceCodeServices
 
