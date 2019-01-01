@@ -9,7 +9,7 @@ open Microsoft.CodeAnalysis.CSharp
 open Microsoft.CodeAnalysis.CSharp.Syntax
 
 // TEST SETUP
-let path = @"./src/prettiercs/tests/Test01.cs"
+let path = @"./src/prettiercs/tests/FeedParser.cs"
 let tree = CSharpSyntaxTree.ParseText (System.IO.File.ReadAllText path)
 
 #load "./Core.fs"
@@ -20,4 +20,5 @@ open PrettySharp.Core
 open PrettySharp.CS
 
 let doc = visit tree
-Console.WriteLine(pretty 80 doc)
+
+printfn "%s" (pretty 80 doc)

@@ -85,7 +85,9 @@ type PrintVisitor() =
         group (namecol_ <+/+> refkind <+/+> expr)
 
     override this.VisitArgumentList node =
-        this.BracketedList "(" "," ")" node.Arguments
+        let args = Seq.map (this.Visit) node.Arguments |> listJoin ","
+        text "(" <+>
+        group (indent (softline <+> group(args <+> text ")")))
 
     override this.VisitArrayType node =
         let ranks =
@@ -237,7 +239,7 @@ type PrintVisitor() =
     override this.VisitInvocationExpression node =
         let expr = this.Visit node.Expression
         let args = this.Visit node.ArgumentList
-        group (expr <+> softline <+> args)
+        group (expr <+> args)
 
     override this.VisitLiteralExpression node = visitToken node.Token
 
@@ -245,7 +247,7 @@ type PrintVisitor() =
         let mods = visitModifiers node.Modifiers
         let decl = this.Visit node.Declaration
 
-        breakParent <+> group (mods <+/+> decl <+> text ";")
+        breakParent <+> mods <+/+> decl <+> text ";"
 
     override this.VisitMemberAccessExpression node =
         let formatMember (maes:MemberAccessExpressionSyntax) =
@@ -389,9 +391,21 @@ type PrintVisitor() =
             group (name <+/+> text "=") <+/!+> this.Visit init.Value
 
     override this.VisitVariableDeclaration node =
-        let type_ = this.Visit node.Type
-        let vars = node.Variables |> Seq.map (this.Visit) |> listJoin ","
-        type_ <+/!+> vars
+        let firstVar =
+            let type_ = this.Visit node.Type
+            let first = Seq.head node.Variables
+            let name = visitToken first.Identifier
+            match first.Initializer with
+            | null -> group (type_ <+/!+> name)
+            | init ->
+                group (
+                    group (type_ <+/!+> name <+/+> text "=") <+/!+>
+                    this.Visit init.Value
+                )
+
+        let restVars =
+            (Seq.tail node.Variables) |> Seq.map (this.Visit) |> listJoin ","
+        firstVar <+/!+> restVars
 
 let visit (tree:SyntaxTree) =
     let visitor = new PrintVisitor()

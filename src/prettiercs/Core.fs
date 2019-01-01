@@ -88,6 +88,14 @@ let rec group x =
 /// strings, nothing fancy like unions or nests or anything like that. This form
 /// is simple to transform into a string, and is not optimized for further
 /// analysis. (That's what `DOC` is for.)
+///
+/// N.B.: Wadler's paper defines these as nested recursive types; with an
+/// explicit `Nil` terminator. Once we've done the linearization work in `best`,
+/// though, that's really kinda silly. Also, Wadler's paper relies on Haskell's
+/// laziness in order to achieve acceptable performance. In order to get similar
+/// performance here in F#, we need to be lazy, and working with Seq<Doc> is the
+/// best way to achieve laziness. Therefore, we get sequencing by putting these
+/// in a Seq<>, and no longer need `Nil` nor the contents.
 type Doc =
     | Text of string
     | Line of int
