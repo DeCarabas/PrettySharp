@@ -1,6 +1,5 @@
 public class FeedParser
 {
-    
     static readonly
     Dictionary<XName, Func<FeedSegment, XElement, FeedSegment>> FeedElements =
         new Dictionary<XName, Func<FeedSegment, XElement, FeedSegment>>

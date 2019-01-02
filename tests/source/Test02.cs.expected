@@ -23,6 +23,5 @@ namespace OnceAndFuture.Syndication
                     element,
                     element);
         }
-
     }
 }

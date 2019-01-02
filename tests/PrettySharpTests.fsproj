@@ -13,10 +13,10 @@
     <Compile Include="PrettySharpTests.fs" />
     <None Include="App.config" />
     <Content Include="./source/**/*.cs">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
     <Content Include="./source/**/*.cs.expected">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
   <Import Project="..\.paket\Paket.targets" />

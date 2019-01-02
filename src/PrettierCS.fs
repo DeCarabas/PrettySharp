@@ -123,10 +123,19 @@ type PrintVisitor() =
 
     override this.VisitClassDeclaration node =
         let decl = this.VisitTypeDeclaration node
+
+        let foldMember doc m =
+            let memberDoc = this.Visit m
+            if doc = NIL
+            then memberDoc
+            else
+                match m.Kind() with
+                | SyntaxKind.FieldDeclaration -> doc <+/+> memberDoc
+                | _ -> doc <+/+> line <+> memberDoc
+
         let members =
             node.Members
-            |> Seq.map (this.Visit)
-            |> Seq.fold (<+/+>) nil
+            |> Seq.fold (foldMember) nil
             |> bracket "{" "}"
 
         group (decl <+/+> members)
@@ -287,9 +296,10 @@ type PrintVisitor() =
             group (explicitInterface <+> id <+> softline <+> typeParams)
         let parameterList = this.Visit node.ParameterList
         let constraints = this.VisitChunk node.ConstraintClauses
-        let body = this.VisitOptional node.Body
-        let expressionBody = this.VisitOptional node.ExpressionBody
-        let semi = visitToken node.SemicolonToken // Because of expr!
+        let body =
+            if node.Body <> null
+            then this.Visit node.Body
+            else this.Visit node.ExpressionBody <+> text ";"
 
         breakParent <+>
         group (
@@ -301,8 +311,7 @@ type PrintVisitor() =
                 parameterList <+/+>
                 constraints
             ) <+/+>
-            body <+/+>
-            group (expressionBody <+> semi)
+            body
         )
 
     override this.VisitNameColon node =
