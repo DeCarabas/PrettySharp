@@ -10,10 +10,10 @@ open Microsoft.CodeAnalysis.CSharp.Syntax
 
 // TEST SETUP
 
-let path = @"./tests/source/Test03.cs"
+let path = @"./tests/source/FeedParser.cs.ignore"
 let parseOpts = CSharpParseOptions.Default.WithKind(SourceCodeKind.Script)
 //let tree = CSharpSyntaxTree.ParseText (System.IO.File.ReadAllText path)
-let tree = CSharpSyntaxTree.ParseText ("class Foo { int bar() { return 5; } }", parseOpts)
+let tree = CSharpSyntaxTree.ParseText ("int bar() { int x; } }", parseOpts)
 let root = tree.GetRoot()
 
 

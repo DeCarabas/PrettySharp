@@ -1,6 +1,9 @@
+module PrettySharp.Tests
+
 open System
 open System.IO
 
+open Microsoft.CodeAnalysis
 open Microsoft.CodeAnalysis.CSharp
 
 open PrettySharp.Core
@@ -25,7 +28,9 @@ let rec getFiles dir searchPattern =
     }
 
 let prettyFile fileName =
-    (CSharpSyntaxTree.ParseText (File.ReadAllText fileName)).GetRoot()
+    let parseOpts = CSharpParseOptions.Default.WithKind(SourceCodeKind.Script)
+    let fileText = File.ReadAllText fileName
+    (CSharpSyntaxTree.ParseText (fileText, parseOpts)).GetRoot()
         |> visit
         |> pretty 80
 
@@ -44,6 +49,10 @@ let writeSnapshot actual fileName =
 type TestResult =
     | Pass of fname:string
     | Fail of fname:string * actual:string * diff:string
+
+let isFailure = function
+    | Pass _ -> false
+    | Fail _ -> true
 
 let showResult (options:Options) result =
     match result with
@@ -97,6 +106,7 @@ let parseCommandLine args =
             { opts with hasCommandLineErrors = true }
     parseInternal defaultOptions (Array.toList args)
 
+
 [<EntryPoint>]
 let main argv =
     let options = parseCommandLine argv
@@ -110,4 +120,4 @@ let main argv =
 
         printf "\n"
         results |> List.map (showResult options) |> ignore
-        0
+        if Seq.exists (isFailure) results then 1 else 0

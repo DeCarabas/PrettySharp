@@ -258,7 +258,7 @@ type PrintVisitor() =
         let mods = visitModifiers node.Modifiers
         let decl = this.Visit node.Declaration
 
-        breakParent <+> mods <+/+> decl <+> text ";"
+        breakParent <+> (mods <+/+> decl <+> text ";")
 
     override this.VisitMemberAccessExpression node =
         let formatMember (maes:MemberAccessExpressionSyntax) =
