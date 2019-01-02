@@ -8,6 +8,15 @@ open PrettySharp.CS
 open DiffPlex.DiffBuilder
 open DiffPlex.DiffBuilder.Model
 
+type Options = {
+    hasCommandLineErrors:bool;
+    updateSnapshots:bool;
+}
+let defaultOptions = {
+    hasCommandLineErrors = false;
+    updateSnapshots = false;
+}
+
 let rec getFiles dir searchPattern =
     seq {
         yield! Directory.GetFiles(dir, searchPattern)
@@ -20,21 +29,35 @@ let prettyFile fileName =
         |> visit
         |> pretty 80
 
+let snapFile fileName = fileName + ".expected"
+
 let loadSnapshot fileName =
-    let snapfile = fileName + ".expected"
-    printfn "-> %s" snapfile
+    let snapfile = snapFile fileName
     if File.Exists snapfile
     then (File.ReadAllText snapfile).Trim()
     else ""
 
-type TestResult =
-    | Pass of string
-    | Fail of string * string
+let writeSnapshot actual fileName =
+    File.WriteAllText ((snapFile fileName), actual)
 
-let showResult result =
+
+type TestResult =
+    | Pass of fname:string
+    | Fail of fname:string * actual:string * diff:string
+
+let showResult (options:Options) result =
     match result with
     | Pass _ -> ()
-    | Fail (fileName, diff) -> printfn "%s failed:\n%s" fileName diff
+    | Fail (fileName, actual, diff) ->
+        printfn "%s failed:\n%s\n" fileName diff
+        if options.updateSnapshots
+        then
+            printfn "Do you want to update the snapshot? [y/N]"
+            match Console.ReadLine().ToLower() with
+            | "yes" | "y" ->
+                printfn "Updating snapshot..."
+                writeSnapshot actual fileName
+            | _ -> printfn "Not updating snapshot."
 
 let diffStrings left right =
     (new InlineDiffBuilder(new DiffPlex.Differ())).BuildDiffModel(left, right)
@@ -42,7 +65,7 @@ let diffStrings left right =
 let hasDifferences (diff:DiffPaneModel) =
     diff.Lines |> Seq.exists (fun line -> line.Type <> ChangeType.Unchanged)
 
-let testFile fileName =
+let testFile options fileName =
     let actual = (prettyFile fileName).Trim()
     let expected = loadSnapshot fileName
 
@@ -58,14 +81,33 @@ let testFile fileName =
             diff.Lines
             |> Seq.map formatLine
             |> String.concat "\n"
-        Fail (fileName, formattedDiff)
-    else Pass fileName
+        printf "F"
+        Fail (fileName, actual, formattedDiff)
+    else
+        printf "."
+        Pass fileName
+
+let parseCommandLine args =
+    let rec parseInternal opts args =
+        match args with
+        | [] -> opts
+        | "-u"::xs -> parseInternal { opts with updateSnapshots = true } xs
+        | x::xs ->
+            eprintfn "Unrecognized option: '%s'" x
+            { opts with hasCommandLineErrors = true }
+    parseInternal defaultOptions (Array.toList args)
 
 [<EntryPoint>]
 let main argv =
-    getFiles AppDomain.CurrentDomain.BaseDirectory "*.cs"
-    |> Seq.map (testFile)
-    |> Seq.map (showResult)
-    |> Seq.toList
-    |> ignore
-    0
+    let options = parseCommandLine argv
+    if options.hasCommandLineErrors
+    then -1
+    else
+        let results =
+            getFiles AppDomain.CurrentDomain.BaseDirectory "*.cs"
+            |> Seq.map (testFile options)
+            |> Seq.toList
+
+        printf "\n"
+        results |> List.map (showResult options) |> ignore
+        0
