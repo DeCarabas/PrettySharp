@@ -4,7 +4,6 @@ open PrettySharp.Core
 open Microsoft.CodeAnalysis
 open Microsoft.CodeAnalysis.CSharp
 open Microsoft.CodeAnalysis.CSharp.Syntax
-open Microsoft.CodeAnalysis.CSharp.Syntax
 
 let ifNotNil x y xy =
     match x,y with

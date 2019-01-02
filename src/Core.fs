@@ -8,7 +8,7 @@
 /// than the first line on the right.)
 type DOC =
     | NIL
-    | CONCAT of DOC*DOC
+    | CONCAT of DOC list
     | NEST of int*DOC
     | TEXT of string
     | LINE of string
@@ -28,7 +28,18 @@ let nil = NIL
 ///
 /// (Wadler uses <> but F# doesn't want me to override that one, probably for
 /// good reason.)
-let ( <+> ) x y  = CONCAT (x,y)
+let ( <+> ) x y  =
+    let left =
+        match x with
+        | CONCAT(xi) -> xi
+        | _ -> [x]
+
+    let right =
+        match y with
+        | CONCAT(yi) -> yi
+        | _ -> [y]
+
+    CONCAT (left @ right)
 
 
 /// Nest the given document `x` by `i` spaces.
@@ -62,7 +73,7 @@ let rec group x =
     let rec hasForce x =
         match x with
         | NIL -> false
-        | CONCAT (xi, yi) -> hasForce xi || hasForce yi
+        | CONCAT (xi) -> List.exists (hasForce) xi
         | NEST (_, xi) -> hasForce xi
         | TEXT _ -> false
         | LINE _ -> false
@@ -75,7 +86,7 @@ let rec group x =
     let rec flatten x =
         match x with
         | NIL -> NIL
-        | CONCAT (xi, yi) -> CONCAT (flatten xi, flatten yi)
+        | CONCAT (xi) -> List.map (flatten) xi |> List.reduce (<+>)
         | NEST (i, xi) -> flatten xi
         | TEXT str -> TEXT str
         | LINE str -> TEXT str
@@ -133,7 +144,7 @@ let best w k x =
         match x with
         | [] -> Seq.empty
         | (_, NIL)::z | (_, BREAKPARENT)::z -> be w k z
-        | (i, CONCAT(xi, yi))::z -> be w k ((i,xi)::(i,yi)::z)
+        | (i, CONCAT(xi))::z -> be w k ([for xii in xi -> (i,xii)] @ z)
         | (i, NEST (j, xi))::z -> be w k ((i + j, xi)::z)
         | (_, TEXT s)::z -> seq {yield Text s; yield! be w (k+s.Length) z}
         | (i, LINE _)::z -> seq {yield Line i; yield! be w i z}
