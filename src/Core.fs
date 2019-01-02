@@ -113,12 +113,16 @@ type Doc =
 
 
 /// Interpret the physical document `x` as a string.
-let rec layout x =
-    match x with
-    | [] -> ""
-    | Text (s)::z -> s + layout z
-    | Line (i)::z -> "\n" + (new string(' ', i)) + layout z
+let layout x =
+    let rec layoutRec result x =
+        match x with
+        | [] -> result
+        | Text (s)::z -> layoutRec (result + s) z
+        | Line (i)::z ->
+            // Take this opportunity to strip trailing spaces.
+            layoutRec (result.TrimEnd(' ') + "\n" + (new string(' ', i))) z
 
+    layoutRec "" x
 
 /// `true` if the first line of physical document `x` fits in width `w`.
 let rec fits w x =

@@ -10,6 +10,7 @@ open PrettySharp.Core
 open PrettySharp.CS
 open DiffPlex.DiffBuilder
 open DiffPlex.DiffBuilder.Model
+open DiffPlex.Model
 
 type Options = {
     hasCommandLineErrors:bool;
@@ -68,11 +69,48 @@ let showResult (options:Options) result =
                 writeSnapshot actual fileName
             | _ -> printfn "Not updating snapshot."
 
-let diffStrings left right =
-    (new InlineDiffBuilder(new DiffPlex.Differ())).BuildDiffModel(left, right)
 
-let hasDifferences (diff:DiffPaneModel) =
-    diff.Lines |> Seq.exists (fun line -> line.Type <> ChangeType.Unchanged)
+type DiffLine =
+    | Unchanged of string
+    | Inserted of string
+    | Deleted of string
+
+let diffStrings left right =
+    let diff = (new DiffPlex.Differ()).CreateLineDiffs(left, right, false)
+    let rec handleBlock start (block:DiffBlock) =
+        let unchanged =
+            seq { start .. block.InsertStartB - 1 }
+            |> Seq.map (fun i -> diff.PiecesNew.[i])
+            |> Seq.map (Unchanged)
+        let deleted =
+            seq { 0 .. block.DeleteCountA - 1 }
+            |> Seq.map (fun i -> diff.PiecesOld.[i + block.DeleteStartA])
+            |> Seq.map (Deleted)
+        let inserted =
+            seq { 0 .. block.InsertCountB - 1 }
+            |> Seq.map (fun i -> diff.PiecesNew.[i + block.InsertStartB])
+            |> Seq.map (Inserted)
+
+        Seq.concat [unchanged; deleted; inserted]
+
+    let rec handleDiff pos (blocks:DiffBlock list) =
+        match blocks with
+        | [] ->
+            seq { pos .. diff.PiecesNew.Length - 1 }
+            |> Seq.map (fun i -> diff.PiecesNew.[i])
+            |> Seq.map (Unchanged)
+        | block::z ->
+            let endpos = block.InsertStartB + block.InsertCountB
+            Seq.append (handleBlock pos block) (handleDiff endpos z)
+
+    handleDiff 0 (Seq.toList diff.DiffBlocks) |> Seq.toList
+
+let rec hasDifferences diff =
+    match diff with
+    | [] -> false
+    | (Unchanged _)::z -> hasDifferences z
+    | (Inserted _)::_ -> true
+    | (Deleted _)::_ -> true
 
 let testFile options fileName =
     let actual = (prettyFile fileName).Trim()
@@ -81,14 +119,14 @@ let testFile options fileName =
     let diff = diffStrings expected actual
     if hasDifferences diff
     then
-        let formatLine (line:DiffPiece) =
-            match line.Type with
-            | ChangeType.Inserted -> " + " + line.Text
-            | ChangeType.Deleted -> " - " + line.Text
-            | _ -> "    " + line.Text
+        let formatLine line =
+            match line with
+            | Inserted (s) -> "  + " + s
+            | Deleted (s) -> "  - " + s
+            | Unchanged (s) -> "    " + s
         let formattedDiff =
-            diff.Lines
-            |> Seq.map formatLine
+            diff
+            |> List.map formatLine
             |> String.concat "\n"
         printf "F"
         Fail (fileName, actual, formattedDiff)

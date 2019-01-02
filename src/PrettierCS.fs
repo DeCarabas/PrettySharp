@@ -87,9 +87,12 @@ type PrintVisitor() =
         group (namecol_ <+/+> refkind <+/+> expr)
 
     override this.VisitArgumentList node =
-        let args = Seq.map (this.Visit) node.Arguments |> listJoin ","
-        text "(" <+>
-        group (indent (softline <+> group(args <+> text ")")))
+        if Seq.isEmpty node.Arguments
+        then text "()"
+        else
+            let args = Seq.map (this.Visit) node.Arguments |> listJoin ","
+            text "(" <+>
+            group (indent (softline <+> group(args <+> text ")")))
 
     override this.VisitArrayType node =
         let ranks =
@@ -104,7 +107,7 @@ type PrintVisitor() =
         let op = visitToken node.OperatorToken
         let right = this.Visit node.Right
 
-        group (left <+> text " " <+> op <+/+> right)
+        group (left <+> text " " <+> op <+/!+> right)
 
     override this.VisitBinaryExpression node =
         let left = this.Visit node.Left
