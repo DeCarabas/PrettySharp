@@ -13,7 +13,7 @@ open Microsoft.CodeAnalysis.CSharp.Syntax
 let path = @"./tests/source/Test03.cs"
 let parseOpts = CSharpParseOptions.Default.WithKind(SourceCodeKind.Script)
 //let tree = CSharpSyntaxTree.ParseText (System.IO.File.ReadAllText path)
-let tree = CSharpSyntaxTree.ParseText ("7 + 3 * 90", parseOpts)
+let tree = CSharpSyntaxTree.ParseText ("class Foo { int foo; int bar; }", parseOpts)
 let root = tree.GetRoot()
 
 

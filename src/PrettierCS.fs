@@ -177,7 +177,7 @@ type PrintVisitor() =
         let mods = visitModifiers node.Modifiers
         let decl = this.Visit node.Declaration
 
-        breakParent <+> attribs <+/+> mods <+/+> decl <+> text ";"
+        breakParent <+> (attribs <+/+> mods <+/+> decl <+> text ";")
 
     override this.VisitForEachStatement node =
         // let await = visitToken node.AwaitKeyword
