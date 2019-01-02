@@ -201,6 +201,9 @@ type PrintVisitor() =
 
         group (id <+> softline <+> args)
 
+    override this.VisitGlobalStatement node =
+        this.Visit node.Statement
+
     override this.VisitIdentifierName node =
         visitToken node.Identifier
 
@@ -406,9 +409,9 @@ type PrintVisitor() =
             (Seq.tail node.Variables) |> Seq.map (this.Visit) |> listJoin ","
         firstVar <+/!+> restVars
 
-let visit (tree:SyntaxTree) =
+let visit (tree:SyntaxNode) =
     let visitor = new PrintVisitor()
-    visitor.Visit(tree.GetRoot())
+    visitor.Visit(tree)
 
 
 [<EntryPoint>]
@@ -420,7 +423,7 @@ let main argv =
         let tree = CSharpSyntaxTree.ParseText (System.IO.File.ReadAllText path)
         printfn "Parsed in %i ms" timer.ElapsedMilliseconds
         timer.Restart()
-        let doc = visit tree
+        let doc = visit (tree.GetRoot())
         printfn "Visited in %i ms" timer.ElapsedMilliseconds
         timer.Restart()
         let formatted = pretty 80 doc

@@ -25,7 +25,7 @@ let rec getFiles dir searchPattern =
     }
 
 let prettyFile fileName =
-    CSharpSyntaxTree.ParseText (File.ReadAllText fileName)
+    (CSharpSyntaxTree.ParseText (File.ReadAllText fileName)).GetRoot()
         |> visit
         |> pretty 80
 

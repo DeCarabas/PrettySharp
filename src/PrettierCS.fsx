@@ -9,8 +9,13 @@ open Microsoft.CodeAnalysis.CSharp
 open Microsoft.CodeAnalysis.CSharp.Syntax
 
 // TEST SETUP
+
 let path = @"./tests/source/Test03.cs"
-let tree = CSharpSyntaxTree.ParseText (System.IO.File.ReadAllText path)
+let parseOpts = CSharpParseOptions.Default.WithKind(SourceCodeKind.Script)
+//let tree = CSharpSyntaxTree.ParseText (System.IO.File.ReadAllText path)
+let tree = CSharpSyntaxTree.ParseText ("7 + 3 * 90", parseOpts)
+let root = tree.GetRoot()
+
 
 #load "../src/Core.fs"
 
@@ -19,6 +24,6 @@ let tree = CSharpSyntaxTree.ParseText (System.IO.File.ReadAllText path)
 open PrettySharp.Core
 open PrettySharp.CS
 
-let doc = visit tree
+let doc = visit root
 
 printfn "%s" (pretty 80 doc)
