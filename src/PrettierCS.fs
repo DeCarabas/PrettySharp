@@ -4,6 +4,9 @@ open PrettySharp.Core
 open Microsoft.CodeAnalysis
 open Microsoft.CodeAnalysis.CSharp
 open Microsoft.CodeAnalysis.CSharp.Syntax
+open Microsoft.CodeAnalysis
+open Microsoft.CodeAnalysis.CSharp.Syntax
+open Microsoft.CodeAnalysis.CSharp.Syntax
 
 let ifNotNil x y xy =
     match x,y with
@@ -114,10 +117,23 @@ type PrintVisitor() =
         if Seq.isEmpty node.Statements
         then text "{}"
         else
+            let getsNewline (node:SyntaxNode) =
+                match node with
+                | :? LocalDeclarationStatementSyntax -> false
+                | :? ExpressionStatementSyntax -> false
+                | _ -> true
+
+            let combineStatements (prevDoc, prevNode) stat =
+                let statDoc = this.Visit stat
+                match prevDoc, getsNewline prevNode with
+                | NIL, _ -> (statDoc, stat)
+                | _, true -> (prevDoc <+/+> line <+> statDoc, stat)
+                | _, false -> (prevDoc <+/+> statDoc, stat)
+
             let block =
                 node.Statements
-                |> Seq.map (this.Visit)
-                |> Seq.reduce (<+/+>)
+                |> Seq.fold (combineStatements) (NIL, null)
+                |> fst
                 |> bracket "{" "}"
             breakParent <+> block
 

@@ -12,8 +12,8 @@ open Microsoft.CodeAnalysis.CSharp.Syntax
 
 let path = @"./tests/source/FeedParser.cs.ignore"
 let parseOpts = CSharpParseOptions.Default.WithKind(SourceCodeKind.Script)
-//let tree = CSharpSyntaxTree.ParseText (System.IO.File.ReadAllText path)
-let tree = CSharpSyntaxTree.ParseText ("int bar() { int x; } }", parseOpts)
+let tree = CSharpSyntaxTree.ParseText (System.IO.File.ReadAllText path)
+//let tree = CSharpSyntaxTree.ParseText ("int bar() { int x; } }", parseOpts)
 let root = tree.GetRoot()
 
 
