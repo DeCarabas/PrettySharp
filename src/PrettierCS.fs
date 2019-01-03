@@ -294,7 +294,7 @@ type PrintVisitor() =
         let mods = visitModifiers node.Modifiers
         let decl = this.Visit node.Declaration
 
-        breakParent <+> (mods <+/+> decl <+> text ";")
+        breakParent <+> group(mods <+/+> decl <+> text ";")
 
     override this.VisitMemberAccessExpression node =
         visitMemberAccessOrConditional (this.Visit) node
@@ -433,13 +433,15 @@ type PrintVisitor() =
             | null -> group (type_ <+/!+> name)
             | init ->
                 group (
-                    group (type_ <+/!+> name <+/+> text "=") <+/!+>
+                    group (type_ <+/!+> (name <++> text "=")) <+/!+>
                     this.Visit init.Value
                 )
 
         let restVars =
             (Seq.tail node.Variables) |> Seq.map (this.Visit) |> listJoin ","
-        firstVar <+/!+> restVars
+        match restVars with
+        | NIL -> firstVar
+        | _ -> (firstVar <+> text ",") <+/!+> restVars
 
 let visit (tree:SyntaxNode) =
     let visitor = new PrintVisitor()
