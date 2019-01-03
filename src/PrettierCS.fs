@@ -4,14 +4,6 @@ open PrettySharp.Core
 open Microsoft.CodeAnalysis
 open Microsoft.CodeAnalysis.CSharp
 open Microsoft.CodeAnalysis.CSharp.Syntax
-open Microsoft.CodeAnalysis.CSharp.Syntax
-open Microsoft.CodeAnalysis.CSharp.Syntax
-
-let ifNotNil x y xy =
-    match x,y with
-    | x, NIL -> x
-    | NIL, y -> y
-    | x, y -> xy
 
 let indentLevel = 4
 let bracket = PrettySharp.Core.bracket indentLevel
@@ -29,10 +21,40 @@ let join sep seq =
 
 let listJoin sep = join (text sep <+> line)
 
+type Visitor = SyntaxNode->DOC
+
+
 let visitToken (token : SyntaxToken) =
     if token.Span.IsEmpty
     then nil
     else text token.Text
+
+let visitMemberAccessOrConditional (visit:Visitor) node =
+    let formatMember (maes:MemberAccessExpressionSyntax) =
+        let op = visitToken maes.OperatorToken
+        let right = visit maes.Name
+        softline <+> op <+> right
+
+    let formatConditional (caes:ConditionalAccessExpressionSyntax) =
+        let op = visitToken caes.OperatorToken
+        let right = visit caes.WhenNotNull
+        softline <+> op <+> right
+
+    // Explicitly Recursive here to group properly.
+    let rec gather memberList (node:SyntaxNode) =
+        match node with
+        | :? MemberAccessExpressionSyntax as maes ->
+            gather ((formatMember maes)::memberList) maes.Expression
+        | :? ConditionalAccessExpressionSyntax as caes ->
+            gather ((formatConditional caes)::memberList) caes.Expression
+        | _ ->
+            let root = visit node
+            let members =
+                memberList
+                |> List.reduce (<+>)
+            group (root <+> indent (members))
+
+    gather [] node
 
 let visitModifiers mods =
     if Seq.isEmpty mods
@@ -45,6 +67,7 @@ type PrintVisitor() =
     member this.BracketedList l s r x =
         let contents = Seq.map (this.Visit) x |> listJoin s
         bracket l r contents
+
 
     member this.VisitChunk seq =
         Seq.map (this.Visit) seq |> Seq.fold (<+/+>) nil
@@ -75,34 +98,6 @@ type PrintVisitor() =
         then line <+> this.Visit node
         else indent (line <+> this.Visit node)
 
-    member this.VisitMemberAccessOrConditional node =
-        let formatMember (maes:MemberAccessExpressionSyntax) =
-            let op = visitToken maes.OperatorToken
-            let right = this.Visit maes.Name
-            softline <+> op <+> right
-
-        let formatConditional (caes:ConditionalAccessExpressionSyntax) =
-            let op = visitToken caes.OperatorToken
-            let right = this.Visit caes.WhenNotNull
-            softline <+> op <+> right
-
-        // Explicitly Recursive here to group properly.
-        let rec gather memberList (node:SyntaxNode) =
-            match node with
-            | :? MemberAccessExpressionSyntax as maes ->
-                gather ((formatMember maes)::memberList) maes.Expression
-            | :? ConditionalAccessExpressionSyntax as caes ->
-                gather ((formatConditional caes)::memberList) caes.Expression
-            | _ ->
-                let root = this.Visit node
-                let members =
-                    memberList
-                    |> List.reduce (<+>)
-                group (root <+> indent (members))
-
-        gather [] node
-
-
     override this.DefaultVisit node =
         failwith (sprintf "Could not visit a %A %A" (node.Kind()) node)
 
@@ -110,8 +105,7 @@ type PrintVisitor() =
         let namecolon = this.VisitOptional node.NameColon
         let refkind = visitToken node.RefKindKeyword
         let expr = this.Visit node.Expression
-
-        group (namecolon <+/!+> (refkind <+/+> expr))
+        namecolon <++> group(refkind <+/+> expr)
 
     override this.VisitArgumentList node =
         if Seq.isEmpty node.Arguments
@@ -145,7 +139,7 @@ type PrintVisitor() =
 
     override this.VisitBlock node =
         if Seq.isEmpty node.Statements
-        then text "{}"
+        then text "{ }"
         else
             let getsNewline (node:SyntaxNode) =
                 match node with
@@ -187,7 +181,7 @@ type PrintVisitor() =
         group (decl <+/+> members)
 
     override this.VisitConditionalAccessExpression node =
-        this.VisitMemberAccessOrConditional node
+        visitMemberAccessOrConditional (this.Visit) node
 
     override this.VisitCompilationUnit node =
         let attribs = this.VisitChunk node.AttributeLists
@@ -303,7 +297,7 @@ type PrintVisitor() =
         breakParent <+> (mods <+/+> decl <+> text ";")
 
     override this.VisitMemberAccessExpression node =
-        this.VisitMemberAccessOrConditional node
+        visitMemberAccessOrConditional (this.Visit) node
 
     override this.VisitMemberBindingExpression node =
         group (visitToken node.OperatorToken <+> this.Visit node.Name)
@@ -330,13 +324,12 @@ type PrintVisitor() =
             group (
                 attrs <+/+>
                 group (mods <+/+> returnType) <+/+>
-                name <+>
-                softline <+>
-                parameterList <+/+>
-                constraints
-            ) <+/+>
-            body
-        )
+                name
+            ) <+>
+            parameterList <+/+>
+            constraints
+        ) <+/+>
+        body
 
     override this.VisitNameColon node =
         this.Visit node.Name <+> text ":"
@@ -375,7 +368,12 @@ type PrintVisitor() =
         group (attrs <+/+> mods <+/+> type_ <+/+> id <+/+> default_)
 
     override this.VisitParameterList node =
-        this.BracketedList "(" "," ")" node.Parameters
+        if Seq.isEmpty node.Parameters
+        then text "()"
+        else
+            let args = Seq.map (this.Visit) node.Parameters |> listJoin ","
+            text "(" <+>
+            group (indent (softline <+> group(args <+> text ")")))
 
     override this.VisitParenthesizedExpression node =
         bracket "(" ")" (this.Visit node.Expression)

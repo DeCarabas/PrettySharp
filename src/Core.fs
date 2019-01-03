@@ -62,13 +62,15 @@ let line = LINE " "
 let softline = LINE ""
 
 
-/// Uh.
+/// Include this anywhere to force all parent groups to break.
 let breakParent = BREAKPARENT
 
 /// A group of documents: either on one line or on multiple lines.
 ///
 /// This is the core line-breaking thing; if you have something that might be
-/// together on one line then use `group`.
+/// together on one line then use `group`. The printer will try to fit
+/// everything on one line, and if that doesn't work it will break the outer
+/// group and try again.
 let rec group x =
     let rec hasForce x =
         match x with
@@ -163,8 +165,14 @@ let pretty w x =  best w 0 x |> layout
 
 // Helpers
 
+let ifNotNil x y xy =
+    match x,y with
+    | x, NIL -> x
+    | NIL, y -> y
+    | x, y -> xy
+
 /// Concatenate two documents with a space in between them.
-let ( <++> ) x y = x <+> text " " <+> y
+let ( <++> ) x y = ifNotNil x y (x <+> text " " <+> y)
 
 let bracket i l r x =
     group (
