@@ -272,7 +272,7 @@ type PrintVisitor() =
                 let trailingElse =
                     match last with
                     | null -> nil
-                    | _ -> text "else" <+> this.VisitBody last
+                    | _ -> line <+> text "else" <+> this.VisitBody last
 
                 let ifElseChain =
                     chain
