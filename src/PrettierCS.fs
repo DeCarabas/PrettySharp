@@ -4,7 +4,6 @@ open PrettySharp.Core
 open Microsoft.CodeAnalysis
 open Microsoft.CodeAnalysis.CSharp
 open Microsoft.CodeAnalysis.CSharp.Syntax
-open Microsoft.CodeAnalysis
 open Microsoft.CodeAnalysis.CSharp.Syntax
 open Microsoft.CodeAnalysis.CSharp.Syntax
 
@@ -76,15 +75,43 @@ type PrintVisitor() =
         then line <+> this.Visit node
         else indent (line <+> this.Visit node)
 
+    member this.VisitMemberAccessOrConditional node =
+        let formatMember (maes:MemberAccessExpressionSyntax) =
+            let op = visitToken maes.OperatorToken
+            let right = this.Visit maes.Name
+            softline <+> op <+> right
+
+        let formatConditional (caes:ConditionalAccessExpressionSyntax) =
+            let op = visitToken caes.OperatorToken
+            let right = this.Visit caes.WhenNotNull
+            softline <+> op <+> right
+
+        // Explicitly Recursive here to group properly.
+        let rec gather memberList (node:SyntaxNode) =
+            match node with
+            | :? MemberAccessExpressionSyntax as maes ->
+                gather ((formatMember maes)::memberList) maes.Expression
+            | :? ConditionalAccessExpressionSyntax as caes ->
+                gather ((formatConditional caes)::memberList) caes.Expression
+            | _ ->
+                let root = this.Visit node
+                let members =
+                    memberList
+                    |> List.reduce (<+>)
+                group (root <+> indent (members))
+
+        gather [] node
+
+
     override this.DefaultVisit node =
         failwith (sprintf "Could not visit a %A %A" (node.Kind()) node)
 
     override this.VisitArgument node =
-        let namecol_ = this.VisitOptional node.NameColon
+        let namecolon = this.VisitOptional node.NameColon
         let refkind = visitToken node.RefKindKeyword
         let expr = this.Visit node.Expression
 
-        group (namecol_ <+/+> refkind <+/+> expr)
+        group (namecolon <+/!+> (refkind <+/+> expr))
 
     override this.VisitArgumentList node =
         if Seq.isEmpty node.Arguments
@@ -160,11 +187,7 @@ type PrintVisitor() =
         group (decl <+/+> members)
 
     override this.VisitConditionalAccessExpression node =
-        let left = this.Visit node.Expression
-        let op = visitToken node.OperatorToken
-        let right = this.Visit node.WhenNotNull
-
-        group (left <+> softline <+> group(op <+> softline <+> right))
+        this.VisitMemberAccessOrConditional node
 
     override this.VisitCompilationUnit node =
         let attribs = this.VisitChunk node.AttributeLists
@@ -218,7 +241,7 @@ type PrintVisitor() =
         group (
             text "foreach" <+/+>
             bracket "(" ")" (
-                group (type_ <+/+> id <+/+> text "in") <+/+> indent (expr)
+                group (type_ <+/+> id <+/+> text "in") <+/!+> expr
             )
         ) <+>
         body
@@ -280,25 +303,7 @@ type PrintVisitor() =
         breakParent <+> (mods <+/+> decl <+> text ";")
 
     override this.VisitMemberAccessExpression node =
-        let formatMember (maes:MemberAccessExpressionSyntax) =
-            let op = visitToken maes.OperatorToken
-            let name = this.Visit maes.Name
-            softline <+> op <+> name
-
-        // Explicitly Recursive here to group properly.
-        let rec gather memberList (node:SyntaxNode) =
-            match node with
-            | :? MemberAccessExpressionSyntax as maes ->
-                gather (maes::memberList) maes.Expression
-            | _ ->
-                let root = this.Visit node
-                let members =
-                    memberList
-                    |> List.map (formatMember)
-                    |> List.reduce (<+>)
-                group (root <+> indent (members))
-
-        gather [] node
+        this.VisitMemberAccessOrConditional node
 
     override this.VisitMemberBindingExpression node =
         group (visitToken node.OperatorToken <+> this.Visit node.Name)
@@ -354,7 +359,7 @@ type PrintVisitor() =
         let args = this.VisitOptional node.ArgumentList
         let initializer = this.VisitOptional node.Initializer
         group (
-            group (text "new" <+/+> type_ <+/+> args) <+/+>
+            group (text "new" <++> type_ <+> args) <+/+>
             initializer
         )
 
@@ -401,7 +406,8 @@ type PrintVisitor() =
 
     override this.VisitReturnStatement node =
         let expr = this.VisitOptional node.Expression
-        breakParent <+> group (text "return" <+/+> indent (expr <+> text ";"))
+        breakParent <+>
+        group (text "return" <++> expr <+> text ";")
 
     override this.VisitSimpleLambdaExpression node =
         let async = visitToken node.AsyncKeyword

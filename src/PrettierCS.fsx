@@ -14,7 +14,30 @@ let path = @"./tests/source/FeedParser.cs.ignore"
 let parseOpts = CSharpParseOptions.Default.WithKind(SourceCodeKind.Script)
 //let tree = CSharpSyntaxTree.ParseText (System.IO.File.ReadAllText path)
 let tree = CSharpSyntaxTree.ParseText ("
-    item = veryVeryVeryVeryVeryVeryVeryVeryVeryVeryVeryVeryVeryLongLongLongLongLong();
+    namespace OnceAndFuture.Syndication
+    {
+        public class FeedParser
+        {
+            static void Foo()
+            {
+               return
+                   item.With(
+                       enclosures:
+                           item.Enclosures.Add(
+                               new
+                               Enclosure
+                               (
+                                   length:
+                                       element.Attribute(XNames.RSS.Length)?.Value,
+                                   type: element.Attribute(XNames.RSS.Type)?.Value,
+                                   url:
+                                       SyndicationUtil.ParseLink(
+                                           element.Attribute(XNames.RSS.Url)
+                                           ?.Value,
+                                           element))));
+            }
+        }
+    }
 ", parseOpts)
 let root = tree.GetRoot()
 
@@ -29,3 +52,5 @@ open PrettySharp.CS
 let doc = visit root
 
 printfn "%s" (pretty 80 doc)
+
+printfn "%s" (pretty 20 doc)

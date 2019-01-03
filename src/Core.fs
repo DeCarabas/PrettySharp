@@ -87,7 +87,7 @@ let rec group x =
         match x with
         | NIL -> NIL
         | CONCAT (xi) -> List.map (flatten) xi |> List.reduce (<+>)
-        | NEST (i, xi) -> flatten xi
+        | NEST (i, xi) -> NEST (i, flatten xi)
         | TEXT str -> TEXT str
         | LINE str -> TEXT str
         | UNION (xi, _) -> xi

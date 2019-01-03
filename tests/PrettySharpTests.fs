@@ -8,8 +8,6 @@ open Microsoft.CodeAnalysis.CSharp
 
 open PrettySharp.Core
 open PrettySharp.CS
-open DiffPlex.DiffBuilder
-open DiffPlex.DiffBuilder.Model
 open DiffPlex.Model
 
 type Options = {
