@@ -10,7 +10,7 @@ open Microsoft.CodeAnalysis.CSharp.Syntax
 
 // TEST SETUP
 
-let path = @"./tests/source/FeedParser.cs.ignore"
+let path = @"./tests/source/KateGame.cs.ignore"
 let parseOpts = CSharpParseOptions.Default.WithKind(SourceCodeKind.Script)
 let tree = CSharpSyntaxTree.ParseText (System.IO.File.ReadAllText path)
 // let tree = CSharpSyntaxTree.ParseText ("
