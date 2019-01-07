@@ -114,8 +114,8 @@ type PrintVisitor() =
         let mods = visitModifiers node.Modifiers
         let body =
             if node.Body <> null
-            then this.Visit node.Body
-            else this.Visit node.ExpressionBody <+> text ";"
+            then line <+> this.Visit node.Body
+            else text " " <+> this.Visit node.ExpressionBody <+> text ";"
 
         group (
             attrs <+/+>
@@ -237,20 +237,22 @@ type PrintVisitor() =
         let initializer = this.VisitOptional node.Initializer
         let body =
             if node.Body <> null
-            then this.Visit node.Body
-            else this.Visit node.ExpressionBody <+> text ";"
+            then line <+> this.Visit node.Body
+            else text " " <+> this.Visit node.ExpressionBody <+> text ";"
 
         breakParent <+>
         group (
             group (
-                attrs <+/+>
-                mods <+/+>
-                name
-            ) <+>
-            parameterList <+/!+>
-            initializer
-        ) <+/+>
-        body
+                group (
+                    attrs <+/+>
+                    mods <+/+>
+                    name
+                ) <+>
+                parameterList <+/!+>
+                initializer
+            ) <+/+>
+            body
+        )
 
     override this.VisitCompilationUnit node =
         let attribs = this.VisitChunk node.AttributeLists
@@ -281,7 +283,7 @@ type PrintVisitor() =
 
         let members = this.BracketedList "{" "," "}" node.Members
 
-        breakParent <+> group (decl <+/+> members)
+        breakParent <+> group(group (decl <+/+> members))
 
     override this.VisitEnumMemberDeclaration node =
         let equalsValue = this.VisitOptional node.EqualsValue
@@ -302,23 +304,28 @@ type PrintVisitor() =
 
         breakParent <+>
         group (
-            attrs <+/+>
-            group(group(mods <+/+> text "event") <+/+> group(type_ <+/+> name))
-        ) <+/+>
-        body
+            group (
+                attrs <+/+>
+                group(
+                    group(mods <+/+> text "event") <+/+>
+                    group(type_ <+/+> name)
+                )
+            ) <+/+>
+            body
+        )
 
     override this.VisitEqualsValueClause node =
         text "=" <+/!+> this.Visit node.Value
 
     override this.VisitExpressionStatement node =
-        breakParent <+> this.Visit node.Expression <+> text ";"
+        breakParent <+> group(this.Visit node.Expression <+> text ";")
 
     override this.VisitFieldDeclaration node =
         let attribs = this.VisitChunk node.AttributeLists
         let mods = visitModifiers node.Modifiers
         let decl = this.Visit node.Declaration
 
-        breakParent <+> (attribs <+/+> mods <+/+> decl <+> text ";")
+        breakParent <+> group(attribs <+/+> mods <+/+> decl <+> text ";")
 
     override this.VisitForEachStatement node =
         // let await = visitToken node.AwaitKeyword
@@ -329,12 +336,14 @@ type PrintVisitor() =
 
         breakParent <+>
         group (
-            text "foreach" <+/+>
-            bracket "(" ")" (
-                group (type_ <+/+> id <+/+> text "in") <+/!+> expr
-            )
-        ) <+>
-        body
+            group (
+                text "foreach" <+/+>
+                bracket "(" ")" (
+                    group (type_ <+/+> id <+/+> text "in") <+/!+> expr
+                )
+            ) <+>
+            body
+        )
 
     override this.VisitForStatement node =
         let declarationOrInit =
@@ -348,16 +357,18 @@ type PrintVisitor() =
         let body = this.VisitBody node.Statement
         breakParent <+>
         group (
-            text "for" <+/+>
-            bracket "(" ")" (
-                group(
-                    (declarationOrInit <+> text ";") <+/+>
-                    (condition <+> text ";") <+/+>
-                    incrementors
+            group (
+                text "for" <+/+>
+                bracket "(" ")" (
+                    group(
+                        (declarationOrInit <+> text ";") <+/+>
+                        (condition <+> text ";") <+/+>
+                        incrementors
+                    )
                 )
-            )
-        ) <+>
-        body
+            ) <+>
+            body
+        )
 
     override this.VisitGenericName node =
         let id = visitToken node.Identifier
@@ -410,15 +421,17 @@ type PrintVisitor() =
             this.VisitOptional node.ExplicitInterfaceSpecifier <+> text "this"
         let body =
             if node.AccessorList <> null
-            then this.Visit node.AccessorList
-            else this.Visit node.ExpressionBody <+> text ";"
+            then line <+> this.Visit node.AccessorList
+            else text " " <+> this.Visit node.ExpressionBody <+> text ";"
 
         breakParent <+>
         group (
-            attrs <+/+>
-            group(mods <+/+> group(type_ <+/+> name))
-        ) <+/+>
-        body
+            group (
+                attrs <+/+>
+                group(mods <+/+> group(type_ <+/+> name))
+            ) <+>
+            body
+        )
 
 
     override this.VisitInitializerExpression node =
@@ -459,20 +472,22 @@ type PrintVisitor() =
         let constraints = this.VisitChunk node.ConstraintClauses
         let body =
             if node.Body <> null
-            then this.Visit node.Body
-            else this.Visit node.ExpressionBody <+> text ";"
+            then line <+> this.Visit node.Body
+            else text " " <+> this.Visit node.ExpressionBody <+> text ";"
 
         breakParent <+>
         group (
             group (
-                attrs <+/+>
-                group (mods <+/+> returnType) <+/+>
-                name
+                group (
+                    attrs <+/+>
+                    group (mods <+/+> returnType) <+/+>
+                    name
+                ) <+>
+                parameterList <+/+>
+                constraints
             ) <+>
-            parameterList <+/+>
-            constraints
-        ) <+/+>
-        body
+            body
+        )
 
     override this.VisitNameColon node =
         this.Visit node.Name <+> text ":"
@@ -541,17 +556,20 @@ type PrintVisitor() =
         let body =
             if node.AccessorList <> null
             then
+                line <+>
                 this.Visit node.AccessorList <+/!+>
                 this.VisitOptional node.Initializer
-            else this.Visit node.ExpressionBody
+            else text " " <+> this.Visit node.ExpressionBody
 
         breakParent <+>
         group (
-            attrs <+/+>
-            group(mods <+/+> group(type_ <+/+> name))
-        ) <+/+>
-        body <+>
-        visitToken node.SemicolonToken
+            group (
+                attrs <+/+>
+                group(mods <+/+> group(type_ <+/+> name))
+            ) <+>
+            body <+>
+            visitToken node.SemicolonToken
+        )
 
     override this.VisitPrefixUnaryExpression node =
         visitToken node.OperatorToken <+> this.Visit node.Operand
