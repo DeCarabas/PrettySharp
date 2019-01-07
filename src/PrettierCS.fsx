@@ -12,10 +12,15 @@ open Microsoft.CodeAnalysis.CSharp.Syntax
 
 let path = @"./tests/source/KateGame.cs.ignore"
 let parseOpts = CSharpParseOptions.Default.WithKind(SourceCodeKind.Script)
-let tree = CSharpSyntaxTree.ParseText (System.IO.File.ReadAllText path)
-//let tree = CSharpSyntaxTree.ParseText ("
-//class Foo { readonly int bar; }
-//", parseOpts)
+// let tree = CSharpSyntaxTree.ParseText (System.IO.File.ReadAllText path)
+let tree = CSharpSyntaxTree.ParseText ("
+            var node =
+                new Node(
+                    dna,
+                    Vector3.Zero,
+                    -MathHelper.PiOver2,
+                    5 + Node.random.NextFloat() * 4);
+", parseOpts)
 let root = tree.GetRoot()
 
 
@@ -31,3 +36,5 @@ let doc = visit root
 printfn "%s" (pretty 80 doc)
 
 printfn "%s" (pretty 20 doc)
+
+

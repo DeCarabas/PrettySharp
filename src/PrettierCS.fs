@@ -6,11 +6,16 @@ open Microsoft.CodeAnalysis.CSharp
 open Microsoft.CodeAnalysis.CSharp.Syntax
 open System.Linq.Expressions
 open System
+open Microsoft.CodeAnalysis.CSharp
 
 let indentLevel = 4
 let bracket = PrettySharp.Core.bracket indentLevel
 let indent = nest indentLevel
+
+/// Concatenate two documents with a line-break in between.
 let ( <+/+> ) x y = ifNotNil x y (x <+> line <+> y)
+
+/// Concatenate two documents with a line break, and indent the second one.
 let ( <+/!+> ) x y = ifNotNil x y (x <+> indent (line <+> y))
 
 let join sep seq =
@@ -23,7 +28,6 @@ let join sep seq =
 let listJoin sep = join (text sep <+> line)
 
 type Visitor = SyntaxNode->DOC
-
 
 let visitToken (token : SyntaxToken) =
     if token.Span.IsEmpty
@@ -104,7 +108,7 @@ type PrintVisitor() =
         else
             let args = Seq.map (this.Visit) list |> listJoin ","
             text lb <+>
-            group (indent (softline <+> group(args <+> text rb)))
+            group (indent (softline <+> args <+> text rb))
 
     override this.DefaultVisit node =
         failwith (sprintf "Could not visit a %A %A" (node.Kind()) node)
@@ -269,7 +273,8 @@ type PrintVisitor() =
     override this.VisitElementAccessExpression node =
         let expr = this.Visit node.Expression
         let args = this.Visit node.ArgumentList
-        group (expr <+> args)
+
+        group(expr <+> args)
 
     override this.VisitEnumDeclaration node =
         let decl =
@@ -371,10 +376,9 @@ type PrintVisitor() =
         )
 
     override this.VisitGenericName node =
-        let id = visitToken node.Identifier
-        let args = this.Visit node.TypeArgumentList
-
-        group (id <+> softline <+> args)
+        // If you're mad that we're not breaking the line before the argument
+        // list, don't have super-complicated argument lists.
+        visitToken node.Identifier <+> this.Visit node.TypeArgumentList
 
     override this.VisitGlobalStatement node =
         this.Visit node.Statement
@@ -442,7 +446,9 @@ type PrintVisitor() =
     override this.VisitInvocationExpression node =
         let expr = this.Visit node.Expression
         let args = this.Visit node.ArgumentList
-        group (expr <+> args)
+
+        group(expr <+> args)
+
 
     override this.VisitLiteralExpression node = visitToken node.Token
 
@@ -509,6 +515,7 @@ type PrintVisitor() =
         let type_ = this.VisitOptional node.Type
         let args = this.VisitOptional node.ArgumentList
         let initializer = this.VisitOptional node.Initializer
+
         group (
             group (text "new" <++> type_ <+> args) <+/+>
             initializer
@@ -608,8 +615,7 @@ type PrintVisitor() =
         let name = visitToken node.Identifier
         match node.Initializer with
         | null -> name
-        | init ->
-            group (name <+/+> text "=") <+/!+> this.Visit init.Value
+        | init -> group (name <+/+> text "=") <+/!+> this.Visit init.Value
 
     override this.VisitVariableDeclaration node =
         let firstVar =
@@ -619,9 +625,15 @@ type PrintVisitor() =
             match first.Initializer with
             | null -> group (type_ <+/!+> name)
             | init ->
+                let initValue = this.Visit init.Value
+                // N.B.: There should be some cases where we can break the line
+                //       (and indent) after the '='. Prettier does this, see
+                //       the `printAssignmentRight` function in
+                //       `printer-estree.js`. (https://bit.ly/2RCANP8)
                 group (
-                    group (type_ <+/!+> (name <++> text "=")) <+/!+>
-                    this.Visit init.Value
+                    // I'm sorry this looks so bizarre.
+                    group (group (type_ <+/!+> name) <++> text "=" <+> line) <+>
+                    initValue
                 )
 
         let restVars =
