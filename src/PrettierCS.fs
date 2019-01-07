@@ -632,6 +632,14 @@ type PrintVisitor() =
                 //       `printer-estree.js`. (https://bit.ly/2RCANP8)
                 group (
                     // I'm sorry this looks so bizarre.
+                    // NOTE: This is *wrong*: when the inner group breaks (and
+                    //     adds the line break) then initValue should be
+                    //     indented. We don't have the ability to describe that
+                    //     right now, because the nesting of the indentation
+                    //     plays against the nesting of the groups. (See the
+                    //     tests `LongFieldInitializer`, which is currently
+                    //     wrong, `LongMethodArguments`, which is right. Fixing
+                    //     one breaks the other.)
                     group (group (type_ <+/!+> name) <++> text "=" <+> line) <+>
                     initValue
                 )
