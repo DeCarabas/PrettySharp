@@ -10,6 +10,8 @@
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Stuff.fs" />
+    <Compile Include="ExampleTests.fs" />
     <Compile Include="PrettySharpTests.fs" />
     <None Include="App.config" />
     <Content Include="./source/**/*.cs">

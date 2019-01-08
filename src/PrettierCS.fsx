@@ -36,5 +36,3 @@ let doc = visit root
 printfn "%s" (pretty 80 doc)
 
 printfn "%s" (pretty 20 doc)
-
-
