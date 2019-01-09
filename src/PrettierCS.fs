@@ -354,6 +354,8 @@ type PrintVisitor() =
             body
         )
 
+    override this.VisitConstantPattern node = this.Visit node.Expression
+
     override this.VisitConstructorInitializer node =
         let thisOrBase = visitToken node.ThisOrBaseKeyword
         text ":" <++> thisOrBase <+> this.Visit node.ArgumentList
