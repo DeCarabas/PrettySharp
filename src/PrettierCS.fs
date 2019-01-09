@@ -67,6 +67,8 @@ let visitModifiers mods =
     then nil
     else group (mods |> Seq.map (visitToken) |> Seq.reduce (<+/+>))
 
+let notImplemented node = failwithf "%A not implemented" (node.GetType())
+
 type PrintVisitor() =
     inherit CSharpSyntaxVisitor<DOC>()
 
@@ -331,6 +333,10 @@ type PrintVisitor() =
             group(text ":" <++> whenFalse)
         )
 
+    override this.VisitConstantPattern node = this.Visit node.Expression
+
+    override this.VisitConstructorConstraint node = notImplemented node
+
     override this.VisitConstructorDeclaration node =
         let attrs = this.VisitChunk node.AttributeLists
         let mods = visitModifiers node.Modifiers
@@ -357,17 +363,62 @@ type PrintVisitor() =
             body
         )
 
-    override this.VisitConstantPattern node = this.Visit node.Expression
-
     override this.VisitConstructorInitializer node =
         let thisOrBase = visitToken node.ThisOrBaseKeyword
         text ":" <++> thisOrBase <+> this.Visit node.ArgumentList
+
+    override this.VisitContinueStatement node = notImplemented node
+
+    override this.VisitConversionOperatorDeclaration node = notImplemented node
+
+    override this.VisitConversionOperatorMemberCref node = notImplemented node
+
+    override this.VisitCrefBracketedParameterList node = notImplemented node
+
+    override this.VisitCrefParameter node = notImplemented node
+
+    override this.VisitCrefParameterList node = notImplemented node
+
+    override this.VisitDeclarationExpression node = notImplemented node
+
+    override this.VisitDeclarationPattern node = notImplemented node
+
+    override this.VisitDefaultExpression node = notImplemented node
+
+    override this.VisitDefaultSwitchLabel node = notImplemented node
+
+    override this.VisitDefineDirectiveTrivia node = notImplemented node
+
+    override this.VisitDelegateDeclaration node = notImplemented node
+
+    override this.VisitDestructorDeclaration node = notImplemented node
+
+    override this.VisitDiscardDesignation node = notImplemented node
+
+    override this.VisitDocumentationCommentTrivia node = notImplemented node
+
+    override this.VisitDoStatement node = notImplemented node
 
     override this.VisitElementAccessExpression node =
         let expr = this.Visit node.Expression
         let args = this.Visit node.ArgumentList
 
         group(expr <+> args)
+
+    override this.VisitElementBindingExpression node = notImplemented node
+
+    override this.VisitElifDirectiveTrivia node = notImplemented node
+
+    override this.VisitElseClause node =
+        failwith "Should not happen: `else` is handled specially in `if`."
+
+    override this.VisitElseDirectiveTrivia node = notImplemented node
+
+    override this.VisitEmptyStatement node = breakParent <+> text ";"
+
+    override this.VisitEndIfDirectiveTrivia node = notImplemented node
+
+    override this.VisitEndRegionDirectiveTrivia node = notImplemented node
 
     override this.VisitEnumDeclaration node =
         let decl =
@@ -388,6 +439,11 @@ type PrintVisitor() =
         let id = visitToken node.Identifier
 
         group (id <+/+> equalsValue)
+
+    override this.VisitEqualsValueClause node =
+        text "=" <+/!+> this.Visit node.Value
+
+    override this.VisitErrorDirectiveTrivia node = notImplemented node
 
     override this.VisitEventDeclaration node =
         let attrs = this.VisitChunk node.AttributeLists
@@ -412,11 +468,12 @@ type PrintVisitor() =
             body
         )
 
-    override this.VisitEqualsValueClause node =
-        text "=" <+/!+> this.Visit node.Value
+    override this.VisitExplicitInterfaceSpecifier node = notImplemented node
 
     override this.VisitExpressionStatement node =
         breakParent <+> group(this.Visit node.Expression <+> text ";")
+
+    override this.VisitExternAliasDirective node = notImplemented node
 
     override this.VisitFieldDeclaration node =
         let attribs = this.VisitChunk node.AttributeLists
@@ -424,6 +481,10 @@ type PrintVisitor() =
         let decl = this.Visit node.Declaration
 
         breakParent <+> group(attribs <+/+> mods <+/+> decl <+> text ";")
+
+    override this.VisitFinallyClause node = notImplemented node
+
+    override this.VisitFixedStatement node = notImplemented node
 
     override this.VisitForEachStatement node =
         // let await = visitToken node.AwaitKeyword
@@ -442,6 +503,8 @@ type PrintVisitor() =
             ) <+>
             body
         )
+
+    override this.VisitForEachVariableStatement node = notImplemented node
 
     override this.VisitForStatement node =
         let declarationOrInit =
@@ -468,6 +531,8 @@ type PrintVisitor() =
             body
         )
 
+    override this.VisitFromClause node = notImplemented node
+
     override this.VisitGenericName node =
         // If you're mad that we're not breaking the line before the argument
         // list, don't have super-complicated argument lists.
@@ -476,8 +541,12 @@ type PrintVisitor() =
     override this.VisitGlobalStatement node =
         this.Visit node.Statement
 
+    override this.VisitGotoStatement node = notImplemented node
+
     override this.VisitIdentifierName node =
         visitToken node.Identifier
+
+    override this.VisitIfDirectiveTrivia node = notImplemented node
 
     override this.VisitIfStatement node =
         let format (node:IfStatementSyntax) =
@@ -510,6 +579,13 @@ type PrintVisitor() =
         let initializer = this.Visit node.Initializer
         text "new [" <+> commas <+> text "]" <+/!+> initializer
 
+    override this.VisitImplicitElementAccess node = notImplemented node
+
+    override this.VisitImplicitStackAllocArrayCreationExpression node =
+        notImplemented node
+
+    override this.VisitIncompleteMember node = notImplemented node
+
     override this.VisitIndexerDeclaration node =
         let attrs = this.VisitChunk node.AttributeLists
         let mods = visitModifiers node.Modifiers
@@ -517,9 +593,9 @@ type PrintVisitor() =
         let name =
             this.VisitOptional node.ExplicitInterfaceSpecifier <+> text "this"
         let body =
-            if node.AccessorList <> null
-            then line <+> this.Visit node.AccessorList
-            else text " " <+> this.Visit node.ExpressionBody <+> text ";"
+            match node.AccessorList with
+                | null -> text " " <+> this.Visit node.ExpressionBody <+> text ";"
+                | _ -> line <+> this.Visit node.AccessorList
 
         breakParent <+>
         group (
@@ -530,11 +606,24 @@ type PrintVisitor() =
             body
         )
 
+    override this.VisitIndexerMemberCref node = notImplemented node
 
     override this.VisitInitializerExpression node =
         let left = node.OpenBraceToken.Text
         let right = node.CloseBraceToken.Text
         this.BracketedList left "," right node.Expressions
+
+    override this.VisitInterfaceDeclaration node = notImplemented node
+
+    override this.VisitInterpolatedStringExpression node = notImplemented node
+
+    override this.VisitInterpolatedStringText node = notImplemented node
+
+    override this.VisitInterpolation node = notImplemented node
+
+    override this.VisitInterpolationAlignmentClause node = notImplemented node
+
+    override this.VisitInterpolationFormatClause node = notImplemented node
 
     override this.VisitInvocationExpression node =
         let expr = this.Visit node.Expression
@@ -542,14 +631,33 @@ type PrintVisitor() =
 
         group(expr <+> args)
 
+    override this.VisitIsPatternExpression node = notImplemented node
+
+    override this.VisitJoinClause node = notImplemented node
+
+    override this.VisitJoinIntoClause node = notImplemented node
+
+    override this.VisitLabeledStatement node = notImplemented node
+
+    override this.VisitLetClause node = notImplemented node
+
+    override this.VisitLineDirectiveTrivia node = notImplemented node
 
     override this.VisitLiteralExpression node = visitToken node.Token
+
+    override this.VisitLoadDirectiveTrivia node = notImplemented node
 
     override this.VisitLocalDeclarationStatement node =
         let mods = visitModifiers node.Modifiers
         let decl = this.Visit node.Declaration
 
         breakParent <+> group(mods <+/+> decl <+> text ";")
+
+    override this.VisitLocalFunctionStatement node = notImplemented node
+
+    override this.VisitLockStatement node = notImplemented node
+
+    override this.VisitMakeRefExpression node = notImplemented node
 
     override this.VisitMemberAccessExpression node =
         visitMemberAccessOrConditional (this.Visit) node
@@ -591,6 +699,10 @@ type PrintVisitor() =
     override this.VisitNameColon node =
         this.Visit node.Name <+> text ":"
 
+    override this.VisitNameEquals node = notImplemented node
+
+    override this.VisitNameMemberCref node = notImplemented node
+
     override this.VisitNamespaceDeclaration node =
         let name = this.Visit node.Name
         let contents =
@@ -616,6 +728,16 @@ type PrintVisitor() =
 
     override this.VisitOmittedArraySizeExpression _ = nil
 
+    override this.VisitOmittedTypeArgument _ = nil
+
+    override this.VisitOperatorDeclaration node = notImplemented node
+
+    override this.VisitOperatorMemberCref node = notImplemented node
+
+    override this.VisitOrderByClause node = notImplemented node
+
+    override this.VisitOrdering node = notImplemented node
+
     override this.VisitParameter node =
         let attrs = this.VisitChunk node.AttributeLists
         let mods = visitModifiers node.Modifiers
@@ -639,10 +761,22 @@ type PrintVisitor() =
 
         group (group(async <+/+> parameters <+/+> arrow) <+> body)
 
+    override this.VisitParenthesizedVariableDesignation node =
+        notImplemented node
+
+    override this.VisitPointerType node = notImplemented node
+
     override this.VisitPostfixUnaryExpression node =
         this.Visit node.Operand <+> visitToken node.OperatorToken
 
+    override this.VisitPragmaChecksumDirectiveTrivia node = notImplemented node
+
+    override this.VisitPragmaWarningDirectiveTrivia node = notImplemented node
+
     override this.VisitPredefinedType node = visitToken node.Keyword
+
+    override this.VisitPrefixUnaryExpression node =
+        visitToken node.OperatorToken <+> this.Visit node.Operand
 
     override this.VisitPropertyDeclaration node =
         let attrs = this.VisitChunk node.AttributeLists
@@ -671,26 +805,37 @@ type PrintVisitor() =
             visitToken node.SemicolonToken
         )
 
-    override this.VisitPrefixUnaryExpression node =
-        visitToken node.OperatorToken <+> this.Visit node.Operand
-
-    override this.VisitThisExpression _ = text "this"
-
-    override this.VisitUsingDirective node =
-        let name = this.Visit node.Name
-        let alias = this.VisitOptional node.Alias
-        let static_ = visitToken node.StaticKeyword
-
-        breakParent <+>
-        group (text "using" <+/+> static_ <+/+> alias <+/+> name <+> text ";")
+    override this.VisitQualifiedCref node = notImplemented node
 
     override this.VisitQualifiedName node =
         group(this.Visit node.Left <+> text "." <+> this.Visit node.Right)
+
+    override this.VisitQueryBody node = notImplemented node
+
+    override this.VisitQueryContinuation node = notImplemented node
+
+    override this.VisitQueryExpression node = notImplemented node
+
+    override this.VisitReferenceDirectiveTrivia node = notImplemented node
+
+    override this.VisitRefExpression node = notImplemented node
+
+    override this.VisitRefType node = notImplemented node
+
+    override this.VisitRefTypeExpression node = notImplemented node
+
+    override this.VisitRefValueExpression node = notImplemented node
+
+    override this.VisitRegionDirectiveTrivia node = notImplemented node
 
     override this.VisitReturnStatement node =
         let expr = this.VisitOptional node.Expression
         breakParent <+>
         group (text "return" <++> expr <+> text ";")
+
+    override this.VisitSelectClause node = notImplemented node
+
+    override this.VisitShebangDirectiveTrivia node = notImplemented node
 
     override this.VisitSimpleBaseType node = this.Visit node.Type
 
@@ -701,14 +846,58 @@ type PrintVisitor() =
         let body = this.Visit node.Body
         group (async <+/+> param <+/+> arrow <+/+> body)
 
+    override this.VisitSingleVariableDesignation node = notImplemented node
+
+    override this.VisitSizeOfExpression node = notImplemented node
+
+    override this.VisitSkippedTokensTrivia node = notImplemented node
+
+    override this.VisitStackAllocArrayCreationExpression node = notImplemented node
+
+    override this.VisitStructDeclaration node = notImplemented node
+
+    override this.VisitSwitchSection node = notImplemented node
+
+    override this.VisitSwitchStatement node = notImplemented node
+
+    override this.VisitThisExpression _ = text "this"
+
+    override this.VisitThrowExpression node = notImplemented node
+
+    override this.VisitThrowStatement node = notImplemented node
+
+    override this.VisitTryStatement node = notImplemented node
+
+    override this.VisitTupleElement node = notImplemented node
+
+    override this.VisitTupleExpression node = notImplemented node
+
+    override this.VisitTupleType node = notImplemented node
+
     override this.VisitTypeArgumentList node =
         this.BracketedList "<" "," ">" node.Arguments
 
-    override this.VisitVariableDeclarator node =
-        let name = visitToken node.Identifier
-        match node.Initializer with
-        | null -> name
-        | init -> group (name <+/+> text "=") <+/!+> this.Visit init.Value
+    override this.VisitTypeConstraint node = notImplemented node
+
+    override this.VisitTypeCref node = notImplemented node
+
+    override this.VisitTypeOfExpression node = notImplemented node
+
+    override this.VisitTypeParameter node = notImplemented node
+
+    override this.VisitTypeParameterList node = notImplemented node
+
+    override this.VisitUndefDirectiveTrivia node = notImplemented node
+
+    override this.VisitUnsafeStatement node = notImplemented node
+
+    override this.VisitUsingDirective node =
+        let name = this.Visit node.Name
+        let alias = this.VisitOptional node.Alias
+        let static_ = visitToken node.StaticKeyword
+
+        breakParent <+>
+        group (text "using" <+/+> static_ <+/+> alias <+/+> name <+> text ";")
 
     override this.VisitVariableDeclaration node =
         let firstVar =
@@ -743,6 +932,49 @@ type PrintVisitor() =
         match restVars with
         | NIL -> firstVar
         | _ -> (firstVar <+> text ",") <+/!+> restVars
+
+    override this.VisitVariableDeclarator node =
+        let name = visitToken node.Identifier
+        match node.Initializer with
+        | null -> name
+        | init -> group (name <+/+> text "=") <+/!+> this.Visit init.Value
+
+    override this.VisitWarningDirectiveTrivia node = notImplemented node
+
+    override this.VisitWhenClause node = notImplemented node
+
+    override this.VisitWhereClause node = notImplemented node
+
+    override this.VisitWhileStatement node = notImplemented node
+
+    override this.VisitXmlCDataSection node = notImplemented node
+
+    override this.VisitXmlComment node = notImplemented node
+
+    override this.VisitXmlCrefAttribute node = notImplemented node
+
+    override this.VisitXmlElement node = notImplemented node
+
+    override this.VisitXmlElementEndTag node = notImplemented node
+
+    override this.VisitXmlElementStartTag node = notImplemented node
+
+    override this.VisitXmlEmptyElement node = notImplemented node
+
+    override this.VisitXmlName node = notImplemented node
+
+    override this.VisitXmlNameAttribute node = notImplemented node
+
+    override this.VisitXmlPrefix node = notImplemented node
+
+    override this.VisitXmlProcessingInstruction node = notImplemented node
+
+    override this.VisitXmlText node = notImplemented node
+
+    override this.VisitXmlTextAttribute node = notImplemented node
+
+    override this.VisitYieldStatement node = notImplemented node
+
 
 let visit (tree:SyntaxNode) =
     let visitor = new PrintVisitor()
