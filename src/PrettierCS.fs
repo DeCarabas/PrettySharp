@@ -19,8 +19,6 @@ let ( <+/+> ) x y = ifNotNil x y (x <+> line <+> y)
 /// Concatenate two documents with a line break, and indent the second one.
 let ( <+/!+> ) x y = ifNotNil x y (x <+> indent (line <+> y))
 
-
-
 let join sep seq =
     if Seq.isEmpty seq
     then nil
@@ -80,7 +78,9 @@ type PrintVisitor() =
         Seq.map (this.Visit) seq |> Seq.fold (<+/+>) nil
 
     member this.VisitOptional (node : SyntaxNode) =
-        if node = null then nil else this.Visit node
+        match node with
+            | null -> nil
+            | _ -> this.Visit node
 
     member this.VisitTypeDeclaration (node:TypeDeclarationSyntax) =
         let attribs = this.VisitChunk node.AttributeLists
@@ -98,7 +98,8 @@ type PrintVisitor() =
             id <+/+>
             typeParams <+/+>
             baseList <+/+>
-            constraints)
+            constraints
+        )
 
     member this.VisitBody (node:SyntaxNode) =
         if node.IsKind(SyntaxKind.Block)
@@ -120,9 +121,10 @@ type PrintVisitor() =
         let attrs = this.VisitChunk node.AttributeLists
         let mods = visitModifiers node.Modifiers
         let body =
-            if node.Body <> null
-            then line <+> this.Visit node.Body
-            else text " " <+> this.Visit node.ExpressionBody <+> text ";"
+            match node.Body with
+                | null ->
+                    text " " <+> this.Visit node.ExpressionBody <+> text ";"
+                | _ -> line <+> this.Visit node.Body
 
         group (
             attrs <+/+>
@@ -138,10 +140,10 @@ type PrintVisitor() =
         this.Visit node.Alias <+> text "::" <+> this.Visit node.Name
 
     override this.VisitAnonymousMethodExpression node = //#filler
-        let async_ = visitToken node.AsyncKeyword
-        let params_ = this.Visit node.ParameterList
+        let asyncKw = visitToken node.AsyncKeyword
+        let ps = this.Visit node.ParameterList
         let body = this.Visit node.Body
-        group(async_ <+/+> text "delegate" <+> params_) <+/+> body
+        group (asyncKw <+/+> text "delegate" <+> ps) <+/+> body
 
     override this.VisitAnonymousObjectCreationExpression node = //#filler
         this.BracketedList "new {" "," "}" node.Initializers
@@ -261,8 +263,8 @@ type PrintVisitor() =
         group (text "case" <+/!+> (expr <+> text":"))
 
     override this.VisitCastExpression node =
-        let type_ = bracket "(" ")" (this.Visit node.Type)
-        type_ <+> this.Visit node.Expression
+        let typ = bracket "(" ")" (this.Visit node.Type)
+        typ <+> this.Visit node.Expression
 
     override this.VisitCatchClause node = //#filler
         let decl = this.VisitOptional node.Declaration
@@ -271,9 +273,9 @@ type PrintVisitor() =
         group(text "catch" <++> decl <+> indent(line <+> filter)) <+/+> block
 
     override this.VisitCatchDeclaration node = //#filler
-        let type_ = this.Visit node.Type
+        let typ = this.Visit node.Type
         let identifier = visitToken node.Identifier
-        bracket "(" ")" (group (type_ <+/+> identifier))
+        bracket "(" ")" (group (typ <+/+> identifier))
 
     override this.VisitCatchFilterClause node = //#filler
         bracket "when (" ")" (this.Visit node.FilterExpression)
@@ -336,9 +338,10 @@ type PrintVisitor() =
         let parameterList = this.Visit node.ParameterList
         let initializer = this.VisitOptional node.Initializer
         let body =
-            if node.Body <> null
-            then line <+> this.Visit node.Body
-            else text " " <+> this.Visit node.ExpressionBody <+> text ";"
+            match node.Body with
+                | null ->
+                    text " " <+> this.Visit node.ExpressionBody <+> text ";"
+                | _ -> line <+> this.Visit node.Body
 
         breakParent <+>
         group (
@@ -389,7 +392,7 @@ type PrintVisitor() =
     override this.VisitEventDeclaration node =
         let attrs = this.VisitChunk node.AttributeLists
         let mods = visitModifiers node.Modifiers
-        let type_ = this.Visit node.Type
+        let typ = this.Visit node.Type
         let name =
             let explicitInterface =
                 this.VisitOptional node.ExplicitInterfaceSpecifier
@@ -403,7 +406,7 @@ type PrintVisitor() =
                 attrs <+/+>
                 group(
                     group(mods <+/+> text "event") <+/+>
-                    group(type_ <+/+> name)
+                    group(typ <+/+> name)
                 )
             ) <+/+>
             body
@@ -424,7 +427,7 @@ type PrintVisitor() =
 
     override this.VisitForEachStatement node =
         // let await = visitToken node.AwaitKeyword
-        let type_ = this.Visit node.Type
+        let typ = this.Visit node.Type
         let id = visitToken node.Identifier
         let expr = this.Visit node.Expression
         let body = this.VisitBody node.Statement
@@ -434,7 +437,7 @@ type PrintVisitor() =
             group (
                 text "foreach" <+/+>
                 bracket "(" ")" (
-                    group (type_ <+/+> id <+/+> text "in") <+/!+> expr
+                    group (typ <+/+> id <+/+> text "in") <+/!+> expr
                 )
             ) <+>
             body
@@ -484,8 +487,8 @@ type PrintVisitor() =
 
         let rec gather chain (node:SyntaxNode) =
             match node with
-            | :? IfStatementSyntax as if_ -> gather (if_::chain) if_.Else
-            | :? ElseClauseSyntax as else_ -> gather chain else_.Statement
+            | :? IfStatementSyntax as ifs -> gather (ifs::chain) ifs.Else
+            | :? ElseClauseSyntax as els -> gather chain els.Statement
             | last ->
                 let trailingElse =
                     match last with
@@ -510,7 +513,7 @@ type PrintVisitor() =
     override this.VisitIndexerDeclaration node =
         let attrs = this.VisitChunk node.AttributeLists
         let mods = visitModifiers node.Modifiers
-        let type_ = this.Visit node.Type
+        let typ = this.Visit node.Type
         let name =
             this.VisitOptional node.ExplicitInterfaceSpecifier <+> text "this"
         let body =
@@ -522,7 +525,7 @@ type PrintVisitor() =
         group (
             group (
                 attrs <+/+>
-                group(mods <+/+> group(type_ <+/+> name))
+                group(mods <+/+> group(typ <+/+> name))
             ) <+>
             body
         )
@@ -602,12 +605,12 @@ type PrintVisitor() =
         group (this.Visit node.ElementType <+> text "?")
 
     override this.VisitObjectCreationExpression node =
-        let type_ = this.VisitOptional node.Type
+        let typ = this.VisitOptional node.Type
         let args = this.VisitOptional node.ArgumentList
         let initializer = this.VisitOptional node.Initializer
 
         group (
-            group (text "new" <++> type_ <+> args) <+/+>
+            group (text "new" <++> typ <+> args) <+/+>
             initializer
         )
 
@@ -616,11 +619,11 @@ type PrintVisitor() =
     override this.VisitParameter node =
         let attrs = this.VisitChunk node.AttributeLists
         let mods = visitModifiers node.Modifiers
-        let type_ = this.VisitOptional node.Type
+        let typ = this.VisitOptional node.Type
         let id = visitToken node.Identifier
         let default_ = this.VisitOptional node.Default
 
-        group (attrs <+/+> mods <+/+> type_ <+/+> id <+/+> default_)
+        group (attrs <+/+> mods <+/+> typ <+/+> id <+/+> default_)
 
     override this.VisitParameterList node =
         this.VisitParameterOrArgumentList "(" ")" node.Parameters
@@ -644,7 +647,7 @@ type PrintVisitor() =
     override this.VisitPropertyDeclaration node =
         let attrs = this.VisitChunk node.AttributeLists
         let mods = visitModifiers node.Modifiers
-        let type_ = this.Visit node.Type
+        let typ = this.Visit node.Type
         let name =
             let explicitInterface =
                 this.VisitOptional node.ExplicitInterfaceSpecifier
@@ -662,7 +665,7 @@ type PrintVisitor() =
         group (
             group (
                 attrs <+/+>
-                group(mods <+/+> group(type_ <+/+> name))
+                group(mods <+/+> group(typ <+/+> name))
             ) <+>
             body <+>
             visitToken node.SemicolonToken
@@ -709,11 +712,11 @@ type PrintVisitor() =
 
     override this.VisitVariableDeclaration node =
         let firstVar =
-            let type_ = this.Visit node.Type
+            let typ = this.Visit node.Type
             let first = Seq.head node.Variables
             let name = visitToken first.Identifier
             match first.Initializer with
-            | null -> group (type_ <+/!+> name)
+            | null -> group (typ <+/!+> name)
             | init ->
                 let initValue = this.Visit init.Value
                 // N.B.: There should be some cases where we can break the line
@@ -724,13 +727,14 @@ type PrintVisitor() =
                     // I'm sorry this looks so bizarre.
                     // NOTE: This is *wrong*: when the inner group breaks (and
                     //     adds the line break) then initValue should be
-                    //     indented. We don't have the ability to describe that
-                    //     right now, because the nesting of the indentation
-                    //     plays against the nesting of the groups. (See the
-                    //     tests `LongFieldInitializer`, which is currently
-                    //     wrong, `LongMethodArguments`, which is right. Fixing
-                    //     one breaks the other.)
-                    group (group (type_ <+/!+> name) <++> text "=" <+> line) <+>
+                    //     indented. We don't have the ability to describe
+                    //     that right now, because the nesting of the
+                    //     indentation plays against the nesting of the
+                    //     groups. (See the tests `LongFieldInitializer`,
+                    //     which is currently wrong, and
+                    //     `LongMethodArguments`, which is right. Fixing one
+                    //     breaks the other.)
+                    group (group (typ <+/!+> name) <++> text "=" <+> line) <+>
                     initValue
                 )
 

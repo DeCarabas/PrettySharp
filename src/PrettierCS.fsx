@@ -28,6 +28,6 @@ open PrettySharp.CS
 
 let doc = visit root
 
-printfn "%s" (pretty 80 doc)
+printfn "\n%s" (pretty 80 doc)
 
-printfn "%s" (pretty 20 doc)
+printfn "\n%s" (pretty 20 doc)
