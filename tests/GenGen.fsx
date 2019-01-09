@@ -1,16 +1,17 @@
-open Microsoft.CodeAnalysis.CSharp
-open Microsoft.CodeAnalysis
-open Microsoft.CodeAnalysis.CSharp.Syntax
 #r "netstandard"
 #r "System.Text.Encoding"
 #r "System.Xml.Linq"
 #r "../packages/Microsoft.CodeAnalysis.Common/lib/netstandard1.3/Microsoft.CodeAnalysis.dll"
 #r "../packages/Microsoft.CodeAnalysis.CSharp/lib/netstandard1.3/Microsoft.CodeAnalysis.CSharp.dll"
+#r "../packages/FsCheck/lib/net452/FsCheck.dll"
 
 open System
 open System.Collections.Generic
 open System.Reflection
 open System.Xml.Linq
+
+open FsCheck
+open Microsoft.CodeAnalysis
 open Microsoft.CodeAnalysis.CSharp
 
 
@@ -48,7 +49,6 @@ let syntaxMap =
     let url = "https://raw.githubusercontent.com/dotnet/roslyn/master/src/Compilers/CSharp/Portable/Syntax/Syntax.xml"
     syntaxNodesToTokenFieldKinds url
 
-
 let isNodeFactoryMethod (m:MethodInfo) =
     typeof<CSharpSyntaxNode>.IsAssignableFrom(m.ReturnType) &&
     not (m.Name.StartsWith("get_")) &&
@@ -64,7 +64,8 @@ let hasEnumerableParameter (m:MethodInfo) =
     m.GetParameters()
     |> Array.exists (fun p -> p.ParameterType |> isTypeIEnumerable)
 
-let isTypeTrivia (t:Type) = typeof<StructuredTriviaSyntax>.IsAssignableFrom(t)
+let isTypeTrivia (t:Type) =
+    typeof<Syntax.StructuredTriviaSyntax>.IsAssignableFrom(t)
 let isReturnTypeTrivia (m:MethodInfo) = m.ReturnType |> isTypeTrivia
 
 let safeName (p:ParameterInfo) = if p.Name ="type" then "type_" else p.Name
@@ -94,7 +95,7 @@ let makeInvocation (m:MethodInfo) =
         else Array.reduce (fun l r -> l + " " + r) names
     let gen =
         if m.GetParameters().Length = 0
-        then "Gen.map (fun _ -> SyntaxFactory." + m.Name + "()) ()"
+        then "Gen.constant () |> Gen.map (fun () -> SyntaxFactory." + m.Name + ")"
         else "Gen.map (fun " + pnamespace + " -> SyntaxFactory." + m.Name + "(" + pnames + ")) " + pnamespace
 
     pvals + gen
@@ -106,4 +107,47 @@ let concrete =
     |> Array.filter (isReturnTypeTrivia >> not)
     |> Array.map (makeInvocation)
 
-concrete.[3]
+let genThisExpression0 =
+    gen {
+        return SyntaxFactory.ThisExpression()
+    }
+
+let genBinaryExpression0 =
+    let gen_ size =
+        gen {
+            let! kind = Gen.elements [
+                SyntaxKind.AddExpression;
+                SyntaxKind.SubtractExpression;
+            ]
+            let! left = Gen.resize (size/2) Arb.generate<Syntax.ExpressionSyntax>
+            let! right = Gen.resize (size/2) Arb.generate<Syntax.ExpressionSyntax>
+            return SyntaxFactory.BinaryExpression(kind, left, right)
+        }
+    Gen.sized gen_
+
+let genCast<'S,'T> (g:Gen<'S>):Gen<'T> =
+    Gen.map (fun (x:'S) -> x :> Object :?> 'T) g
+
+type RoslynGenerators =
+    static member ThisExpressionSyntax() =
+        {new Arbitrary<Syntax.ThisExpressionSyntax>() with
+            override x.Generator = genThisExpression0
+            override x.Shrinker t = Seq.empty }
+    static member BinaryExpressionSyntax() =
+        {new Arbitrary<Syntax.BinaryExpressionSyntax>() with
+            override x.Generator = genBinaryExpression0
+            override x.Shrinker t = Seq.empty }
+    static member ExpressionSyntax() =
+        {new Arbitrary<Syntax.ExpressionSyntax>() with
+            override x.Generator =
+                Gen.oneof [
+                    genBinaryExpression0 |> genCast;
+                    genThisExpression0 |> genCast;
+                ]
+            override x.Shrinker t = Seq.empty }
+
+Arb.register<RoslynGenerators>()
+
+Arb.generate<Syntax.ExpressionSyntax> |> Gen.sample 10 1
+
+
