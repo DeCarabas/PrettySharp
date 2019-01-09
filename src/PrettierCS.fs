@@ -7,6 +7,7 @@ open Microsoft.CodeAnalysis.CSharp.Syntax
 open System.Linq.Expressions
 open System
 open Microsoft.CodeAnalysis.CSharp
+open System.Linq.Expressions
 
 let indentLevel = 4
 let bracket = PrettySharp.Core.bracket indentLevel
@@ -17,6 +18,8 @@ let ( <+/+> ) x y = ifNotNil x y (x <+> line <+> y)
 
 /// Concatenate two documents with a line break, and indent the second one.
 let ( <+/!+> ) x y = ifNotNil x y (x <+> indent (line <+> y))
+
+
 
 let join sep seq =
     if Seq.isEmpty seq
@@ -131,6 +134,21 @@ type PrintVisitor() =
         let accessors = Seq.map (this.Visit) node.Accessors |> join line
         text "{" <+/+>  indent(accessors) <+/+> text "}"
 
+    override this.VisitAliasQualifiedName node = // #filler
+        this.Visit node.Alias <+> text "::" <+> this.Visit node.Name
+
+    override this.VisitAnonymousMethodExpression node = //#filler
+        let async_ = visitToken node.AsyncKeyword
+        let params_ = this.Visit node.ParameterList
+        let body = this.Visit node.Body
+        group(async_ <+/+> text "delegate" <+> params_) <+/+> body
+
+    override this.VisitAnonymousObjectCreationExpression node = //#filler
+        this.BracketedList "new {" "," "}" node.Initializers
+
+    override this.VisitAnonymousObjectMemberDeclarator node = //#filler
+        group (this.Visit node.NameEquals <+/!+> this.Visit node.Expression)
+
     override this.VisitArgument node =
         let namecolon = this.VisitOptional node.NameColon
         let refkind = visitToken node.RefKindKeyword
@@ -145,13 +163,13 @@ type PrintVisitor() =
         this.Visit node.Type <+>
         this.VisitOptional node.Initializer
 
+    override this.VisitArrayRankSpecifier node =
+        this.BracketedList "[" "," "]" node.Sizes
+
     override this.VisitArrayType node =
         let ranks =
             node.RankSpecifiers |> Seq.map (this.Visit) |> Seq.reduce (<+>)
         this.Visit node.ElementType <+> ranks
-
-    override this.VisitArrayRankSpecifier node =
-        this.BracketedList "[" "," "]" node.Sizes
 
     override this.VisitArrowExpressionClause node =
         group(text "=>" <+/!+> this.Visit node.Expression)
@@ -162,6 +180,30 @@ type PrintVisitor() =
         let right = this.Visit node.Right
 
         group (left <+> text " " <+> op <+/!+> right)
+
+    override this.VisitAttribute node = //#filler
+        this.Visit node.Name <+> this.VisitOptional node.ArgumentList
+
+    override this.VisitAttributeArgument node = //#filler
+        this.VisitOptional node.NameEquals <+/+>
+        this.VisitOptional node.NameColon <+/+>
+        this.Visit node.Expression
+
+    override this.VisitAttributeArgumentList node =
+        this.VisitParameterOrArgumentList "(" ")" node.Arguments
+
+    override this.VisitAttributeList node = //#filler
+        let target = this.VisitOptional node.Target
+        let attrList = node.Attributes |> Seq.map (this.Visit) |> listJoin ","
+        bracket "[" "]" (target <+> attrList)
+
+    override this.VisitAttributeTargetSpecifier node = //#filler
+        visitToken node.Identifier <+> text ":"
+
+    override this.VisitAwaitExpression node = //#filler
+        text "await" <++> this.Visit node.Expression
+
+    override this.VisitBaseExpression _ = text "base"
 
     override this.VisitBaseList node =
         let bases = group(node.Types |> Seq.map (this.Visit) |> listJoin ",")
@@ -201,15 +243,48 @@ type PrintVisitor() =
     override this.VisitBracketedArgumentList node =
         this.VisitParameterOrArgumentList "[" "]" node.Arguments
 
+    override this.VisitBracketedParameterList node = //#filler
+        this.VisitParameterOrArgumentList "[" "]" node.Parameters
+
+    override this.VisitBreakStatement _ = breakParent <+> text "break;"
+
+    override this.VisitCasePatternSwitchLabel node = //#filler
+        let pattern = this.Visit node.Pattern
+        let whenClause = this.VisitOptional node.WhenClause
+        group (
+            text "case" <+/!+>
+            (group (pattern <+/+> whenClause) <+> text ":")
+        )
+
+    override this.VisitCaseSwitchLabel node = //#filler
+        let expr = this.Visit node.Value
+        group (text "case" <+/!+> (expr <+> text":"))
+
     override this.VisitCastExpression node =
-        let type_ =
-            group(
-                text "(" <+>
-                indent(softline <+> this.Visit node.Type) <+>
-                softline <+>
-                text ")"
-            )
+        let type_ = bracket "(" ")" (this.Visit node.Type)
         type_ <+> this.Visit node.Expression
+
+    override this.VisitCatchClause node = //#filler
+        let decl = this.VisitOptional node.Declaration
+        let filter = this.VisitOptional node.Filter
+        let block = this.Visit node.Block
+        group(text "catch" <++> decl <+> indent(line <+> filter)) <+/+> block
+
+    override this.VisitCatchDeclaration node = //#filler
+        let type_ = this.Visit node.Type
+        let identifier = visitToken node.Identifier
+        bracket "(" ")" (group (type_ <+/+> identifier))
+
+    override this.VisitCatchFilterClause node = //#filler
+        bracket "when (" ")" (this.Visit node.FilterExpression)
+
+    override this.VisitCheckedExpression node = //#filler
+        let kw = visitToken node.Keyword
+        kw <+> bracket "(" ")" (this.Visit node.Expression)
+
+    override this.VisitCheckedStatement node = //#filler
+        let kw = visitToken node.Keyword
+        kw <+/+> this.Visit node.Block
 
     override this.VisitClassDeclaration node =
         let decl = this.VisitTypeDeclaration node
@@ -230,8 +305,29 @@ type PrintVisitor() =
 
         group (decl <+/+> members)
 
+    override this.VisitClassOrStructConstraint node =
+        visitToken node.ClassOrStructKeyword
+
+    override this.VisitCompilationUnit node =
+        let attribs = this.VisitChunk node.AttributeLists
+        let usings = this.VisitChunk node.Usings
+        let externs = this.VisitChunk node.Externs
+        let members = this.VisitChunk node.Members
+
+        attribs <+/+> usings <+/+> externs <+/+> members
+
     override this.VisitConditionalAccessExpression node =
         visitMemberAccessOrConditional (this.Visit) node
+
+    override this.VisitConditionalExpression node = //#filler
+        let condition = this.Visit node.Condition
+        let whenTrue = this.Visit node.WhenTrue
+        let whenFalse = this.Visit node.WhenFalse
+        group (
+            condition <+/+>
+            group(text "?" <++> whenTrue) <+/+>
+            group(text ":" <++> whenFalse)
+        )
 
     override this.VisitConstructorDeclaration node =
         let attrs = this.VisitChunk node.AttributeLists
@@ -257,14 +353,6 @@ type PrintVisitor() =
             ) <+/+>
             body
         )
-
-    override this.VisitCompilationUnit node =
-        let attribs = this.VisitChunk node.AttributeLists
-        let usings = this.VisitChunk node.Usings
-        let externs = this.VisitChunk node.Externs
-        let members = this.VisitChunk node.Members
-
-        attribs <+/+> usings <+/+> externs <+/+> members
 
     override this.VisitConstructorInitializer node =
         let thisOrBase = visitToken node.ThisOrBaseKeyword
@@ -581,7 +669,7 @@ type PrintVisitor() =
     override this.VisitPrefixUnaryExpression node =
         visitToken node.OperatorToken <+> this.Visit node.Operand
 
-    override this.VisitThisExpression node = text "this"
+    override this.VisitThisExpression _ = text "this"
 
     override this.VisitUsingDirective node =
         let name = this.Visit node.Name

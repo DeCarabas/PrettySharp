@@ -32,11 +32,13 @@ let ( <+> ) x y  =
     let left =
         match x with
         | CONCAT(xi) -> xi
+        | NIL -> []
         | _ -> [x]
 
     let right =
         match y with
         | CONCAT(yi) -> yi
+        | NIL -> []
         | _ -> [y]
 
     CONCAT (left @ right)

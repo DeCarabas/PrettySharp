@@ -14,12 +14,7 @@ let path = @"./tests/source/KateGame.cs.ignore"
 let parseOpts = CSharpParseOptions.Default.WithKind(SourceCodeKind.Script)
 // let tree = CSharpSyntaxTree.ParseText (System.IO.File.ReadAllText path)
 let tree = CSharpSyntaxTree.ParseText ("
-            var node =
-                new Node(
-                    dna,
-                    Vector3.Zero,
-                    -MathHelper.PiOver2,
-                    5 + Node.random.NextFloat() * 4);
+    var y = delegate (int x) { return x + 1; }
 ", parseOpts)
 let root = tree.GetRoot()
 
