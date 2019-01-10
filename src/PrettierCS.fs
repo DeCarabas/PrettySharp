@@ -69,7 +69,7 @@ let visitModifiers mods =
 
 let notImplemented node = failwithf "%A not implemented" (node.GetType())
 
-let notVisitingTrivia = failwith "Not visiting trivia explicitly!"
+let notVisitingTrivia = NIL
 
 type PrintVisitor() =
     inherit CSharpSyntaxVisitor<DOC>()
