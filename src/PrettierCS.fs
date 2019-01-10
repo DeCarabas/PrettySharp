@@ -75,9 +75,14 @@ let notVisitingTrivia = NIL
 type PrintVisitor() =
     inherit CSharpSyntaxVisitor<DOC>()
 
+    member this.DelimitedList s x =
+        Seq.map (this.Visit) x |> listJoin s
+
+    member this.CommaList x =
+        this.DelimitedList "," x
+
     member this.BracketedList l s r x =
-        let contents = Seq.map (this.Visit) x |> listJoin s
-        bracket l r contents
+        this.DelimitedList s x |> bracket l r
 
     member this.VisitChunk seq =
         Seq.map (this.Visit) seq |> Seq.fold (<+/+>) nil
@@ -110,7 +115,7 @@ type PrintVisitor() =
         if Seq.isEmpty list
         then text (lb + rb)
         else
-            let args = Seq.map (this.Visit) list |> listJoin ","
+            let args = this.CommaList list
             text lb <+>
             group (indent (softline <+> args <+> text rb))
 
@@ -201,7 +206,7 @@ type PrintVisitor() =
 
     override this.VisitAttributeList node = //#filler
         let target = this.Visit node.Target
-        let attrList = node.Attributes |> Seq.map (this.Visit) |> listJoin ","
+        let attrList = this.CommaList node.Attributes
         bracket "[" "]" (target <+> attrList)
 
     override this.VisitAttributeTargetSpecifier node = //#filler
@@ -213,7 +218,7 @@ type PrintVisitor() =
     override this.VisitBaseExpression _ = text "base"
 
     override this.VisitBaseList node =
-        let bases = group(node.Types |> Seq.map (this.Visit) |> listJoin ",")
+        let bases = group(this.CommaList node.Types)
         text ":" <+/!+> bases
 
     override this.VisitBinaryExpression node =
@@ -638,12 +643,10 @@ type PrintVisitor() =
     override this.VisitForStatement node =
         let declarationOrInit =
             let decl = this.Visit node.Declaration
-            let initializers =
-                group(node.Initializers |> Seq.map (this.Visit) |> listJoin ",")
+            let initializers = group (this.CommaList node.Initializers)
             decl <+> initializers
         let condition = this.Visit node.Condition
-        let incrementors =
-            group(node.Incrementors |> Seq.map (this.Visit) |> listJoin ",")
+        let incrementors = group (this.CommaList node.Incrementors)
         let body = this.VisitBody node.Statement
 
         breakParent <+>
@@ -1127,11 +1130,12 @@ type PrintVisitor() =
     override this.VisitTypeArgumentList node =
         this.BracketedList "<" "," ">" node.Arguments
 
-    override this.VisitTypeConstraint node = notImplemented node
+    override this.VisitTypeConstraint node = this.Visit node.Type
 
-    override this.VisitTypeCref node = notImplemented node
+    override this.VisitTypeCref node = notVisitingTrivia
 
-    override this.VisitTypeOfExpression node = notImplemented node
+    override this.VisitTypeOfExpression node =
+        bracket "typeof(" ")" (this.Visit node.Type)
 
     override this.VisitTypeParameter node =
         let attrs = this.VisitChunk node.AttributeLists
@@ -1140,10 +1144,19 @@ type PrintVisitor() =
 
         group (attrs <+/+> variance <++> id)
 
+    override this.VisitTypeParameterConstraintClause node =
+        let constraints = this.CommaList node.Constraints
+        let name = this.Visit node.Name
+
+        group (
+            group (text "where" <++> name <++> text ":") <+/!+>
+            group (constraints)
+        )
+
     override this.VisitTypeParameterList node =
         this.VisitParameterOrArgumentList "<" ">" node.Parameters
 
-    override this.VisitUndefDirectiveTrivia node = notImplemented node
+    override this.VisitUndefDirectiveTrivia node = notVisitingTrivia
 
     override this.VisitUnsafeStatement node = notImplemented node
 
@@ -1183,8 +1196,7 @@ type PrintVisitor() =
                     initValue
                 )
 
-        let restVars =
-            (Seq.tail node.Variables) |> Seq.map (this.Visit) |> listJoin ","
+        let restVars = this.CommaList (Seq.tail node.Variables)
         match restVars with
         | NIL -> firstVar
         | _ -> (firstVar <+> text ",") <+/!+> restVars
