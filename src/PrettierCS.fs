@@ -737,7 +737,7 @@ type PrintVisitor() =
         let name =
             this.Visit node.ExplicitInterfaceSpecifier <+> text "this"
         let body =
-            match node.Body, node.ExpressionBody with
+            match node.AccessorList, node.ExpressionBody with
                 | null, null -> text ";"
                 | null, expr -> text " " <+> this.Visit expr <+> text ";"
                 | body, _ -> line <+> this.Visit body
