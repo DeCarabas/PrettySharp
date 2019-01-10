@@ -563,6 +563,14 @@ type PrintVisitor() =
             body
         )
 
+    override this.VisitEventFieldDeclaration node =
+        let attribs = this.VisitChunk node.AttributeLists
+        let mods = visitModifiers node.Modifiers
+        let decl = this.Visit node.Declaration
+
+        breakParent <+>
+        group(attribs <+/+> mods <+/+> (text "event" <++> decl) <+> text ";")
+
     override this.VisitExplicitInterfaceSpecifier node =
         this.Visit node.Name <+> text "."
 
@@ -746,7 +754,24 @@ type PrintVisitor() =
         let right = node.CloseBraceToken.Text
         this.BracketedList left "," right node.Expressions
 
-    override this.VisitInterfaceDeclaration node = notImplemented node
+    override this.VisitInterfaceDeclaration node = //#filler
+        let decl = this.VisitTypeDeclaration node
+
+        let foldMember doc m =
+            let memberDoc = this.Visit m
+            if doc = NIL
+            then memberDoc
+            else
+                match m.Kind() with
+                | SyntaxKind.FieldDeclaration -> doc <+/+> memberDoc
+                | _ -> doc <+/+> line <+> memberDoc
+
+        let members =
+            node.Members
+            |> Seq.fold (foldMember) nil
+            |> bracket "{" "}"
+
+        group (decl <+/+> members)
 
     override this.VisitInterpolatedStringExpression node = notImplemented node
 
@@ -811,9 +836,10 @@ type PrintVisitor() =
         let parameterList = this.Visit node.ParameterList
         let constraints = this.VisitChunk node.ConstraintClauses
         let body =
-            match node.Body with
-                | null -> text " " <+> this.Visit node.ExpressionBody <+> text ";"
-                | _ -> line <+> this.Visit node.Body
+            match node.Body, node.ExpressionBody with
+                | null, null -> text ";"
+                | null, expr -> text " " <+> this.Visit expr <+> text ";"
+                | body, _ -> line <+> this.Visit body
 
         breakParent <+>
         group (
@@ -1016,9 +1042,15 @@ type PrintVisitor() =
 
     override this.VisitTypeOfExpression node = notImplemented node
 
-    override this.VisitTypeParameter node = notImplemented node
+    override this.VisitTypeParameter node =
+        let attrs = this.VisitChunk node.AttributeLists
+        let variance = visitToken node.VarianceKeyword
+        let id = visitToken node.Identifier
 
-    override this.VisitTypeParameterList node = notImplemented node
+        group (attrs <+/+> variance <++> id)
+
+    override this.VisitTypeParameterList node =
+        this.VisitParameterOrArgumentList "<" ">" node.Parameters
 
     override this.VisitUndefDirectiveTrivia node = notImplemented node
 
