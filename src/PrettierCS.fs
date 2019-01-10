@@ -12,6 +12,7 @@ open System.Linq.Expressions
 let indentLevel = 4
 let bracket = PrettySharp.Core.bracket indentLevel
 let indent = nest indentLevel
+let dedent = nest (-indentLevel)
 
 /// Concatenate two documents with a line-break in between.
 let ( <+/+> ) x y = ifNotNil x y (x <+> line <+> y)
@@ -665,7 +666,7 @@ type PrintVisitor() =
         let id = visitToken node.Identifier
         let expr = this.Visit node.Expression
 
-        group (text "from" <++> typ <++> id <++> text "in" <++> expr)
+        group (text "from" <+/!+> group (typ <++> id <++> text "in" <++> expr))
 
     override this.VisitGenericName node =
         // If you're mad that we're not breaking the line before the argument
@@ -773,37 +774,83 @@ type PrintVisitor() =
 
         group (decl <+/+> members)
 
-    override this.VisitInterpolatedStringExpression node = notImplemented node
+    override this.VisitInterpolatedStringExpression node =
+        let starting = visitToken node.StringStartToken
+        let contents = node.Contents |> Seq.map (this.Visit) |> Seq.reduce (<+>)
+        let ending = visitToken node.StringEndToken
 
-    override this.VisitInterpolatedStringText node = notImplemented node
+        group (starting <+> contents <+> ending)
 
-    override this.VisitInterpolation node = notImplemented node
+    override this.VisitInterpolatedStringText node = visitToken node.TextToken
 
-    override this.VisitInterpolationAlignmentClause node = notImplemented node
+    override this.VisitInterpolation node = //#filler
+        let expr = this.Visit node.Expression
+        let alignment = this.Visit node.AlignmentClause
+        let format = this.Visit node.FormatClause
 
-    override this.VisitInterpolationFormatClause node = notImplemented node
+        group (text "{" <+> expr <+> alignment <+> format <+> text "}")
+
+    override this.VisitInterpolationAlignmentClause node = //#filler
+        text "," <+> this.Visit node.Value
+
+    override this.VisitInterpolationFormatClause node = //#filler
+        text ":" <+> visitToken node.FormatStringToken
 
     override this.VisitInvocationExpression node =
         let expr = this.Visit node.Expression
         let args = this.Visit node.ArgumentList
 
-        group(expr <+> args)
+        group (expr <+> args)
 
-    override this.VisitIsPatternExpression node = notImplemented node
+    override this.VisitIsPatternExpression node = //#filler
+        let expr = this.Visit node.Expression
+        let pattern = this.Visit node.Pattern
 
-    override this.VisitJoinClause node = notImplemented node
+        group (expr <+/+> text "is" <+/+> pattern)
 
-    override this.VisitJoinIntoClause node = notImplemented node
+    override this.VisitJoinClause node = //#filler
+        let typ = this.Visit node.Type
+        let id = visitToken node.Identifier
+        let inexpr = this.Visit node.InExpression
+        let leftexpr = this.Visit node.LeftExpression
+        let rightexpr = this.Visit node.RightExpression
+        let into = this.Visit node.Into
 
-    override this.VisitLabeledStatement node = notImplemented node
+        group (
+            text "join" <+/!+>
+            group (
+                group (typ <++> id <++> text "in" <++> inexpr) <+/!+>
+                group (
+                    group (text "on" <++> leftexpr) <+/+>
+                    group (text "equals" <++> rightexpr)
+                )
+            ) <++>
+            into
+        )
 
-    override this.VisitLetClause node = notImplemented node
+    override this.VisitJoinIntoClause node =
+        text "into" <++> visitToken node.Identifier
 
-    override this.VisitLineDirectiveTrivia node = notImplemented node
+    override this.VisitLabeledStatement node =
+        let id = visitToken node.Identifier
+        let stat = this.Visit node.Statement
+
+        breakParent <+> group (id <+> text ":" <++> stat)
+
+    override this.VisitLetClause node = //#filler
+        let id = visitToken node.Identifier
+        let expr = this.Visit node.Expression
+
+        group (
+            text "let" <+/!+>
+            group (id <++> text "=" <+/!+> group (expr))
+        )
+
+    override this.VisitLineDirectiveTrivia node = notVisitingTrivia
 
     override this.VisitLiteralExpression node = visitToken node.Token
 
-    override this.VisitLoadDirectiveTrivia node = notImplemented node
+    override this.VisitLoadDirectiveTrivia node = notVisitingTrivia
 
     override this.VisitLocalDeclarationStatement node =
         let mods = visitModifiers node.Modifiers
@@ -811,11 +858,44 @@ type PrintVisitor() =
 
         breakParent <+> group(mods <+/+> decl <+> text ";")
 
-    override this.VisitLocalFunctionStatement node = notImplemented node
+    override this.VisitLocalFunctionStatement node = //#filler
+        let mods = visitModifiers node.Modifiers
+        let returnType = this.Visit node.ReturnType
+        let name =
+            let id = visitToken node.Identifier
+            let typeParams = this.Visit node.TypeParameterList
+            group (id <+> softline <+> typeParams)
+        let parameterList = this.Visit node.ParameterList
+        let constraints = this.VisitChunk node.ConstraintClauses
+        let body =
+            match node.Body, node.ExpressionBody with
+                | null, null -> text ";"
+                | null, expr -> text " " <+> this.Visit expr <+> text ";"
+                | body, _ -> line <+> this.Visit body
 
-    override this.VisitLockStatement node = notImplemented node
+        breakParent <+>
+        group (
+            group (
+                group (
+                    group (mods <+/+> returnType) <+/+>
+                    name
+                ) <+>
+                parameterList <+/+>
+                constraints
+            ) <+>
+            body
+        )
 
-    override this.VisitMakeRefExpression node = notImplemented node
+    override this.VisitLockStatement node =
+        let expr = this.Visit node.Expression
+        let body = this.VisitBody node.Statement
+
+        breakParent <+>
+        group (text "lock" <+/+> bracket "(" ")" expr) <+>
+        body
+
+    override this.VisitMakeRefExpression node = //#filler
+        bracket "__makeref(" ")" (this.Visit node.Expression)
 
     override this.VisitMemberAccessExpression node =
         visitMemberAccessOrConditional (this.Visit) node
@@ -858,9 +938,10 @@ type PrintVisitor() =
     override this.VisitNameColon node =
         this.Visit node.Name <+> text ":"
 
-    override this.VisitNameEquals node = notImplemented node
+    override this.VisitNameEquals node =
+        this.Visit node.Name <++> text "="
 
-    override this.VisitNameMemberCref node = notImplemented node
+    override this.VisitNameMemberCref node = notVisitingTrivia
 
     override this.VisitNamespaceDeclaration node =
         let name = this.Visit node.Name
@@ -891,11 +972,12 @@ type PrintVisitor() =
 
     override this.VisitOperatorDeclaration node = notImplemented node
 
-    override this.VisitOperatorMemberCref node = notImplemented node
+    override this.VisitOperatorMemberCref node = notVisitingTrivia
 
     override this.VisitOrderByClause node = notImplemented node
 
-    override this.VisitOrdering node = notImplemented node
+    override this.VisitOrdering node =
+        visitToken node.AscendingOrDescendingKeyword
 
     override this.VisitParameter node =
         let attrs = this.VisitChunk node.AttributeLists
@@ -928,9 +1010,9 @@ type PrintVisitor() =
     override this.VisitPostfixUnaryExpression node =
         this.Visit node.Operand <+> visitToken node.OperatorToken
 
-    override this.VisitPragmaChecksumDirectiveTrivia node = notImplemented node
+    override this.VisitPragmaChecksumDirectiveTrivia node = notVisitingTrivia
 
-    override this.VisitPragmaWarningDirectiveTrivia node = notImplemented node
+    override this.VisitPragmaWarningDirectiveTrivia node = notVisitingTrivia
 
     override this.VisitPredefinedType node = visitToken node.Keyword
 
@@ -964,7 +1046,7 @@ type PrintVisitor() =
             visitToken node.SemicolonToken
         )
 
-    override this.VisitQualifiedCref node = notImplemented node
+    override this.VisitQualifiedCref node = notVisitingTrivia
 
     override this.VisitQualifiedName node =
         group(this.Visit node.Left <+> text "." <+> this.Visit node.Right)
@@ -977,13 +1059,22 @@ type PrintVisitor() =
 
     override this.VisitReferenceDirectiveTrivia node = notImplemented node
 
-    override this.VisitRefExpression node = notImplemented node
+    override this.VisitRefExpression node =
+        text "ref " <+> this.Visit (node.Expression)
 
-    override this.VisitRefType node = notImplemented node
+    override this.VisitRefType node =
+        group (text "ref" <+/+> visitToken node.ReadOnlyKeyword) <+/+>
+        this.Visit node.Type
 
-    override this.VisitRefTypeExpression node = notImplemented node
+    override this.VisitRefTypeExpression node =
+        bracket "__reftype(" ")" (this.Visit node.Expression)
 
-    override this.VisitRefValueExpression node = notImplemented node
+    override this.VisitRefValueExpression node =
+        bracket "__refvalue(" ")" (
+            this.Visit node.Expression <+>
+            text "," <+/+>
+            this.Visit node.Type
+        )
 
     override this.VisitRegionDirectiveTrivia node = notImplemented node
 

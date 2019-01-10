@@ -12,10 +12,13 @@ open Microsoft.CodeAnalysis.CSharp.Syntax
 
 let path = @"../tests/source/ILogger.cs.ignore"
 let parseOpts = CSharpParseOptions.Default.WithKind(SourceCodeKind.Script)
-let tree = CSharpSyntaxTree.ParseText (System.IO.File.ReadAllText path)
-// let tree = CSharpSyntaxTree.ParseText ("
-//     var y = delegate (int x) { return x + 1; }
-// ", parseOpts)
+// let tree = CSharpSyntaxTree.ParseText (System.IO.File.ReadAllText path)
+let tree = CSharpSyntaxTree.ParseText ("
+void Foo() {
+foo:
+    goto foo;
+}
+ ", parseOpts)
 let root = tree.GetRoot()
 
 
