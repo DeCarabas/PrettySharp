@@ -86,8 +86,8 @@ type PrintVisitor() =
         let modifiers = visitModifiers node.Modifiers
         let kw = visitToken node.Keyword
         let id = visitToken node.Identifier
-        let typeParams = this.VisitOptional node.TypeParameterList
-        let baseList = this.VisitOptional node.BaseList
+        let typeParams = this.Visit node.TypeParameterList
+        let baseList = this.Visit node.BaseList
         let constraints = this.VisitChunk node.ConstraintClauses
 
         group (
@@ -811,9 +811,9 @@ type PrintVisitor() =
         let parameterList = this.Visit node.ParameterList
         let constraints = this.VisitChunk node.ConstraintClauses
         let body =
-            if node.Body <> null
-            then line <+> this.Visit node.Body
-            else text " " <+> this.Visit node.ExpressionBody <+> text ";"
+            match node.Body with
+                | null -> text " " <+> this.Visit node.ExpressionBody <+> text ";"
+                | _ -> line <+> this.Visit node.Body
 
         breakParent <+>
         group (
@@ -876,9 +876,9 @@ type PrintVisitor() =
         let mods = visitModifiers node.Modifiers
         let typ = this.Visit node.Type
         let id = visitToken node.Identifier
-        let default_ = this.Visit node.Default
+        let defaultValue = this.Visit node.Default
 
-        group (attrs <+/+> mods <+/+> typ <+/+> id <+/+> default_)
+        group (attrs <+/+> mods <+/+> typ <+/+> id <+/+> defaultValue)
 
     override this.VisitParameterList node =
         this.VisitParameterOrArgumentList "(" ")" node.Parameters
@@ -921,12 +921,12 @@ type PrintVisitor() =
             let id = visitToken node.Identifier
             explicitInterface <+> id
         let body =
-            if node.AccessorList <> null
-            then
-                line <+>
-                this.Visit node.AccessorList <+/!+>
-                this.Visit node.Initializer
-            else text " " <+> this.Visit node.ExpressionBody
+            match node.AccessorList with
+                | null -> text " " <+> this.Visit node.ExpressionBody
+                | _ ->
+                    line <+>
+                    this.Visit node.AccessorList <+/!+>
+                    this.Visit node.Initializer
 
         breakParent <+>
         group (
@@ -1027,10 +1027,10 @@ type PrintVisitor() =
     override this.VisitUsingDirective node =
         let name = this.Visit node.Name
         let alias = this.Visit node.Alias
-        let static_ = visitToken node.StaticKeyword
+        let statickw = visitToken node.StaticKeyword
 
         breakParent <+>
-        group (text "using" <+/+> static_ <+/+> alias <+/+> name <+> text ";")
+        group (text "using" <+/+> statickw <+/+> alias <+/+> name <+> text ";")
 
     override this.VisitVariableDeclaration node =
         let firstVar =
@@ -1110,7 +1110,7 @@ type PrintVisitor() =
 
 
 let visit (tree:SyntaxNode) =
-    let visitor = new PrintVisitor()
+    let visitor = PrintVisitor()
     visitor.Visit(tree)
 
 
@@ -1118,7 +1118,7 @@ let visit (tree:SyntaxNode) =
 let main argv =
     match Array.toList argv with
     | path::_ ->
-        let timer = new System.Diagnostics.Stopwatch()
+        let timer = System.Diagnostics.Stopwatch()
         timer.Start()
         let tree = CSharpSyntaxTree.ParseText (System.IO.File.ReadAllText path)
         printfn "Parsed in %i ms" timer.ElapsedMilliseconds
