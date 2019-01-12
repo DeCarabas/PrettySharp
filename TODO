@@ -1,8 +1,4 @@
-- "Fill" expressions rather than wrapping as a tree, ala prettier.io
 - Trivia
     See [empty lines](https://prettier.io/docs/en/rationale.html#empty-lines)
-- Maybe better initializer support?
-    See [Multi-line objects](https://prettier.io/docs/en/rationale.html#multi-line-objects)
-- Complete tree support
 - Fix variable declarations with long types and long initializers (see `VisitVariableDeclaration`)
 - Wrap XML comments intelligently instead of treating them like we do now.

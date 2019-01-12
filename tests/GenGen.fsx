@@ -113,17 +113,18 @@ let genThisExpression0 =
     }
 
 let genBinaryExpression0 =
-    let gen_ size =
+    let genBinaryExpression size =
         gen {
-            let! kind = Gen.elements [
-                SyntaxKind.AddExpression;
-                SyntaxKind.SubtractExpression;
-            ]
+            let! kind =
+                Gen.elements [
+                    SyntaxKind.AddExpression;
+                    SyntaxKind.SubtractExpression;
+                ]
             let! left = Gen.resize (size/2) Arb.generate<Syntax.ExpressionSyntax>
             let! right = Gen.resize (size/2) Arb.generate<Syntax.ExpressionSyntax>
             return SyntaxFactory.BinaryExpression(kind, left, right)
         }
-    Gen.sized gen_
+    Gen.sized genBinaryExpression
 
 let genCast<'S,'T> (g:Gen<'S>):Gen<'T> =
     Gen.map (fun (x:'S) -> x :> Object :?> 'T) g
@@ -149,5 +150,3 @@ type RoslynGenerators =
 Arb.register<RoslynGenerators>()
 
 Arb.generate<Syntax.ExpressionSyntax> |> Gen.sample 10 1
-
-

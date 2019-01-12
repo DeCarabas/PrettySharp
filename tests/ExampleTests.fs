@@ -17,12 +17,17 @@ let rec getFiles dir searchPattern =
             yield! getFiles subdir searchPattern
     }
 
-let prettyFile fileName =
+let parseText (text:string) =
     let parseOpts = CSharpParseOptions.Default.WithKind(SourceCodeKind.Script)
-    let fileText = File.ReadAllText fileName
-    (CSharpSyntaxTree.ParseText (fileText, parseOpts)).GetRoot()
-        |> visit
-        |> pretty 80
+    CSharpSyntaxTree.ParseText (text, parseOpts)
+
+let parseFile fileName =
+    File.ReadAllText fileName |> parseText
+
+
+let prettyFile fileName =
+    let root = (parseFile fileName).GetRoot()
+    root |> visit |> pretty 80
 
 let snapFile fileName = fileName + ".expected"
 
@@ -31,6 +36,10 @@ let loadSnapshot fileName =
     if File.Exists snapfile
     then (File.ReadAllText snapfile).Trim()
     else ""
+
+let normalize (tree:SyntaxTree) =
+    let newRoot = tree.GetRoot().NormalizeWhitespace("  ", true)
+    tree.WithRootAndOptions(newRoot, tree.Options)
 
 let testFile options fileName =
     let actual = (prettyFile fileName).Trim()
@@ -42,8 +51,11 @@ let testFile options fileName =
         printf "F"
         Fail (fileName, actual, formatDiff diff)
     else
+        // We used to compare the parse trees again after pretty with IsEquivalentTo
+        // but there were false positives that I couldn't work out.
         printf "."
         Pass fileName
+
 
 let testExamples options =
     getFiles AppDomain.CurrentDomain.BaseDirectory "*.cs"
