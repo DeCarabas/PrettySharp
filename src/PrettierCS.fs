@@ -1,13 +1,12 @@
 module PrettySharp.CS
 
-open PrettySharp.Core
+open System
+open System.Linq.Expressions
+open System.Linq.Expressions
 open Microsoft.CodeAnalysis
 open Microsoft.CodeAnalysis.CSharp
 open Microsoft.CodeAnalysis.CSharp.Syntax
-open System.Linq.Expressions
-open System
-open Microsoft.CodeAnalysis.CSharp
-open System.Linq.Expressions
+open PrettySharp.Core
 
 let indentLevel = 4
 let bracket = PrettySharp.Core.bracket indentLevel
@@ -47,7 +46,7 @@ let visitMemberAccessOrConditional (visit:Visitor) node =
         let right = visit caes.WhenNotNull
         softline <+> op <+> right
 
-    // Explicitly Recursive here to group properly.
+    // Explicitly recursive here to group properly.
     let rec gather memberList (node:SyntaxNode) =
         match node with
         | :? MemberAccessExpressionSyntax as maes ->
@@ -1325,24 +1324,3 @@ type PrintVisitor() =
 let visit (tree:SyntaxNode) =
     let visitor = PrintVisitor()
     visitor.Visit(tree)
-
-
-[<EntryPoint>]
-let main argv =
-    match Array.toList argv with
-    | path::_ ->
-        let timer = System.Diagnostics.Stopwatch()
-        timer.Start()
-        let tree = CSharpSyntaxTree.ParseText (System.IO.File.ReadAllText path)
-        printfn "Parsed in %i ms" timer.ElapsedMilliseconds
-        timer.Restart()
-        let doc = visit (tree.GetRoot())
-        printfn "Visited in %i ms" timer.ElapsedMilliseconds
-        timer.Restart()
-        let formatted = pretty 80 doc
-        printfn "Formatted in %i ms" timer.ElapsedMilliseconds
-        printfn "%s" formatted
-        0
-    | _ ->
-        printfn "Unknown command line arguments!"
-        -1

@@ -8,6 +8,7 @@
     <None Include="App.config" />
     <Compile Include="Core.fs" />
     <Compile Include="PrettierCS.fs" />
+    <Compile Include="Program.fs" />
   </ItemGroup>
   <Import Project="..\.paket\paket.targets" />
   <Import Project="..\.paket\Paket.Restore.targets" />
