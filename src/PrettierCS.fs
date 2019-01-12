@@ -68,8 +68,6 @@ let visitModifiers mods =
     then nil
     else group (mods |> Seq.map (visitToken) |> Seq.reduce (<+/+>))
 
-let notImplemented node = failwithf "%A not implemented" (node.GetType())
-
 let notVisitingTrivia = NIL
 
 type PrintVisitor() =
@@ -1151,23 +1149,49 @@ type PrintVisitor() =
 
         group (decl <+/+> members)
 
-    override this.VisitSwitchSection node = notImplemented node
+    override this.VisitSwitchSection node =
+        let labels = node.Labels |> Seq.map (this.Visit) |> join line
+        let statements = node.Statements |> Seq.map (this.Visit) |> join line
 
-    override this.VisitSwitchStatement node = notImplemented node
+        labels <+/!+> (statements)
+
+    override this.VisitSwitchStatement node =
+        let expr = bracket "switch (" ")" (this.Visit node.Expression)
+        let sections =
+            node.Sections |> Seq.map (this.Visit) |> join (line <+> line)
+
+        breakParent <+>
+        group (group (expr) <+/+> text "{" <+/+> sections <+/+> text "}")
+
 
     override this.VisitThisExpression _ = text "this"
 
-    override this.VisitThrowExpression node = notImplemented node
+    override this.VisitThrowExpression node =
+        text "throw" <++> this.Visit node.Expression
 
-    override this.VisitThrowStatement node = notImplemented node
+    override this.VisitThrowStatement node =
+        breakParent <+>
+        group (
+            match node.Expression with
+            | null -> text "throw;"
+            | _ -> text "throw" <+/!+> (this.Visit node.Expression <+> text ";")
+        )
 
-    override this.VisitTryStatement node = notImplemented node
+    override this.VisitTryStatement node =
+        let block = this.Visit node.Block
+        let catches = node.Catches |> Seq.map (this.Visit) |> join line
+        let fin = this.Visit node.Finally
 
-    override this.VisitTupleElement node = notImplemented node
+        breakParent <+> group (text "try" <+/+> block <+/+> catches <+/+> fin)
 
-    override this.VisitTupleExpression node = notImplemented node
+    override this.VisitTupleElement node =
+        group (this.Visit node.Type <+/!+> visitToken node.Identifier)
 
-    override this.VisitTupleType node = notImplemented node
+    override this.VisitTupleExpression node =
+        this.VisitParameterOrArgumentList "(" ")" node.Arguments
+
+    override this.VisitTupleType node =
+        this.BracketedList "(" "," ")" node.Elements
 
     override this.VisitTypeArgumentList node =
         this.BracketedList "<" "," ">" node.Arguments
@@ -1200,7 +1224,8 @@ type PrintVisitor() =
 
     override this.VisitUndefDirectiveTrivia node = notVisitingTrivia
 
-    override this.VisitUnsafeStatement node = notImplemented node
+    override this.VisitUnsafeStatement node =
+        breakParent <+> (text "unsafe" <+/+> this.Visit node.Block)
 
     override this.VisitUsingDirective node =
         let name = this.Visit node.Name
@@ -1249,41 +1274,52 @@ type PrintVisitor() =
         | null -> name
         | init -> group (name <+/+> text "=") <+/!+> this.Visit init.Value
 
-    override this.VisitWarningDirectiveTrivia node = notImplemented node
+    override this.VisitWarningDirectiveTrivia node = notVisitingTrivia
 
-    override this.VisitWhenClause node = notImplemented node
+    override this.VisitWhenClause node = //#filler
+        group (text "where" <+/!+> group (this.Visit node.Condition))
 
-    override this.VisitWhereClause node = notImplemented node
+    override this.VisitWhereClause node =
+        group (text "where" <+/!+> group (this.Visit node.Condition))
 
-    override this.VisitWhileStatement node = notImplemented node
+    override this.VisitWhileStatement node =
+        breakParent <+>
+        group (
+            bracket "while (" ")" (this.Visit node.Condition) <+>
+            this.VisitBody node.Statement
+        )
 
-    override this.VisitXmlCDataSection node = notImplemented node
+    override this.VisitXmlCDataSection node = notVisitingTrivia
 
-    override this.VisitXmlComment node = notImplemented node
+    override this.VisitXmlComment node = notVisitingTrivia
 
-    override this.VisitXmlCrefAttribute node = notImplemented node
+    override this.VisitXmlCrefAttribute node = notVisitingTrivia
 
-    override this.VisitXmlElement node = notImplemented node
+    override this.VisitXmlElement node = notVisitingTrivia
 
-    override this.VisitXmlElementEndTag node = notImplemented node
+    override this.VisitXmlElementEndTag node = notVisitingTrivia
 
-    override this.VisitXmlElementStartTag node = notImplemented node
+    override this.VisitXmlElementStartTag node = notVisitingTrivia
 
-    override this.VisitXmlEmptyElement node = notImplemented node
+    override this.VisitXmlEmptyElement node = notVisitingTrivia
 
-    override this.VisitXmlName node = notImplemented node
+    override this.VisitXmlName node = notVisitingTrivia
 
-    override this.VisitXmlNameAttribute node = notImplemented node
+    override this.VisitXmlNameAttribute node = notVisitingTrivia
 
-    override this.VisitXmlPrefix node = notImplemented node
+    override this.VisitXmlPrefix node = notVisitingTrivia
 
-    override this.VisitXmlProcessingInstruction node = notImplemented node
+    override this.VisitXmlProcessingInstruction node = notVisitingTrivia
 
-    override this.VisitXmlText node = notImplemented node
+    override this.VisitXmlText node = notVisitingTrivia
 
-    override this.VisitXmlTextAttribute node = notImplemented node
+    override this.VisitXmlTextAttribute node = notVisitingTrivia
 
-    override this.VisitYieldStatement node = notImplemented node
+    override this.VisitYieldStatement node =
+        breakParent <+>
+        group (
+            text "yield" <+/!+> group (this.Visit node.Expression) <+> text ";"
+        )
 
 
 let visit (tree:SyntaxNode) =
