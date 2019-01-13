@@ -31,6 +31,7 @@ let listJoin sep = join (text sep <+> line)
 type Visitor = SyntaxNode->DOC
 
 let visitToken (token : SyntaxToken) =
+    // TODO: This is where all the trivia handling will go, eventually.
     if token.Span.IsEmpty
     then nil
     else text token.Text
@@ -120,13 +121,13 @@ type PrintVisitor() =
         then line <+> this.Visit node
         else indent (line <+> this.Visit node)
 
-    member this.VisitParameterOrArgumentList lb rb list =
+    member this.VisitParameterOrArgumentList (lb:SyntaxToken) list (rb:SyntaxToken) =
         if Seq.isEmpty list
-        then text (lb + rb)
+        then visitToken lb <+> visitToken rb
         else
             let args = this.CommaList list
-            text lb <+>
-            group (indent (softline <+> args <+> text rb))
+            visitToken lb <+>
+            group (indent (softline <+> args <+> visitToken rb))
 
     override this.Visit node =
         match node with
@@ -177,7 +178,7 @@ type PrintVisitor() =
         namecolon <++> group(refkind <+/+> expr)
 
     override this.VisitArgumentList node =
-        this.VisitParameterOrArgumentList "(" ")" node.Arguments
+        this.VisitParameterOrArgumentList node.OpenParenToken node.Arguments node.CloseParenToken
 
     override this.VisitArrayCreationExpression node =
         text "new" <++>
@@ -211,7 +212,7 @@ type PrintVisitor() =
         this.Visit node.Expression
 
     override this.VisitAttributeArgumentList node =
-        this.VisitParameterOrArgumentList "(" ")" node.Arguments
+        this.VisitParameterOrArgumentList node.OpenParenToken node.Arguments node.CloseParenToken
 
     override this.VisitAttributeList node = //#filler
         let target = this.Visit node.Target
@@ -262,10 +263,10 @@ type PrintVisitor() =
             breakParent <+> block
 
     override this.VisitBracketedArgumentList node =
-        this.VisitParameterOrArgumentList "[" "]" node.Arguments
+        this.VisitParameterOrArgumentList node.OpenBracketToken node.Arguments node.CloseBracketToken
 
     override this.VisitBracketedParameterList node = //#filler
-        this.VisitParameterOrArgumentList "[" "]" node.Parameters
+        this.VisitParameterOrArgumentList node.OpenBracketToken node.Parameters node.CloseBracketToken
 
     override this.VisitBreakStatement _ = breakParent <+> text "break;"
 
