@@ -1512,8 +1512,7 @@ type PrintVisitor() =
                     initValue
                 )
 
-        let restVars =
-            this.VisitList (node.Variables.RemoveAt(node.Variables.Count - 1))
+        let restVars = this.VisitList (node.Variables.RemoveAt(0))
         match restVars with
         | NIL -> firstVar
         | _ ->

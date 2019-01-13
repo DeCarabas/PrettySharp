@@ -250,7 +250,7 @@ namespace OnceAndFuture.Syndication
                     element.Attribute(XNames.Media.Url)?.Value,
                     null,
                     element);
-                int width, width;
+                int width, height;
                 if (
                     url != null &&
                     Int32.TryParse(
