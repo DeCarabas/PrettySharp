@@ -41,6 +41,9 @@ let normalize (tree:SyntaxTree) =
     let newRoot = tree.GetRoot().NormalizeWhitespace("  ", true)
     tree.WithRootAndOptions(newRoot, tree.Options)
 
+let diffTrees left right =
+    diffStrings (left.ToString()) (right.ToString()) |> formatDiff
+
 let testFile options fileName =
     let actual = (prettyFile fileName).Trim()
     let expected = loadSnapshot fileName
@@ -59,7 +62,12 @@ let testFile options fileName =
             Pass fileName
         else
             printf "F"
-            Fail (fileName, actual, "Something was lost in translation!")
+            Fail (
+                fileName,
+                actual,
+                "Something was lost in translation!\n\n" +
+                (diffTrees normExpected normActual)
+            )
 
 let testExamples options =
     getFiles AppDomain.CurrentDomain.BaseDirectory "*.cs"
