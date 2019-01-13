@@ -632,7 +632,7 @@ type PrintVisitor() =
         let members =
             let ob = node.OpenBraceToken
             let cb = node.CloseBraceToken
-            this.FoldMembers ob cb node.Members
+            this.BracketedList ob cb node.Members
 
         breakParent <+> group(group (decl <+/+> members))
 
