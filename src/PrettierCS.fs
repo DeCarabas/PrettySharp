@@ -9,7 +9,6 @@ open Microsoft.CodeAnalysis.CSharp.Syntax
 open PrettySharp.Core
 
 let indentLevel = 4
-let bracket = PrettySharp.Core.bracket indentLevel
 let indent = nest indentLevel
 let dedent = nest (-indentLevel)
 
@@ -34,7 +33,12 @@ let visitToken (token : SyntaxToken) =
     // TODO: This is where all the trivia handling will go, eventually.
     if token.Span.IsEmpty
     then nil
-    else text token.Text
+    else PrettySharp.Core.text token.Text
+
+let bracket (l:SyntaxToken) (r:SyntaxToken) =
+    let left = visitToken l
+    let right = visitToken r
+    PrettySharp.Core.bracket indentLevel left right
 
 let visitMemberAccessOrConditional (visit:Visitor) node =
     let formatMember (maes:MemberAccessExpressionSyntax) =
@@ -73,14 +77,21 @@ let notVisitingTrivia = NIL
 type PrintVisitor() =
     inherit CSharpSyntaxVisitor<DOC>()
 
-    member this.DelimitedList s x =
-        Seq.map (this.Visit) x |> listJoin s
+    member this.VisitList<'t when 't :> SyntaxNode>
+        (l:SeparatedSyntaxList<'t>) =
+            let handleItem i =
+                let sep =
+                    if i < l.SeparatorCount
+                    then visitToken (l.GetSeparator(i))
+                    else nil
+                this.Visit l.[i] <+> sep
 
-    member this.CommaList x =
-        this.DelimitedList "," x
+            seq { 0 .. l.Count - 1 }
+            |> Seq.map (handleItem)
+            |> Seq.fold (<+/+>) nil
 
-    member this.BracketedList l s r x =
-        this.DelimitedList s x |> bracket l r
+    member this.BracketedList l r x =
+        this.VisitList x |> bracket l r
 
     member this.VisitChunk seq =
         Seq.map (this.Visit) seq |> Seq.fold (<+/+>) nil
@@ -94,8 +105,8 @@ type PrintVisitor() =
                 | SyntaxKind.FieldDeclaration -> doc <+/+> memberDoc
                 | _ -> doc <+/+> line <+> memberDoc
 
-    member this.FoldMembers members =
-        members |> Seq.fold (this.FoldMember) nil |> bracket "{" "}"
+    member this.FoldMembers left right members =
+        members |> Seq.fold (this.FoldMember) nil |> bracket left right
 
     member this.VisitTypeDeclaration (node:TypeDeclarationSyntax) =
         let attribs = this.VisitChunk node.AttributeLists
@@ -121,13 +132,14 @@ type PrintVisitor() =
         then line <+> this.Visit node
         else indent (line <+> this.Visit node)
 
-    member this.VisitParameterOrArgumentList (lb:SyntaxToken) list (rb:SyntaxToken) =
-        if Seq.isEmpty list
-        then visitToken lb <+> visitToken rb
-        else
-            let args = this.CommaList list
-            visitToken lb <+>
-            group (indent (softline <+> args <+> visitToken rb))
+    member this.VisitParameterOrArgumentList
+        (lb:SyntaxToken) (rb:SyntaxToken) list =
+            if Seq.isEmpty list
+            then visitToken lb <+> visitToken rb
+            else
+                let args = this.VisitList list
+                visitToken lb <+>
+                group (indent (softline <+> args <+> visitToken rb))
 
     override this.Visit node =
         match node with
@@ -166,7 +178,11 @@ type PrintVisitor() =
         group (asyncKw <+/+> text "delegate" <+> ps) <+/+> body
 
     override this.VisitAnonymousObjectCreationExpression node = //#filler
-        this.BracketedList "new {" "," "}" node.Initializers
+        visitToken node.NewKeyword <++>
+        this.BracketedList
+            node.OpenBraceToken
+            node.CloseBraceToken
+            node.Initializers
 
     override this.VisitAnonymousObjectMemberDeclarator node = //#filler
         group (this.Visit node.NameEquals <+/!+> this.Visit node.Expression)
@@ -178,7 +194,10 @@ type PrintVisitor() =
         namecolon <++> group(refkind <+/+> expr)
 
     override this.VisitArgumentList node =
-        this.VisitParameterOrArgumentList node.OpenParenToken node.Arguments node.CloseParenToken
+        this.VisitParameterOrArgumentList
+            node.OpenParenToken
+            node.CloseParenToken
+            node.Arguments
 
     override this.VisitArrayCreationExpression node =
         text "new" <++>
@@ -186,7 +205,10 @@ type PrintVisitor() =
         this.Visit node.Initializer
 
     override this.VisitArrayRankSpecifier node =
-        this.BracketedList "[" "," "]" node.Sizes
+        this.BracketedList
+            node.OpenBracketToken
+            node.CloseBracketToken
+            node.Sizes
 
     override this.VisitArrayType node =
         let ranks =
@@ -212,12 +234,18 @@ type PrintVisitor() =
         this.Visit node.Expression
 
     override this.VisitAttributeArgumentList node =
-        this.VisitParameterOrArgumentList node.OpenParenToken node.Arguments node.CloseParenToken
+        this.VisitParameterOrArgumentList
+            node.OpenParenToken
+            node.CloseParenToken
+            node.Arguments
 
     override this.VisitAttributeList node = //#filler
         let target = this.Visit node.Target
-        let attrList = this.CommaList node.Attributes
-        bracket "[" "]" (target <+> attrList)
+        let attrList = this.VisitList node.Attributes
+        bracket
+            node.OpenBracketToken
+            node.CloseBracketToken
+            (target <+> attrList)
 
     override this.VisitAttributeTargetSpecifier node = //#filler
         visitToken node.Identifier <+> text ":"
@@ -228,7 +256,7 @@ type PrintVisitor() =
     override this.VisitBaseExpression _ = text "base"
 
     override this.VisitBaseList node =
-        let bases = group(this.CommaList node.Types)
+        let bases = group (this.VisitList node.Types)
         text ":" <+/!+> bases
 
     override this.VisitBinaryExpression node =
@@ -259,14 +287,20 @@ type PrintVisitor() =
                 node.Statements
                 |> Seq.fold (combineStatements) (NIL, null)
                 |> fst
-                |> bracket "{" "}"
+                |> bracket node.OpenBraceToken node.CloseBraceToken
             breakParent <+> block
 
     override this.VisitBracketedArgumentList node =
-        this.VisitParameterOrArgumentList node.OpenBracketToken node.Arguments node.CloseBracketToken
+        this.VisitParameterOrArgumentList
+            node.OpenBracketToken
+            node.CloseBracketToken
+            node.Arguments
 
     override this.VisitBracketedParameterList node = //#filler
-        this.VisitParameterOrArgumentList node.OpenBracketToken node.Parameters node.CloseBracketToken
+        this.VisitParameterOrArgumentList
+            node.OpenBracketToken
+            node.CloseBracketToken
+            node.Parameters
 
     override this.VisitBreakStatement _ = breakParent <+> text "break;"
 
@@ -283,7 +317,11 @@ type PrintVisitor() =
         group (text "case" <+/!+> (expr <+> text":"))
 
     override this.VisitCastExpression node =
-        let typ = bracket "(" ")" (this.Visit node.Type)
+        let typ =
+            bracket
+                node.OpenParenToken
+                node.CloseParenToken
+                (this.Visit node.Type)
         typ <+> this.Visit node.Expression
 
     override this.VisitCatchClause node = //#filler
@@ -299,14 +337,24 @@ type PrintVisitor() =
     override this.VisitCatchDeclaration node = //#filler
         let typ = this.Visit node.Type
         let identifier = visitToken node.Identifier
-        bracket "(" ")" (group (typ <+/+> identifier))
+        bracket
+            node.OpenParenToken
+            node.CloseParenToken
+            (group (typ <+/+> identifier))
 
     override this.VisitCatchFilterClause node = //#filler
-        bracket "when (" ")" (this.Visit node.FilterExpression)
+        visitToken node.WhenKeyword <++>
+        bracket
+            node.OpenParenToken
+            node.CloseParenToken
+            (this.Visit node.FilterExpression)
 
     override this.VisitCheckedExpression node = //#filler
-        let kw = visitToken node.Keyword
-        kw <+> bracket "(" ")" (this.Visit node.Expression)
+        visitToken node.Keyword <++>
+        bracket
+            node.OpenParenToken
+            node.CloseParenToken
+            (this.Visit node.Expression)
 
     override this.VisitCheckedStatement node = //#filler
         let kw = visitToken node.Keyword
@@ -314,7 +362,10 @@ type PrintVisitor() =
 
     override this.VisitClassDeclaration node =
         let decl = this.VisitTypeDeclaration node
-        let members = this.FoldMembers node.Members
+        let members =
+            let ob = node.OpenBraceToken
+            let cb = node.CloseBraceToken
+            this.FoldMembers ob cb node.Members
 
         group (decl <+/+> members)
 
@@ -419,9 +470,14 @@ type PrintVisitor() =
         this.Visit node.Type <++> this.Visit node.Designation
 
     override this.VisitDefaultExpression node = //#filler
-        bracket "default(" ")" (this.Visit node.Type)
+        visitToken node.Keyword <+>
+        bracket
+            node.OpenParenToken
+            node.CloseParenToken
+            (this.Visit node.Type)
 
-    override this.VisitDefaultSwitchLabel _ = text "default:"
+    override this.VisitDefaultSwitchLabel node =
+        visitToken node.Keyword <+> visitToken node.ColonToken
 
     override this.VisitDefineDirectiveTrivia node = notVisitingTrivia
 
@@ -481,18 +537,23 @@ type PrintVisitor() =
 
     override this.VisitDoStatement node = //#filler
         let condition = this.Visit node.Condition
-        let body =
-            // N.B.: This one is not like VisitBody because we *need* to wrap the
-            //       body in curly-braces so we can put in the ... `while` condition.
+
+        // N.B.: This one is not like VisitBody because we *need* to wrap the
+        //       body in curly-braces so we can put in the ... `while` condition.
+        let block =
             if node.Statement.IsKind(SyntaxKind.Block)
-            then line <+> this.Visit node.Statement
-            else bracket "{" "}" (this.Visit node)
+            then node.Statement :?> BlockSyntax
+            else SyntaxFactory.Block(node.Statement)
+        let body = line <+> this.Visit block
 
         breakParent <+>
         group (
             text "do" <+>
             body <+/+>
-            (bracket "while (" ")" condition) <+>
+            (
+                visitToken node.DoKeyword <+>
+                bracket node.OpenParenToken node.CloseParenToken condition
+            ) <+>
             text ";"
         )
 
@@ -528,7 +589,10 @@ type PrintVisitor() =
 
             group (attribs <+/+> modifiers <+/+> kw <+/+> id <+/+> baseList)
 
-        let members = this.BracketedList "{" "," "}" node.Members
+        let members =
+            let ob = node.OpenBraceToken
+            let cb = node.CloseBraceToken
+            this.FoldMembers ob cb node.Members
 
         breakParent <+> group(group (decl <+/+> members))
 
@@ -599,22 +663,28 @@ type PrintVisitor() =
 
         breakParent <+>
         group (
-            (bracket "fixed (" ")" decl) <+> body
+            (
+                visitToken node.FixedKeyword <++>
+                bracket node.OpenParenToken node.CloseParenToken decl
+            ) <+>
+            body
         )
 
     override this.VisitForEachStatement node =
         // let await = visitToken node.AwaitKeyword
+        let foreach' = visitToken node.ForEachKeyword
         let typ = this.Visit node.Type
         let id = visitToken node.Identifier
+        let in' = visitToken node.InKeyword
         let expr = this.Visit node.Expression
         let body = this.VisitBody node.Statement
 
         breakParent <+>
         group (
             group (
-                text "foreach" <+/+>
-                bracket "(" ")" (
-                    group (typ <+/+> id <+/+> text "in") <+/!+> expr
+                foreach'  <+/+>
+                bracket node.OpenParenToken node.CloseParenToken (
+                    group (typ <+/+> id <+/+> in') <+/!+> expr
                 )
             ) <+>
             body
@@ -630,7 +700,7 @@ type PrintVisitor() =
         group (
             group (
                 text "foreach" <+/+>
-                bracket "(" ")" (
+                bracket node.OpenParenToken node.CloseParenToken (
                     group (var <+/+> text "in") <+/!+> expr
                 )
             ) <+>
@@ -640,17 +710,17 @@ type PrintVisitor() =
     override this.VisitForStatement node =
         let declarationOrInit =
             let decl = this.Visit node.Declaration
-            let initializers = group (this.CommaList node.Initializers)
+            let initializers = group (this.VisitList node.Initializers)
             decl <+> initializers
         let condition = this.Visit node.Condition
-        let incrementors = group (this.CommaList node.Incrementors)
+        let incrementors = group (this.VisitList node.Incrementors)
         let body = this.VisitBody node.Statement
 
         breakParent <+>
         group (
             group (
                 text "for" <+/+>
-                bracket "(" ")" (
+                bracket node.OpenParenToken node.CloseParenToken (
                     group(
                         (declarationOrInit <+> text ";") <+/+>
                         (condition <+> text ";") <+/+>
@@ -691,7 +761,7 @@ type PrintVisitor() =
     override this.VisitIfStatement node =
         let format (node:IfStatementSyntax) =
             text "if " <+>
-            bracket "(" ")" (this.Visit node.Condition) <+>
+            bracket node.OpenParenToken node.CloseParenToken (this.Visit node.Condition) <+>
             this.VisitBody node.Statement
 
         let rec gather chain (node:SyntaxNode) =
@@ -752,13 +822,16 @@ type PrintVisitor() =
     override this.VisitIndexerMemberCref node = notVisitingTrivia
 
     override this.VisitInitializerExpression node =
-        let left = node.OpenBraceToken.Text
-        let right = node.CloseBraceToken.Text
-        this.BracketedList left "," right node.Expressions
+        let left = node.OpenBraceToken
+        let right = node.CloseBraceToken
+        this.BracketedList left right node.Expressions
 
     override this.VisitInterfaceDeclaration node = //#filler
         let decl = this.VisitTypeDeclaration node
-        let members = this.FoldMembers node.Members
+        let members =
+            let ob = node.OpenBraceToken
+            let cb = node.CloseBraceToken
+            this.FoldMembers ob cb node.Members
 
         group (decl <+/+> members)
 
@@ -879,11 +952,15 @@ type PrintVisitor() =
         let body = this.VisitBody node.Statement
 
         breakParent <+>
-        group (text "lock" <+/+> bracket "(" ")" expr) <+>
+        group (text "lock" <+/+> bracket node.OpenParenToken node.CloseParenToken expr) <+>
         body
 
     override this.VisitMakeRefExpression node = //#filler
-        bracket "__makeref(" ")" (this.Visit node.Expression)
+        visitToken node.Keyword <+>
+        bracket
+            node.OpenParenToken
+            node.CloseParenToken
+            (this.Visit node.Expression)
 
     override this.VisitMemberAccessExpression node =
         visitMemberAccessOrConditional (this.Visit) node
@@ -932,14 +1009,18 @@ type PrintVisitor() =
     override this.VisitNameMemberCref node = notVisitingTrivia
 
     override this.VisitNamespaceDeclaration node =
+        let namespace' = visitToken node.NamespaceKeyword
         let name = this.Visit node.Name
         let contents =
             let usings = this.VisitChunk node.Usings
             let externs = this.VisitChunk node.Externs
             let members = this.VisitChunk node.Members
-            bracket "{" "}" (usings <+/+> externs <+/+> members)
+            let ob = node.OpenBraceToken
+            let cb = node.CloseBraceToken
 
-        group (text "namespace" <+/+> name) <+/+> contents
+            bracket ob cb (usings <+/+> externs <+/+> members)
+
+        group (namespace' <+/+> name) <+/+> contents
 
     override this.VisitNullableType node =
         group (this.Visit node.ElementType <+> text "?")
@@ -986,7 +1067,7 @@ type PrintVisitor() =
     override this.VisitOperatorMemberCref node = notVisitingTrivia
 
     override this.VisitOrderByClause node =
-        let orderings = this.CommaList node.Orderings
+        let orderings = this.VisitList node.Orderings
 
         group (text "orderby" <+/!+> group (orderings))
 
@@ -1006,10 +1087,16 @@ type PrintVisitor() =
         group (attrs <+/+> mods <+/+> typ <+/+> id <+/+> defaultValue)
 
     override this.VisitParameterList node =
-        this.VisitParameterOrArgumentList "(" ")" node.Parameters
+        this.VisitParameterOrArgumentList
+            node.OpenParenToken
+            node.CloseParenToken
+            node.Parameters
 
     override this.VisitParenthesizedExpression node =
-        bracket "(" ")" (this.Visit node.Expression)
+        bracket
+            node.OpenParenToken
+            node.CloseParenToken
+            (this.Visit node.Expression)
 
     override this.VisitParenthesizedLambdaExpression node =
         let async = visitToken node.AsyncKeyword
@@ -1020,7 +1107,10 @@ type PrintVisitor() =
         group (group(async <+/+> parameters <+/+> arrow) <+> body)
 
     override this.VisitParenthesizedVariableDesignation node =
-        bracket "(" ")" (this.CommaList node.Variables)
+        bracket
+            node.OpenParenToken
+            node.CloseParenToken
+            (this.VisitList node.Variables)
 
     override this.VisitPointerType node =
         this.Visit node.ElementType <+> text "*"
@@ -1099,10 +1189,18 @@ type PrintVisitor() =
         this.Visit node.Type
 
     override this.VisitRefTypeExpression node =
-        bracket "__reftype(" ")" (this.Visit node.Expression)
+        visitToken node.Keyword <+>
+        bracket
+            node.OpenParenToken
+            node.CloseParenToken
+            (this.Visit node.Expression)
 
     override this.VisitRefValueExpression node =
-        bracket "__refvalue(" ")" (
+        let kw = visitToken node.Keyword
+        let op = node.OpenParenToken
+        let cp = node.CloseParenToken
+
+        kw <+> bracket op cp (
             this.Visit node.Expression <+>
             text "," <+/+>
             this.Visit node.Type
@@ -1133,7 +1231,8 @@ type PrintVisitor() =
         visitToken node.Identifier
 
     override this.VisitSizeOfExpression node =
-        bracket "sizeof(" ")" (this.Visit node.Type)
+        visitToken node.Keyword <+>
+        bracket node.OpenParenToken node.CloseParenToken (this.Visit node.Type)
 
     override this.VisitSkippedTokensTrivia node = notVisitingTrivia
 
@@ -1145,7 +1244,10 @@ type PrintVisitor() =
 
     override this.VisitStructDeclaration node =
         let decl = this.VisitTypeDeclaration node
-        let members = this.FoldMembers node.Members
+        let members =
+            let ob = node.OpenBraceToken
+            let cb = node.CloseBraceToken
+            this.FoldMembers ob cb node.Members
 
         group (decl <+/+> members)
 
@@ -1156,12 +1258,19 @@ type PrintVisitor() =
         labels <+/!+> (statements)
 
     override this.VisitSwitchStatement node =
-        let expr = bracket "switch (" ")" (this.Visit node.Expression)
+        let kw = visitToken node.SwitchKeyword
+        let expr =
+            let op = node.OpenParenToken
+            let cp = node.CloseParenToken
+            bracket op cp (this.Visit node.Expression)
+
         let sections =
             node.Sections |> Seq.map (this.Visit) |> join (line <+> line)
 
         breakParent <+>
-        group (group (expr) <+/+> text "{" <+/+> sections <+/+> text "}")
+        group (
+            kw <++> group (expr) <+/+> text "{" <+/+> sections <+/+> text "}"
+        )
 
 
     override this.VisitThisExpression _ = text "this"
@@ -1188,20 +1297,30 @@ type PrintVisitor() =
         group (this.Visit node.Type <+/!+> visitToken node.Identifier)
 
     override this.VisitTupleExpression node =
-        this.VisitParameterOrArgumentList "(" ")" node.Arguments
+        this.VisitParameterOrArgumentList
+            node.OpenParenToken
+            node.CloseParenToken
+            node.Arguments
 
     override this.VisitTupleType node =
-        this.BracketedList "(" "," ")" node.Elements
+        this.BracketedList
+            node.OpenParenToken
+            node.CloseParenToken
+            node.Elements
 
     override this.VisitTypeArgumentList node =
-        this.BracketedList "<" "," ">" node.Arguments
+        this.BracketedList
+            node.LessThanToken
+            node.GreaterThanToken
+            node.Arguments
 
     override this.VisitTypeConstraint node = this.Visit node.Type
 
     override this.VisitTypeCref node = notVisitingTrivia
 
     override this.VisitTypeOfExpression node =
-        bracket "typeof(" ")" (this.Visit node.Type)
+        visitToken node.Keyword <+>
+        bracket node.OpenParenToken node.CloseParenToken (this.Visit node.Type)
 
     override this.VisitTypeParameter node =
         let attrs = this.VisitChunk node.AttributeLists
@@ -1211,7 +1330,7 @@ type PrintVisitor() =
         group (attrs <+/+> variance <++> id)
 
     override this.VisitTypeParameterConstraintClause node =
-        let constraints = this.CommaList node.Constraints
+        let constraints = this.VisitList node.Constraints
         let name = this.Visit node.Name
 
         group (
@@ -1220,7 +1339,7 @@ type PrintVisitor() =
         )
 
     override this.VisitTypeParameterList node =
-        this.VisitParameterOrArgumentList "<" ">" node.Parameters
+        this.VisitParameterOrArgumentList node.LessThanToken node.GreaterThanToken node.Parameters
 
     override this.VisitUndefDirectiveTrivia node = notVisitingTrivia
 
@@ -1263,7 +1382,8 @@ type PrintVisitor() =
                     initValue
                 )
 
-        let restVars = this.CommaList (Seq.tail node.Variables)
+        let restVars =
+            this.VisitList (node.Variables.RemoveAt(node.Variables.Count - 1))
         match restVars with
         | NIL -> firstVar
         | _ -> (firstVar <+> text ",") <+/!+> restVars
@@ -1277,15 +1397,22 @@ type PrintVisitor() =
     override this.VisitWarningDirectiveTrivia node = notVisitingTrivia
 
     override this.VisitWhenClause node = //#filler
-        group (text "where" <+/!+> group (this.Visit node.Condition))
+        let when' = visitToken node.WhenKeyword
+        group (when' <+/!+> group (this.Visit node.Condition))
 
     override this.VisitWhereClause node =
-        group (text "where" <+/!+> group (this.Visit node.Condition))
+        let where' = visitToken node.WhereKeyword
+        group (where' <+/!+> group (this.Visit node.Condition))
 
     override this.VisitWhileStatement node =
+        let while' = visitToken node.WhileKeyword
+        let op = node.OpenParenToken
+        let cp = node.CloseParenToken
+
         breakParent <+>
         group (
-            bracket "while (" ")" (this.Visit node.Condition) <+>
+            while' <++>
+            bracket op cp (this.Visit node.Condition) <+>
             this.VisitBody node.Statement
         )
 

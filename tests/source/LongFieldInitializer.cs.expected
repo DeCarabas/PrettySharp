@@ -38,6 +38,6 @@ public class FeedParser
         {
             XNames.Atom.Entry,
             (rf, xe) => rf.With(items: rf.Items.Add(LoadItem(xe)))
-        }
+        },
     };
 }

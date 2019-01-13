@@ -178,8 +178,8 @@ let ( <++> ) x y = ifNotNil x y (x <+> text " " <+> y)
 
 let bracket i l r x =
     group (
-        text l <+>
+        l <+>
         nest i (softline <+> x) <+>
         softline <+>
-        text r
+        r
     )
