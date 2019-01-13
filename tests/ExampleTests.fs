@@ -51,11 +51,15 @@ let testFile options fileName =
         printf "F"
         Fail (fileName, actual, formatDiff diff)
     else
-        // We used to compare the parse trees again after pretty with IsEquivalentTo
-        // but there were false positives that I couldn't work out.
-        printf "."
-        Pass fileName
-
+        let normActual = parseText actual |> normalize
+        let normExpected = parseFile fileName |> normalize
+        if normActual.IsEquivalentTo(normExpected)
+        then
+            printf "."
+            Pass fileName
+        else
+            printf "F"
+            Fail (fileName, actual, "Something was lost in translation!")
 
 let testExamples options =
     getFiles AppDomain.CurrentDomain.BaseDirectory "*.cs"
