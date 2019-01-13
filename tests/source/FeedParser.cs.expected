@@ -315,6 +315,8 @@ namespace OnceAndFuture.Syndication
                 }
             }
 
+            // Load the body; prefer explicit summaries to "description", which is ambiguous, to "content", which is
+            // explicitly intended to be the full entry content.
             if (ri.Summary != null)
             {
                 ri = ri.With(body: SyndicationUtil.ParseBody(ri.Summary));

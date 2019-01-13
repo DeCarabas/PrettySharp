@@ -25,14 +25,64 @@ let join sep seq =
         let join x y = ifNotNil x y (x <+> sep <+> y)
         seq |> Seq.reduce join
 
-let space =
-    PrettySharp.Core.text " "
+let space = PrettySharp.Core.text " "
 
-let text (token : SyntaxToken) =
-    // TODO: This is where all the trivia handling will go, eventually.
-    if token.Span.IsEmpty
+let visitTrivia (trivia:SyntaxTrivia) =
+    let txt (t:SyntaxTrivia) = PrettySharp.Core.text (t.ToFullString().Trim())
+    match trivia.Kind() with
+        | SyntaxKind.EndOfLineTrivia | SyntaxKind.WhitespaceTrivia -> nil
+        | SyntaxKind.SkippedTokensTrivia ->
+            failwith "The parse actually failed."
+
+        | SyntaxKind.DisabledTextTrivia
+        | SyntaxKind.ConflictMarkerTrivia
+        | SyntaxKind.PreprocessingMessageTrivia -> txt trivia
+
+        | SyntaxKind.DocumentationCommentExteriorTrivia
+        | SyntaxKind.MultiLineCommentTrivia
+        | SyntaxKind.MultiLineDocumentationCommentTrivia ->
+            breakParent <+> txt trivia
+
+        // TODO: Push these around to other side of stuff like commas.
+        | SyntaxKind.SingleLineDocumentationCommentTrivia
+        | SyntaxKind.SingleLineCommentTrivia ->
+            breakParent <+> txt trivia <+> line
+
+        | SyntaxKind.BadDirectiveTrivia
+        | SyntaxKind.DefineDirectiveTrivia
+        | SyntaxKind.ElifDirectiveTrivia
+        | SyntaxKind.ElseDirectiveTrivia
+        | SyntaxKind.EndIfDirectiveTrivia
+        | SyntaxKind.EndRegionDirectiveTrivia
+        | SyntaxKind.ErrorDirectiveTrivia
+        | SyntaxKind.IfDirectiveTrivia
+        | SyntaxKind.LineDirectiveTrivia
+        | SyntaxKind.LoadDirectiveTrivia
+        | SyntaxKind.PragmaChecksumDirectiveTrivia
+        | SyntaxKind.PragmaWarningDirectiveTrivia
+        | SyntaxKind.ReferenceDirectiveTrivia
+        | SyntaxKind.RegionDirectiveTrivia
+        | SyntaxKind.ShebangDirectiveTrivia
+        | SyntaxKind.UndefDirectiveTrivia
+        | SyntaxKind.WarningDirectiveTrivia ->
+            breakParent <+> setindent 0 (line <+> txt trivia) <+> line
+
+        | _ -> failwith "Unexpected trivia type"
+
+let visitTriviaList (trivia:SyntaxTriviaList) =
+    if trivia.Count = 0
     then nil
-    else PrettySharp.Core.text token.Text
+    else trivia |> Seq.map (visitTrivia) |> Seq.fold (<+>) nil
+
+let text (token:SyntaxToken) =
+    // TODO: This is where all the trivia handling will go, eventually.
+    let leading = visitTriviaList token.LeadingTrivia
+    let trailing = visitTriviaList token.TrailingTrivia
+    let tokenText =
+        if token.Span.IsEmpty
+        then nil
+        else PrettySharp.Core.text token.Text
+    leading <+> tokenText <+> trailing
 
 let bracket (l:SyntaxToken) (r:SyntaxToken) =
     let left = text l

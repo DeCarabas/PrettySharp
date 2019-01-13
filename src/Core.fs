@@ -10,6 +10,7 @@ type DOC =
     | NIL
     | CONCAT of DOC list
     | NEST of int*DOC
+    | SETINDENT of int*DOC
     | TEXT of string
     | LINE of string
     | UNION of DOC*DOC
@@ -29,40 +30,41 @@ let nil = NIL
 /// (Wadler uses <> but F# doesn't want me to override that one, probably for
 /// good reason.)
 let ( <+> ) x y  =
-    let left =
-        match x with
-        | CONCAT(xi) -> xi
-        | NIL -> []
-        | _ -> [x]
+    if (x = NIL && y = NIL)
+    then NIL else
+        let left =
+            match x with
+            | CONCAT(xi) -> xi
+            | NIL -> []
+            | _ -> [x]
 
-    let right =
-        match y with
-        | CONCAT(yi) -> yi
-        | NIL -> []
-        | _ -> [y]
+        let right =
+            match y with
+            | CONCAT(yi) -> yi
+            | NIL -> []
+            | _ -> [y]
 
-    CONCAT (left @ right)
+        CONCAT (left @ right)
 
 
 /// Nest the given document `x` by `i` spaces.
 let nest i x = NEST (i,x)
 
+/// Reset the offset explicitly to `i` spaces.
+let setindent i x = SETINDENT (i,x)
 
 /// A text document with content `str`.
 let text str = TEXT str
-
 
 /// A newline.
 ///
 /// This is a soft newline; it will be replaced by a ' ' if we're flattening.
 let line = LINE " "
 
-
 /// A newline.
 ///
 /// This is a soft newline; it will be replaced by a '' if we're flattening.
 let softline = LINE ""
-
 
 /// Include this anywhere to force all parent groups to break.
 let breakParent = BREAKPARENT
@@ -79,6 +81,7 @@ let group x =
         | NIL -> false
         | CONCAT (xi) -> List.exists (hasForce) xi
         | NEST (_, xi) -> hasForce xi
+        | SETINDENT (_, xi) -> hasForce xi
         | TEXT _ -> false
         | LINE _ -> false
         | UNION _ -> false
@@ -92,6 +95,7 @@ let group x =
         | NIL -> NIL
         | CONCAT (xi) -> List.map (flatten) xi |> List.reduce (<+>)
         | NEST (i, xi) -> NEST (i, flatten xi)
+        | SETINDENT (i, xi) -> SETINDENT (i, flatten xi)
         | TEXT str -> TEXT str
         | LINE str -> TEXT str
         | UNION (xi, _) -> xi
@@ -154,6 +158,7 @@ let best w k x =
         | (_, NIL)::z | (_, BREAKPARENT)::z -> be w k z
         | (i, CONCAT(xi))::z -> be w k ([for xii in xi -> (i,xii)] @ z)
         | (i, NEST (j, xi))::z -> be w k ((i + j, xi)::z)
+        | (i, SETINDENT (j, xi))::z -> be w k ((j, xi)::z)
         | (_, TEXT s)::z -> seq {yield Text s; yield! be w (k+s.Length) z}
         | (i, LINE _)::z -> seq {yield Line i; yield! be w i z}
         | (i, UNION(xi, yi))::z ->
