@@ -9,13 +9,13 @@ let main argv =
         let timer = System.Diagnostics.Stopwatch()
         timer.Start()
         let tree = CSharpSyntaxTree.ParseText (System.IO.File.ReadAllText path)
-        printfn "Parsed in %i ms" timer.ElapsedMilliseconds
+        eprintfn "Parsed in %i ms" timer.ElapsedMilliseconds
         timer.Restart()
         let doc = visit (tree.GetRoot())
-        printfn "Visited in %i ms" timer.ElapsedMilliseconds
+        eprintfn "Visited in %i ms" timer.ElapsedMilliseconds
         timer.Restart()
         let formatted = pretty 80 doc
-        printfn "Formatted in %i ms" timer.ElapsedMilliseconds
+        eprintfn "Formatted in %i ms" timer.ElapsedMilliseconds
         printfn "%s" formatted
         0
     | _ ->

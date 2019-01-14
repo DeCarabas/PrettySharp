@@ -244,9 +244,9 @@ namespace NLog.Interface
             TArgument3 argument3);
 
         /// <summary>
-        /// Writes the diagnostic message and exception at the <c>Trace</c> level.
-        /// </summary>
-        /// <param name="message">A <see langword="string"/> to be written.</param><param name="exception">An exception to be logged.</param>
+		/// Writes the diagnostic message and exception at the <c>Trace</c> level.
+		/// </summary>
+		/// <param name="message">A <see langword="string"/> to be written.</param><param name="exception">An exception to be logged.</param>
         void TraceException(
             [Localizable(false)] string message,
             Exception exception);
@@ -391,9 +391,9 @@ namespace NLog.Interface
             TArgument3 argument3);
 
         /// <summary>
-        /// Writes the diagnostic message and exception at the <c>Debug</c> level.
-        /// </summary>
-        /// <param name="message">A <see langword="string"/> to be written.</param><param name="exception">An exception to be logged.</param>
+		/// Writes the diagnostic message and exception at the <c>Debug</c> level.
+		/// </summary>
+		/// <param name="message">A <see langword="string"/> to be written.</param><param name="exception">An exception to be logged.</param>
         void DebugException(
             [Localizable(false)] string message,
             Exception exception);
@@ -538,9 +538,9 @@ namespace NLog.Interface
             TArgument3 argument3);
 
         /// <summary>
-        /// Writes the diagnostic message and exception at the <c>Info</c> level.
-        /// </summary>
-        /// <param name="message">A <see langword="string"/> to be written.</param><param name="exception">An exception to be logged.</param>
+		/// Writes the diagnostic message and exception at the <c>Info</c> level.
+		/// </summary>
+		/// <param name="message">A <see langword="string"/> to be written.</param><param name="exception">An exception to be logged.</param>
         void InfoException(
             [Localizable(false)] string message,
             Exception exception);
@@ -685,9 +685,9 @@ namespace NLog.Interface
             TArgument3 argument3);
 
         /// <summary>
-        /// Writes the diagnostic message and exception at the <c>Warn</c> level.
-        /// </summary>
-        /// <param name="message">A <see langword="string"/> to be written.</param><param name="exception">An exception to be logged.</param>
+		/// Writes the diagnostic message and exception at the <c>Warn</c> level.
+		/// </summary>
+		/// <param name="message">A <see langword="string"/> to be written.</param><param name="exception">An exception to be logged.</param>
         void WarnException(
             [Localizable(false)] string message,
             Exception exception);
@@ -832,9 +832,9 @@ namespace NLog.Interface
             TArgument3 argument3);
 
         /// <summary>
-        /// Writes the diagnostic message and exception at the <c>Error</c> level.
-        /// </summary>
-        /// <param name="message">A <see langword="string"/> to be written.</param><param name="exception">An exception to be logged.</param>
+		/// Writes the diagnostic message and exception at the <c>Error</c> level.
+		/// </summary>
+		/// <param name="message">A <see langword="string"/> to be written.</param><param name="exception">An exception to be logged.</param>
         void ErrorException(
             [Localizable(false)] string message,
             Exception exception);
@@ -979,9 +979,9 @@ namespace NLog.Interface
             TArgument3 argument3);
 
         /// <summary>
-        /// Writes the diagnostic message and exception at the <c>Fatal</c> level.
-        /// </summary>
-        /// <param name="message">A <see langword="string"/> to be written.</param><param name="exception">An exception to be logged.</param>
+		/// Writes the diagnostic message and exception at the <c>Fatal</c> level.
+		/// </summary>
+		/// <param name="message">A <see langword="string"/> to be written.</param><param name="exception">An exception to be logged.</param>
         void FatalException(
             [Localizable(false)] string message,
             Exception exception);
