@@ -24,4 +24,9 @@ let main argv =
 
         printf "\n"
         results |> List.map (showResult options) |> ignore
-        if Seq.exists (isFailure) results then 1 else 0
+
+        let failures = results |> Seq.filter (isFailure) |> Seq.length
+        printf "%d failure%s\n"
+            failures
+            (if failures > 1 || failures = 0 then "s" else "")
+        if failures > 0 then 1 else 0

@@ -41,12 +41,12 @@ let visitTrivia (trivia:SyntaxTrivia) =
         | SyntaxKind.DocumentationCommentExteriorTrivia
         | SyntaxKind.MultiLineCommentTrivia
         | SyntaxKind.MultiLineDocumentationCommentTrivia ->
-            breakParent <+> txt trivia
+            txt trivia
 
         // TODO: Push these around to other side of stuff like commas.
         | SyntaxKind.SingleLineDocumentationCommentTrivia
         | SyntaxKind.SingleLineCommentTrivia ->
-            breakParent <+> txt trivia <+> line
+            txt trivia <+> hardline
 
         | SyntaxKind.BadDirectiveTrivia
         | SyntaxKind.DefineDirectiveTrivia
@@ -65,7 +65,7 @@ let visitTrivia (trivia:SyntaxTrivia) =
         | SyntaxKind.ShebangDirectiveTrivia
         | SyntaxKind.UndefDirectiveTrivia
         | SyntaxKind.WarningDirectiveTrivia ->
-            breakParent <+> setindent 0 (line <+> txt trivia) <+> line
+            setindent 0 (line <+> txt trivia) <+> hardline
 
         | _ -> failwith "Unexpected trivia type"
 
@@ -75,7 +75,6 @@ let visitTriviaList (trivia:SyntaxTriviaList) =
     else trivia |> Seq.map (visitTrivia) |> Seq.fold (<+>) nil
 
 let text (token:SyntaxToken) =
-    // TODO: This is where all the trivia handling will go, eventually.
     let leading = visitTriviaList token.LeadingTrivia
     let trailing = visitTriviaList token.TrailingTrivia
     let tokenText =
@@ -195,7 +194,13 @@ type PrintVisitor() =
     override this.Visit node =
         match node with
             | null -> NIL
-            | _ -> base.Visit node
+            | _ ->
+                let leading = visitTriviaList (node.GetLeadingTrivia())
+                match leading with
+                | NIL -> base.Visit node
+                | _ ->
+                    let newNode = node.WithLeadingTrivia(SyntaxTriviaList.Empty)
+                    leading <+> base.Visit newNode
 
     override this.DefaultVisit node =
         failwith (sprintf "Could not visit a %A %A" (node.Kind()) node)

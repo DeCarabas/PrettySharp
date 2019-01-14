@@ -13,6 +13,7 @@ type DOC =
     | SETINDENT of int*DOC
     | TEXT of string
     | LINE of string
+    | HARDLINE
     | UNION of DOC*DOC
     | BREAKPARENT
 
@@ -28,24 +29,18 @@ let nil = NIL
 /// Concatenate two documents.
 ///
 /// (Wadler uses <> but F# doesn't want me to override that one, probably for
-/// good reason.)
+/// good reason. We are also EXTREMELY aggressive about flattening here, so
+/// that we don't maintain NILs or anything like that any longer than we have
+/// to.)
 let ( <+> ) x y  =
-    if (x = NIL && y = NIL)
-    then NIL else
-        let left =
-            match x with
-            | CONCAT(xi) -> xi
-            | NIL -> []
-            | _ -> [x]
-
-        let right =
-            match y with
-            | CONCAT(yi) -> yi
-            | NIL -> []
-            | _ -> [y]
-
-        CONCAT (left @ right)
-
+    match x, y with
+    | NIL, NIL -> NIL
+    | NIL, _ -> y
+    | _, NIL -> x
+    | CONCAT (xi), CONCAT (yi) -> CONCAT (xi @ yi)
+    | CONCAT (xi), _ -> CONCAT (xi @ [y])
+    | _, CONCAT(yi) -> CONCAT (x::yi)
+    | _, _ -> CONCAT ([x; y])
 
 /// Nest the given document `x` by `i` spaces.
 let nest i x = NEST (i,x)
@@ -66,6 +61,12 @@ let line = LINE " "
 /// This is a soft newline; it will be replaced by a '' if we're flattening.
 let softline = LINE ""
 
+/// A newline
+///
+/// This is a hard newline; it will always be present in the output, no
+/// matter if the parent group is breaking or not.
+let hardline = HARDLINE
+
 /// Include this anywhere to force all parent groups to break.
 let breakParent = BREAKPARENT
 
@@ -84,6 +85,7 @@ let group x =
         | SETINDENT (_, xi) -> hasForce xi
         | TEXT _ -> false
         | LINE _ -> false
+        | HARDLINE -> false
         | UNION _ -> false
         | BREAKPARENT -> true
 
@@ -98,6 +100,7 @@ let group x =
         | SETINDENT (i, xi) -> SETINDENT (i, flatten xi)
         | TEXT str -> TEXT str
         | LINE str -> TEXT str
+        | HARDLINE -> HARDLINE
         | UNION (xi, _) -> xi
         | BREAKPARENT -> failwith "Should not try to flatten with a break!"
 
@@ -160,7 +163,8 @@ let best w k x =
         | (i, NEST (j, xi))::z -> be w k ((i + j, xi)::z)
         | (i, SETINDENT (j, xi))::z -> be w k ((j, xi)::z)
         | (_, TEXT s)::z -> seq {yield Text s; yield! be w (k+s.Length) z}
-        | (i, LINE _)::z -> seq {yield Line i; yield! be w i z}
+        | (i, LINE _)::z
+        | (i, HARDLINE)::z -> seq {yield Line i; yield! be w i z}
         | (i, UNION(xi, yi))::z ->
             better w k (be w k ((i,xi)::z)) (be w k ((i,yi)::z))
 
