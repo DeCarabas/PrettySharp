@@ -3,7 +3,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "lexer.c"
+#include "common.h"
+#include "core.h"
+#include "csharp.h"
 
 #define ERR_INVALID_ARGS 1
 #define ERR_CANNOT_OPEN 2
@@ -58,23 +60,13 @@ int main(int argc, const char *argv[]) {
   }
 
   char *source = read_file(input);
-  lexer_init(source);
+  struct DocBuilder builder = builder_new(16);
 
-  int line = -1;
-  for (;;) {
-    struct Token token = scan_token();
-    if (token.line != line) {
-      printf("%4d ", token.line);
-      line = token.line;
-    } else {
-      printf("   | ");
-    }
-    printf("%2d '%.*s'\n", token.type, token.length, token.start);
-
-    if ((token.type == TOKEN_EOF) || (token.type == TOKEN_ERROR))
-      break;
+  if (format_csharp(&builder, source)) {
+    pretty(stdout, 80, builder.contents, builder.count);
   }
 
+  builder_free(&builder);
   free(source);
   return 0;
 }

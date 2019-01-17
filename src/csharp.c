@@ -1,77 +1,132 @@
-#include "core.h"
+#include "csharp.h"
+#include "lexer.h"
 
-// N.B.: The numeric values in this enum correspond to slots in the
-// visit_dispatch table, below.
-enum SyntaxKind { Syntax_Block = 0, Syntax_VariableDeclaration = 1 };
+typedef struct {
+  struct DocBuilder *builder;
+  struct Token previous;
+  struct Token current;
+  bool had_error;
+  bool panic_mode;
+} Parser;
 
-struct SyntaxNode {
-  enum SyntaxKind kind;
-};
+Parser parser;
 
-struct VariableDeclarationSyntax {
-  struct SyntaxNode node;
-};
+static void verror_at(struct Token *token, const char *format, va_list args) {
+  if (parser.panic_mode) {
+    return;
+  }
+  parser.panic_mode = true;
+  parser.had_error = true;
 
-struct WhileStatementSyntax {
-  struct SyntaxNode node;
-  struct SyntaxNode *condition;
-  struct SyntaxNode *body;
-};
+  fprintf(stderr, "[line %d] Error", token->line);
 
-struct BlockSyntax {
-  struct SyntaxNode node;
-};
-
-typedef void (*visitor)(struct DocBuilder *builder, struct SyntaxNode *node);
-
-void visit(struct DocBuilder *builder, struct SyntaxNode *node);
-
-void visit_body(struct DocBuilder *builder, struct SyntaxNode *node) {
-  if (node->kind != Syntax_Block) {
-    doc_indent(builder);
+  if (token->type == TOKEN_EOF) {
+    fprintf(stderr, " at end");
+  } else if (token->type == TOKEN_ERROR) {
+    // Nothing.
+  } else {
+    fprintf(stderr, " at '%.*s'", token->length, token->start);
   }
 
-  doc_line(builder);
-  visit(builder, node);
+  fprintf(stderr, ": ");
+  vfprintf(stderr, format, args);
+  fprintf(stderr, "\n");
+}
 
-  if (node->kind != Syntax_Block) {
-    doc_dedent(builder);
+static void error_at(struct Token *token, const char *format, ...) {
+  va_list args;
+  va_start(args, format);
+  verror_at(token, format, args);
+  va_end(args);
+}
+
+static void error(const char *format, ...) {
+  va_list args;
+  va_start(args, format);
+  verror_at(&parser.previous, format, args);
+  va_end(args);
+}
+
+static void error_at_current(const char *message) {
+  error_at(&parser.current, message);
+}
+
+static void advance() {
+  parser.previous = parser.current;
+  for (;;) {
+    parser.current = scan_token();
+
+    if (parser.current.type == TOKEN_TRIVIA_BLOCK_COMMENT ||
+        parser.current.type == TOKEN_TRIVIA_EOL ||
+        parser.current.type == TOKEN_TRIVIA_LINE_COMMENT ||
+        parser.current.type == TOKEN_TRIVIA_WHITESPACE) {
+      // TODO: Handle trivia properly.
+      continue;
+    }
+
+    if (parser.current.type != TOKEN_ERROR) {
+      break;
+    }
+
+    error_at_current(parser.current.start);
   }
 }
 
-void visit_block(struct DocBuilder *builder, struct BlockSyntax *node) {}
-
-void visit_variabledeclaration(struct DocBuilder *builder,
-                               struct VariableDeclarationSyntax *node) {
-  doc_group(builder);
-  {
-    doc_group(builder);
-
-    doc_end(builder);
+static void consume(enum TokenType type, const char *message) {
+  if (parser.current.type == type) {
+    advance();
+  } else {
+    error_at_current(message);
   }
-  doc_end(builder);
 }
 
-void visit_while(struct DocBuilder *builder,
-                 struct WhileStatementSyntax *node) {
-  doc_breakparent(builder);
-  doc_group(builder);
+static bool peek(enum TokenType type) { return parser.current.type == type; }
 
-  // while (condition)
-  doc_bracket_open(builder, "while (");
-  visit(builder, node->condition);
-  doc_bracket_close(builder, ")");
+static void group() { doc_group(parser.builder); }
+static void end() { doc_end(parser.builder); }
 
-  // { ... }
-  visit_body(builder, node->body);
+static void space() { doc_text(parser.builder, " ", 1); }
 
-  doc_end(builder);
+static void token(enum TokenType type, const char *message) {
+  // N.B.: Because advance() processes the interstitial trivia we need to echo
+  // to the output as soon as we can. This might write garbage.
+  doc_text(parser.builder, parser.current.start, parser.current.length);
+  consume(type, message);
 }
 
-void visit(struct DocBuilder *builder, struct SyntaxNode *node) {
-  // One per SyntaxKind value.
-  static visitor visit_dispatch[] = {(visitor)visit_block,
-                                     (visitor)visit_variabledeclaration};
+static void identifier() { token(TOKEN_IDENTIFIER, "Expected an identifier"); }
 
-  visit_dispatch[node->kind](builder, node);
+static void extern_alias() {
+  group();
+
+  token(TOKEN_KW_EXTERN, "Expected 'extern'");
+  space();
+  token(TOKEN_KW_ALIAS, "Expected 'alias'");
+  space();
+  identifier();
+  token(TOKEN_SEMICOLON, "Expected a semicolon");
+
+  end();
+}
+
+static void extern_aliases() {
+  while (peek(TOKEN_KW_EXTERN)) {
+    extern_alias();
+  }
+}
+
+static void compilation_unit() { extern_aliases(); }
+
+bool format_csharp(struct DocBuilder *builder, const char *source) {
+  parser.builder = builder;
+  parser.had_error = false;
+  parser.panic_mode = false;
+
+  lexer_init(source);
+  advance();
+
+  compilation_unit();
+  consume(TOKEN_EOF, "Expect end of compilation unit");
+
+  return !parser.had_error;
 }

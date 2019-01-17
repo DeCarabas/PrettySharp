@@ -5,7 +5,7 @@
 
 #include "core.h"
 
-void builder_init(struct DocBuilder *docs, int capacity) {
+static void builder_init(struct DocBuilder *docs, int capacity) {
   docs->count = 0;
   docs->capacity = capacity;
   docs->margin = 0;
@@ -19,7 +19,14 @@ struct DocBuilder builder_new(int capacity) {
   return result;
 }
 
-struct Doc *builder_add(struct DocBuilder *builder) {
+void builder_free(struct DocBuilder *builder) {
+  free(builder->contents);
+  builder->contents = NULL;
+  builder->count = 0;
+  builder->capacity = 0;
+}
+
+static struct Doc *builder_add(struct DocBuilder *builder) {
   builder->count += 1;
   if (builder->count > builder->capacity) {
     builder->capacity += (builder->capacity / 2);
@@ -32,27 +39,6 @@ struct Doc *builder_add(struct DocBuilder *builder) {
   return doc;
 }
 
-void builder_ensure(struct DocBuilder *builder, int more) {
-  int capacity = builder->capacity;
-  while (capacity < builder->count + more) {
-    capacity += (capacity / 2);
-  }
-
-  if (capacity != builder->capacity) {
-    builder->capacity = capacity;
-    builder->contents =
-        realloc(builder->contents, sizeof(struct Doc) * builder->capacity);
-  }
-}
-
-void builder_concat(struct DocBuilder *target, struct DocBuilder *source) {
-  // TODO: Should I just steal the memory somehow?
-  builder_ensure(target, source->count);
-  struct Doc *dest = target->contents + target->count;
-  memcpy(dest, source->contents, source->count);
-  target->count += source->count;
-}
-
 void doc_indent(struct DocBuilder *builder) {
   builder->margin += builder->indent;
 }
@@ -61,10 +47,10 @@ void doc_dedent(struct DocBuilder *builder) {
   builder->margin -= builder->indent;
 }
 
-void doc_text(struct DocBuilder *builder, const char *text) {
+void doc_text(struct DocBuilder *builder, const char *text, int length) {
   struct Doc *out = builder_add(builder);
   out->type = DOC_TEXT;
-  out->length = strlen(text);
+  out->length = length;
   out->string = text;
 }
 
@@ -99,7 +85,7 @@ void doc_end(struct DocBuilder *builder) {
 
 void doc_bracket_open(struct DocBuilder *builder, const char *left) {
   doc_group(builder);
-  doc_text(builder, left);
+  doc_text(builder, left, strlen(left));
 
   doc_indent(builder);
   doc_softline(builder);
@@ -108,15 +94,14 @@ void doc_bracket_open(struct DocBuilder *builder, const char *left) {
 void doc_bracket_close(struct DocBuilder *builder, const char *right) {
   doc_dedent(builder);
   doc_softline(builder);
-  doc_text(builder, right);
+  doc_text(builder, right, strlen(right));
   doc_end(builder);
 }
 
-#define OUT_TEXT 1
-#define OUT_LINE 2
+enum OutputDocType { OUT_TEXT, OUT_LINE };
 
 struct OutputDoc {
-  int type;
+  enum OutputDocType type;
   int length;
   const char *string;
 };
@@ -127,7 +112,20 @@ struct OutputBuilder {
   struct OutputDoc *contents;
 };
 
-struct OutputDoc *output_add(struct OutputBuilder *builder) {
+static void output_init(struct OutputBuilder *builder) {
+  builder->count = 0;
+  builder->capacity = 16;
+  builder->contents = malloc(sizeof(struct OutputDoc) * 16);
+}
+
+static void output_free(struct OutputBuilder *builder) {
+  builder->count = 0;
+  builder->capacity = 0;
+  free(builder->contents);
+  builder->contents = NULL;
+}
+
+static struct OutputDoc *output_add(struct OutputBuilder *builder) {
   builder->count += 1;
   if (builder->count > builder->capacity) {
     builder->capacity += (builder->capacity / 2);
@@ -138,23 +136,23 @@ struct OutputDoc *output_add(struct OutputBuilder *builder) {
   return builder->contents + (builder->count - 1);
 }
 
-void output_push_string(struct OutputBuilder *result, int length,
-                        const char *string) {
+static void output_push_string(struct OutputBuilder *result, int length,
+                               const char *string) {
   struct OutputDoc *doc = output_add(result);
   doc->type = OUT_TEXT;
   doc->length = length;
   doc->string = string;
 }
 
-void output_push_line(struct OutputBuilder *result, int margin) {
+static void output_push_line(struct OutputBuilder *result, int margin) {
   struct OutputDoc *doc = output_add(result);
   doc->type = OUT_LINE;
   doc->length = margin;
   doc->string = NULL;
 }
 
-void best_rep(struct OutputBuilder *result, int width, struct Doc *docs,
-              int length) {
+static void best_rep(struct OutputBuilder *result, int width, struct Doc *docs,
+                     int length) {
   struct Doc *saved_it = NULL;
   int saved_result_count = 0;
   int saved_used = 0;
@@ -227,7 +225,7 @@ void best_rep(struct OutputBuilder *result, int width, struct Doc *docs,
   }
 }
 
-void layout(FILE *file, struct OutputDoc *docs, int length) {
+static void layout(FILE *file, struct OutputDoc *docs, int length) {
   struct OutputDoc *end = docs + length;
   struct OutputDoc *it = docs;
   while (it != end) {
@@ -245,4 +243,14 @@ void layout(FILE *file, struct OutputDoc *docs, int length) {
     }
     it++;
   }
+}
+
+void pretty(FILE *file, int width, struct Doc *docs, int length) {
+  struct OutputBuilder builder;
+  output_init(&builder);
+
+  best_rep(&builder, width, docs, length);
+  layout(file, builder.contents, builder.count);
+
+  output_free(&builder);
 }
