@@ -1130,3 +1130,22 @@ struct Token scan_token() {
 
   return error_token("Unexpected character");
 }
+
+void dump_lex(const char *source) {
+  lexer_init(source);
+
+  int line = -1;
+  for (;;) {
+    struct Token token = scan_token();
+    if (token.line != line) {
+      printf("%4d ", token.line);
+      line = token.line;
+    } else {
+      printf("   | ");
+    }
+    printf("%2d '%.*s'\n", token.type, token.length, token.start);
+
+    if (token.type == TOKEN_EOF || token.type == TOKEN_ERROR)
+      break;
+  }
+}

@@ -84,6 +84,7 @@ static bool peek(enum TokenType type) { return parser.current.type == type; }
 
 static void group() { doc_group(parser.builder); }
 static void end() { doc_end(parser.builder); }
+static void line() { doc_line(parser.builder); }
 
 static void space() { doc_text(parser.builder, " ", 1); }
 
@@ -97,21 +98,21 @@ static void token(enum TokenType type, const char *message) {
 static void identifier() { token(TOKEN_IDENTIFIER, "Expected an identifier"); }
 
 static void extern_alias() {
-  group();
-
   token(TOKEN_KW_EXTERN, "Expected 'extern'");
   space();
   token(TOKEN_KW_ALIAS, "Expected 'alias'");
   space();
   identifier();
   token(TOKEN_SEMICOLON, "Expected a semicolon");
-
-  end();
+  line();
 }
 
 static void extern_aliases() {
-  while (peek(TOKEN_KW_EXTERN)) {
-    extern_alias();
+  if (peek(TOKEN_KW_EXTERN)) {
+    while (peek(TOKEN_KW_EXTERN)) {
+      extern_alias();
+    }
+    line();
   }
 }
 
