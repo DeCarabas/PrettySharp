@@ -4,29 +4,29 @@
 // visit_dispatch table, below.
 enum SyntaxKind { Syntax_Block = 0, Syntax_VariableDeclaration = 1 };
 
-struct syntaxnode {
+struct SyntaxNode {
   enum SyntaxKind kind;
 };
 
-struct variabledeclarationsyntax {
-  struct syntaxnode node;
+struct VariableDeclarationSyntax {
+  struct SyntaxNode node;
 };
 
-struct whilestatementsyntax {
-  struct syntaxnode node;
-  struct syntaxnode *condition;
-  struct syntaxnode *body;
+struct WhileStatementSyntax {
+  struct SyntaxNode node;
+  struct SyntaxNode *condition;
+  struct SyntaxNode *body;
 };
 
-struct blocksyntnax {
-  struct syntaxnode node;
+struct BlockSyntax {
+  struct SyntaxNode node;
 };
 
-typedef void (*visitor)(struct docbuilder *builder, struct syntaxnode *node);
+typedef void (*visitor)(struct DocBuilder *builder, struct SyntaxNode *node);
 
-void visit(struct docbuilder *builder, struct syntaxnode *node);
+void visit(struct DocBuilder *builder, struct SyntaxNode *node);
 
-void visit_body(struct docbuilder *builder, struct syntaxnode *node) {
+void visit_body(struct DocBuilder *builder, struct SyntaxNode *node) {
   if (node->kind != Syntax_Block) {
     doc_indent(builder);
   }
@@ -39,10 +39,10 @@ void visit_body(struct docbuilder *builder, struct syntaxnode *node) {
   }
 }
 
-void visit_block(struct docbuilder *builder, struct blocksyntax *node) {}
+void visit_block(struct DocBuilder *builder, struct BlockSyntax *node) {}
 
-void visit_variabledeclaration(struct docbuilder *builder,
-                               struct variabledeclarationsyntax *node) {
+void visit_variabledeclaration(struct DocBuilder *builder,
+                               struct VariableDeclarationSyntax *node) {
   doc_group(builder);
   {
     doc_group(builder);
@@ -52,8 +52,8 @@ void visit_variabledeclaration(struct docbuilder *builder,
   doc_end(builder);
 }
 
-void visit_while(struct docbuilder *builder,
-                 struct whilestatementsyntax *node) {
+void visit_while(struct DocBuilder *builder,
+                 struct WhileStatementSyntax *node) {
   doc_breakparent(builder);
   doc_group(builder);
 
@@ -68,7 +68,7 @@ void visit_while(struct docbuilder *builder,
   doc_end(builder);
 }
 
-void visit(struct docbuilder *builder, struct syntaxnode *node) {
+void visit(struct DocBuilder *builder, struct SyntaxNode *node) {
   // One per SyntaxKind value.
   static visitor visit_dispatch[] = {(visitor)visit_block,
                                      (visitor)visit_variabledeclaration};

@@ -5,34 +5,34 @@
 
 #include "core.h"
 
-void docbuilder_init(struct docbuilder *docs, int capacity) {
+void builder_init(struct DocBuilder *docs, int capacity) {
   docs->count = 0;
   docs->capacity = capacity;
   docs->margin = 0;
   docs->indent = 4;
-  docs->contents = malloc(sizeof(struct doc) * docs->capacity);
+  docs->contents = malloc(sizeof(struct Doc) * docs->capacity);
 }
 
-struct docbuilder docbuilder_new(int capacity) {
-  struct docbuilder result;
-  docbuilder_init(&result, capacity);
+struct DocBuilder builder_new(int capacity) {
+  struct DocBuilder result;
+  builder_init(&result, capacity);
   return result;
 }
 
-struct doc *docbuilder_add(struct docbuilder *builder) {
+struct Doc *builder_add(struct DocBuilder *builder) {
   builder->count += 1;
   if (builder->count > builder->capacity) {
     builder->capacity += (builder->capacity / 2);
     builder->contents =
-        realloc(builder->contents, sizeof(struct doc) * builder->capacity);
+        realloc(builder->contents, sizeof(struct Doc) * builder->capacity);
   }
 
-  struct doc *doc = builder->contents + (builder->count - 1);
+  struct Doc *doc = builder->contents + (builder->count - 1);
   doc->margin = builder->margin;
   return doc;
 }
 
-void docbuilder_ensure(struct docbuilder *builder, int more) {
+void builder_ensure(struct DocBuilder *builder, int more) {
   int capacity = builder->capacity;
   while (capacity < builder->count + more) {
     capacity += (capacity / 2);
@@ -41,63 +41,63 @@ void docbuilder_ensure(struct docbuilder *builder, int more) {
   if (capacity != builder->capacity) {
     builder->capacity = capacity;
     builder->contents =
-        realloc(builder->contents, sizeof(struct doc) * builder->capacity);
+        realloc(builder->contents, sizeof(struct Doc) * builder->capacity);
   }
 }
 
-void docbuilder_concat(struct docbuilder *target, struct docbuilder *source) {
+void builder_concat(struct DocBuilder *target, struct DocBuilder *source) {
   // TODO: Should I just steal the memory somehow?
-  docbuilder_ensure(target, source->count);
-  struct doc *dest = target->contents + target->count;
+  builder_ensure(target, source->count);
+  struct Doc *dest = target->contents + target->count;
   memcpy(dest, source->contents, source->count);
   target->count += source->count;
 }
 
-void doc_indent(struct docbuilder *builder) {
+void doc_indent(struct DocBuilder *builder) {
   builder->margin += builder->indent;
 }
 
-void doc_dedent(struct docbuilder *builder) {
+void doc_dedent(struct DocBuilder *builder) {
   builder->margin -= builder->indent;
 }
 
-void doc_text(struct docbuilder *builder, const char *text) {
-  struct doc *out = docbuilder_add(builder);
+void doc_text(struct DocBuilder *builder, const char *text) {
+  struct Doc *out = builder_add(builder);
   out->type = DOC_TEXT;
   out->length = strlen(text);
   out->string = text;
 }
 
-void doc_line(struct docbuilder *builder) {
-  struct doc *out = docbuilder_add(builder);
+void doc_line(struct DocBuilder *builder) {
+  struct Doc *out = builder_add(builder);
   out->type = DOC_LINE;
   out->length = 1;
   out->string = " ";
 }
 
-void doc_softline(struct docbuilder *builder) {
-  struct doc *out = docbuilder_add(builder);
+void doc_softline(struct DocBuilder *builder) {
+  struct Doc *out = builder_add(builder);
   out->type = DOC_LINE;
   out->length = 0;
   out->string = "";
 }
 
-void doc_breakparent(struct docbuilder *builder) {
-  struct doc *out = docbuilder_add(builder);
+void doc_breakparent(struct DocBuilder *builder) {
+  struct Doc *out = builder_add(builder);
   out->type = DOC_BREAKPARENT;
 }
 
-void doc_group(struct docbuilder *builder) {
-  struct doc *result = docbuilder_add(builder);
+void doc_group(struct DocBuilder *builder) {
+  struct Doc *result = builder_add(builder);
   result->type = DOC_GROUP;
 }
 
-void doc_end(struct docbuilder *builder) {
-  struct doc *result = docbuilder_add(builder);
+void doc_end(struct DocBuilder *builder) {
+  struct Doc *result = builder_add(builder);
   result->type = DOC_END;
 }
 
-void doc_bracket_open(struct docbuilder *builder, const char *left) {
+void doc_bracket_open(struct DocBuilder *builder, const char *left) {
   doc_group(builder);
   doc_text(builder, left);
 
@@ -105,7 +105,7 @@ void doc_bracket_open(struct docbuilder *builder, const char *left) {
   doc_softline(builder);
 }
 
-void doc_bracket_close(struct docbuilder *builder, const char *right) {
+void doc_bracket_close(struct DocBuilder *builder, const char *right) {
   doc_dedent(builder);
   doc_softline(builder);
   doc_text(builder, right);
@@ -153,15 +153,15 @@ void output_push_line(struct OutputBuilder *result, int margin) {
   doc->string = NULL;
 }
 
-void best_rep(struct OutputBuilder *result, int width, struct doc *docs,
+void best_rep(struct OutputBuilder *result, int width, struct Doc *docs,
               int length) {
-  struct doc *saved_it = NULL;
+  struct Doc *saved_it = NULL;
   int saved_result_count = 0;
   int saved_used = 0;
   int group_depth = 0;
 
-  struct doc *end = docs + length;
-  struct doc *it = docs;
+  struct Doc *end = docs + length;
+  struct Doc *it = docs;
   int used = 0;
   while (it != end) {
     switch (it->type) {

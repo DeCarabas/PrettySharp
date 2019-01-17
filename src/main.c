@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "lexer.c"
+
 #define ERR_INVALID_ARGS 1
 #define ERR_CANNOT_OPEN 2
 #define ERR_CANNOT_READ 3
@@ -55,8 +57,24 @@ int main(int argc, const char *argv[]) {
     exit(ERR_INVALID_ARGS);
   }
 
-  char *contents = read_file(input);
-  printf("%s\n", contents);
+  char *source = read_file(input);
+  lexer_init(source);
 
+  int line = -1;
+  for (;;) {
+    struct Token token = scan_token();
+    if (token.line != line) {
+      printf("%4d ", token.line);
+      line = token.line;
+    } else {
+      printf("   | ");
+    }
+    printf("%2d '%.*s'\n", token.type, token.length, token.start);
+
+    if ((token.type == TOKEN_EOF) || (token.type == TOKEN_ERROR))
+      break;
+  }
+
+  free(source);
   return 0;
 }
