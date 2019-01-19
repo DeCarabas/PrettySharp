@@ -84,6 +84,9 @@ static void vdebug(const char *format, va_list args) {
   }
   vfprintf(stderr, format, args);
   fprintf(stderr, "\n");
+#else
+  UNUSED(format);
+  UNUSED(args);
 #endif
 }
 
@@ -114,20 +117,6 @@ static void verror_at(struct Token *token, const char *format, va_list args) {
   fprintf(stderr, ": ");
   vfprintf(stderr, format, args);
   fprintf(stderr, "\n");
-}
-
-static void error_at(struct Token *token, const char *format, ...) {
-  va_list args;
-  va_start(args, format);
-  verror_at(token, format, args);
-  va_end(args);
-}
-
-static void error(const char *format, ...) {
-  va_list args;
-  va_start(args, format);
-  verror_at(&parser.previous, format, args);
-  va_end(args);
 }
 
 static void verror_at_current(const char *format, va_list args) {
@@ -217,6 +206,15 @@ static bool check(enum TokenType type) {
   return result;
 }
 
+static bool check_any(enum TokenType *types, int count) {
+  for (int i = 0; i < count; i++) {
+    if (check(types[i])) {
+      return true;
+    }
+  }
+  return false;
+}
+
 static bool match(enum TokenType type) {
   if (!check(type)) {
     return false;
@@ -224,6 +222,15 @@ static bool match(enum TokenType type) {
   doc_text(parser.builder, parser.current.start, parser.current.length);
   advance();
   return true;
+}
+
+static bool match_any(enum TokenType *types, int count) {
+  for (int i = 0; i < count; i++) {
+    if (match(types[i])) {
+      return true;
+    }
+  }
+  return false;
 }
 
 static void group() { doc_group(parser.builder); }
@@ -235,8 +242,12 @@ static void indent() { doc_indent(parser.builder); }
 static void dedent() { doc_dedent(parser.builder); }
 static void space() { doc_text(parser.builder, " ", 1); }
 
+static bool check_identifier() {
+  return is_identifier_token(parser.current.type);
+}
+
 static void identifier() {
-  if (is_identifier_token(parser.current.type)) {
+  if (check_identifier()) {
     doc_text(parser.builder, parser.current.start, parser.current.length);
     advance();
   } else {
@@ -271,7 +282,7 @@ static void name_equals() {
 
 static void type_name();
 
-static void optional_type_parameter_list() {
+static void optional_type_argument_list() {
   group();
   if (match(TOKEN_LESSTHAN)) {
     indent();
@@ -292,7 +303,7 @@ static void optional_type_parameter_list() {
 
 static void simple_name() {
   identifier();
-  optional_type_parameter_list();
+  optional_type_argument_list();
 }
 
 static void namespace_or_type_name() {
@@ -303,7 +314,6 @@ static void namespace_or_type_name() {
 }
 
 static void type_name() { namespace_or_type_name(); }
-static void namespace_name() { namespace_or_type_name(); }
 
 static bool check_name_equals() {
   return check(TOKEN_IDENTIFIER) && check_next(TOKEN_EQUALS);
@@ -343,6 +353,42 @@ static void using_directives() {
       line();
     }
     line();
+  }
+}
+
+static enum TokenType builtin_type_tokens[] = {
+    TOKEN_KW_SBYTE, TOKEN_KW_BYTE,   TOKEN_KW_SHORT,   TOKEN_KW_USHORT,
+    TOKEN_KW_INT,   TOKEN_KW_UINT,   TOKEN_KW_LONG,    TOKEN_KW_ULONG,
+    TOKEN_KW_CHAR,  TOKEN_KW_FLOAT,  TOKEN_KW_DOUBLE,  TOKEN_KW_DECIMAL,
+    TOKEN_KW_BOOL,  TOKEN_KW_OBJECT, TOKEN_KW_DYNAMIC, TOKEN_KW_STRING,
+};
+
+static bool check_type() {
+  return check_any(builtin_type_tokens, ARRAY_SIZE(builtin_type_tokens)) ||
+         check_identifier();
+}
+static void type() {
+  if (!match_any(builtin_type_tokens, ARRAY_SIZE(builtin_type_tokens))) {
+    type_name();
+  }
+
+  // Handle all the stuff at the end....
+  while (check(TOKEN_OPENBRACKET) || check(TOKEN_QUESTION) ||
+         check(TOKEN_ASTERISK)) {
+
+    // Array ranks.
+    if (match(TOKEN_OPENBRACKET)) {
+      while (match(TOKEN_COMMA)) {
+        ;
+      }
+      token(TOKEN_CLOSEBRACKET);
+    }
+
+    // Nullable.
+    match(TOKEN_QUESTION);
+
+    // Pointer.
+    match(TOKEN_ASTERISK);
   }
 }
 
@@ -435,6 +481,60 @@ static void global_attributes() {
   }
 }
 
+static void return_type() {
+  if (!match(TOKEN_KW_VOID)) {
+    type();
+  }
+}
+
+static enum TokenType parameter_modifier_tokens[] = {
+    TOKEN_KW_IN, TOKEN_KW_OUT, TOKEN_KW_REF, TOKEN_KW_THIS, TOKEN_KW_PARAMS,
+};
+
+static bool check_formal_parameter() {
+  return check(TOKEN_OPENBRACKET) ||
+         check_any(parameter_modifier_tokens,
+                   ARRAY_SIZE(parameter_modifier_tokens)) ||
+         check_type();
+}
+
+static void formal_parameter_list() {
+  token(TOKEN_OPENPAREN);
+  {
+    indent();
+    softline();
+
+    bool first = true;
+    while (check_formal_parameter()) {
+      if (!first) {
+        token(TOKEN_COMMA);
+        line();
+      }
+      first = false;
+
+      attributes();
+      if (match_any(parameter_modifier_tokens,
+                    ARRAY_SIZE(parameter_modifier_tokens))) {
+        space();
+      }
+      type();
+      space();
+      identifier();
+      if (check(TOKEN_EQUALS)) {
+        space();
+        token(TOKEN_EQUALS);
+        line();
+        indent();
+        expression();
+        dedent();
+      }
+    }
+
+    dedent();
+  }
+  token(TOKEN_CLOSEPAREN);
+}
+
 static void type_constraint() {
   if (match(TOKEN_KW_NEW)) {
     token(TOKEN_OPENPAREN);
@@ -444,32 +544,275 @@ static void type_constraint() {
   }
 }
 
-static bool check_type_keyword() {
-  return (check(TOKEN_KW_CLASS) || check(TOKEN_KW_STRUCT) ||
-          check(TOKEN_KW_INTERFACE) || check(TOKEN_KW_ENUM) ||
-          check(TOKEN_KW_DELEGATE));
+static void optional_type_parameter_list() {
+  group();
+  if (match(TOKEN_LESSTHAN)) {
+    indent();
+    softline();
+
+    attributes();
+    if (match(TOKEN_KW_IN) || match(TOKEN_KW_OUT)) {
+      space();
+    }
+    identifier();
+    while (match(TOKEN_COMMA)) {
+      line();
+      attributes();
+      if (match(TOKEN_KW_IN) || match(TOKEN_KW_OUT)) {
+        space();
+      }
+      identifier();
+    }
+
+    dedent();
+    softline();
+    token(TOKEN_GREATERTHAN);
+  }
+  end();
 }
 
-static bool match_type_keyword() {
-  return (match(TOKEN_KW_CLASS) || match(TOKEN_KW_STRUCT) ||
-          match(TOKEN_KW_INTERFACE) || match(TOKEN_KW_ENUM) ||
-          match(TOKEN_KW_DELEGATE));
+static void base_types() {
+  group();
+  token(TOKEN_COLON);
+  space();
+  type_name();
+  {
+    indent();
+    while (match(TOKEN_COMMA)) {
+      line();
+      type_name();
+    }
+    dedent();
+  }
+  end();
 }
+
+static void type_parameter_constraint() {
+  group();
+  token(TOKEN_KW_WHERE);
+  space();
+  identifier();
+  token(TOKEN_COLON);
+  {
+    indent();
+    line();
+    type_constraint();
+    while (match(TOKEN_COMMA)) {
+      line();
+      type_constraint();
+    }
+    dedent();
+  }
+  end();
+}
+
+static void type_parameter_constraint_clauses() {
+  type_parameter_constraint();
+  if (check(TOKEN_KW_WHERE)) {
+    // MORE THAN ONE, UGH.
+    breakparent();
+    while (check(TOKEN_KW_WHERE)) {
+      line();
+      type_parameter_constraint();
+    }
+  }
+}
+
+static void class_declaration() {
+  token(TOKEN_KW_CLASS);
+  space();
+  identifier();
+  optional_type_parameter_list();
+
+  if (check(TOKEN_COLON)) {
+    indent();
+    line();
+    base_types();
+    dedent();
+  }
+
+  if (check(TOKEN_KW_WHERE)) {
+    indent();
+    line();
+    type_parameter_constraint_clauses();
+    dedent();
+  }
+
+  match(TOKEN_SEMICOLON);
+}
+
+static void struct_declaration() {
+  token(TOKEN_KW_STRUCT);
+  space();
+  identifier();
+  optional_type_parameter_list();
+
+  if (check(TOKEN_COLON)) {
+    indent();
+    line();
+    base_types();
+    dedent();
+  }
+
+  if (check(TOKEN_KW_WHERE)) {
+    indent();
+    line();
+    type_parameter_constraint_clauses();
+    dedent();
+  }
+
+  match(TOKEN_SEMICOLON);
+}
+
+static enum TokenType modifier_tokens[] = {
+    TOKEN_KW_NEW,      TOKEN_KW_PUBLIC,  TOKEN_KW_PROTECTED,
+    TOKEN_KW_INTERNAL, TOKEN_KW_PRIVATE, TOKEN_KW_ABSTRACT,
+    TOKEN_KW_SEALED,   TOKEN_KW_STATIC,  TOKEN_KW_UNSAFE,
+};
 
 static bool check_modifier() {
-  return check(TOKEN_KW_NEW) || check(TOKEN_KW_PUBLIC) ||
-         check(TOKEN_KW_PROTECTED) || check(TOKEN_KW_INTERNAL) ||
-         check(TOKEN_KW_PRIVATE) || check(TOKEN_KW_ABSTRACT) ||
-         check(TOKEN_KW_SEALED) || check(TOKEN_KW_STATIC) ||
-         check(TOKEN_KW_UNSAFE);
+  return check_any(modifier_tokens, ARRAY_SIZE(modifier_tokens));
 }
 
 static bool match_modifier() {
-  return match(TOKEN_KW_NEW) || match(TOKEN_KW_PUBLIC) ||
-         match(TOKEN_KW_PROTECTED) || match(TOKEN_KW_INTERNAL) ||
-         match(TOKEN_KW_PRIVATE) || match(TOKEN_KW_ABSTRACT) ||
-         match(TOKEN_KW_SEALED) || match(TOKEN_KW_STATIC) ||
-         match(TOKEN_KW_UNSAFE);
+  return match_any(modifier_tokens, ARRAY_SIZE(modifier_tokens));
+}
+
+static bool check_member() { return false; }
+
+enum MemberKind {
+  MEMBERKIND_NONE,
+  MEMBERKIND_GARBAGE_ATTRIBUTES,
+  MEMBERKIND_CONSTANT,
+  MEMBERKIND_FIELD,
+  MEMBERKIND_METHOD,
+  MEMBERKIND_PROPERTY,
+  MEMBERKIND_EVENT,
+  MEMBERKIND_INDEXER,
+  MEMBERKIND_OPERATOR,
+  MEMBERKIND_CONSTRUCTOR,
+  MEMBERKIND_DESTRUCTOR,
+  MEMBERKIND_STATIC_CONSTRUCTOR,
+  MEMBERKIND_TYPE,
+};
+
+static enum MemberKind member(enum MemberKind last_member_kind) {
+  // OK this is tough in a single-pass system like mine because I need to figure
+  // out what I'm looking at before I decide what the inter-kind spacing is.
+
+  return MEMBERKIND_NONE;
+}
+
+static void interface_declaration() {
+  token(TOKEN_KW_INTERFACE);
+  space();
+  identifier();
+  optional_type_parameter_list();
+
+  if (check(TOKEN_COLON)) {
+    indent();
+    line();
+    base_types();
+    dedent();
+  }
+
+  if (check(TOKEN_KW_WHERE)) {
+    indent();
+    line();
+    type_parameter_constraint_clauses();
+    dedent();
+  }
+
+  line();
+  token(TOKEN_OPENBRACE);
+  {
+    indent();
+    line();
+
+    enum MemberKind last_member_kind = MEMBERKIND_NONE;
+    while (check_member()) {
+      attributes();
+      last_member_kind = member(last_member_kind);
+    }
+
+    dedent();
+  }
+  token(TOKEN_CLOSEBRACE);
+  match(TOKEN_SEMICOLON);
+}
+
+static void enum_declaration() {
+  token(TOKEN_KW_ENUM);
+  space();
+  identifier();
+
+  if (check(TOKEN_COLON)) {
+    indent();
+    line();
+    type();
+    dedent();
+  }
+
+  line();
+  token(TOKEN_OPENBRACE);
+  {
+    indent();
+    line();
+
+    bool first = true;
+    while (check(TOKEN_OPENBRACKET) || check_identifier()) {
+      if (!first) {
+        token(TOKEN_COMMA);
+        line();
+      }
+      first = false;
+
+      identifier();
+      if (check(TOKEN_EQUALS)) {
+        space();
+        token(TOKEN_EQUALS);
+        indent();
+        line();
+        expression();
+        dedent();
+      }
+    }
+
+    dedent();
+  }
+  token(TOKEN_CLOSEBRACE);
+
+  match(TOKEN_SEMICOLON);
+}
+
+static void delegate_declaration() {
+  group();
+  token(TOKEN_KW_DELEGATE);
+  space();
+  return_type();
+  line();
+  identifier();
+  optional_type_parameter_list();
+
+  formal_parameter_list();
+
+  if (check(TOKEN_KW_WHERE)) {
+    indent();
+    line();
+    type_parameter_constraint_clauses();
+    dedent();
+  }
+
+  end();
+}
+
+static enum TokenType type_keyword_tokens[] = {
+    TOKEN_KW_CLASS, TOKEN_KW_STRUCT,   TOKEN_KW_INTERFACE,
+    TOKEN_KW_ENUM,  TOKEN_KW_DELEGATE,
+};
+
+static bool check_type_keyword() {
+  return check_any(type_keyword_tokens, ARRAY_SIZE(type_keyword_tokens));
 }
 
 static bool check_type_declaration() {
@@ -486,92 +829,23 @@ static void type_declaration() {
     end();
   }
 
-  match(TOKEN_KW_PARTIAL);
-
-  // TODO: Switch on type type? Probably!
-  if (!match_type_keyword()) {
-    error_at_current("Expected a type declaration");
-  }
-  space();
-  identifier();
-
-  // Type parameter list
-  {
-    group();
-    if (match(TOKEN_LESSTHAN)) {
-      indent();
-      softline();
-
-      attributes();
-      identifier();
-      while (match(TOKEN_COMMA)) {
-        line();
-        attributes();
-        identifier();
-      }
-
-      dedent();
-      softline();
-      token(TOKEN_GREATERTHAN);
-    }
-    end();
+  if (match(TOKEN_KW_PARTIAL)) {
+    space();
   }
 
-  // Base types
-  if (check(TOKEN_COLON)) {
-    indent();
-    line();
-    {
-      group();
-      token(TOKEN_COLON);
-      space();
-      type_name();
-      {
-        indent();
-        while (match(TOKEN_COMMA)) {
-          line();
-          type_name();
-        }
-        dedent();
-      }
-      end();
-    }
-    dedent();
+  if (check(TOKEN_KW_CLASS)) {
+    class_declaration();
+  } else if (check(TOKEN_KW_STRUCT)) {
+    struct_declaration();
+  } else if (check(TOKEN_KW_INTERFACE)) {
+    interface_declaration();
+  } else if (check(TOKEN_KW_ENUM)) {
+    enum_declaration();
+  } else if (check(TOKEN_KW_DELEGATE)) {
+    delegate_declaration();
+  } else {
+    error_at_current("Expected some kind of type keyword.");
   }
-
-  // Type parameters constraints clauses
-  if (check(TOKEN_KW_WHERE)) {
-    indent();
-    line();
-    {
-      group();
-      token(TOKEN_KW_WHERE);
-      space();
-      identifier();
-      token(TOKEN_COLON);
-      {
-        indent();
-        line();
-        type_constraint();
-        while (match(TOKEN_COMMA)) {
-          line();
-          type_constraint();
-        }
-        dedent();
-      }
-
-      end();
-    }
-    dedent();
-  }
-
-  // Body.
-  if (match(TOKEN_OPENBRACE)) {
-    // Fuck.
-    token(TOKEN_CLOSEBRACE);
-  }
-
-  match(TOKEN_SEMICOLON);
 }
 
 static void namespace_members();

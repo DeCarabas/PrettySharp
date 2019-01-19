@@ -1,4 +1,5 @@
 // Format: id, text, is_identifier?
+TKN(NONE, "<nothing>", false)
 TKN(AMPERSAND, "&", false)
 TKN(AMPERSAND_AMPERSAND, "&&", false)
 TKN(AMPERSAND_EQUALS, "&=", false)
