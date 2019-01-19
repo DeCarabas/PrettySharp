@@ -15,7 +15,7 @@ struct Lexer {
 
 struct Lexer lexer;
 
-void lexer_init(const char *source) {
+static void lexer_init(const char *source) {
   if (source[0] == -17 && source[1] == -69 && source[2] == -65) {
     // UTF-8 BOM.
     source += 3;
@@ -31,6 +31,8 @@ void lexer_init(const char *source) {
   lexer.interpolation.enabled = false;
   lexer.interpolation.depth = 0;
 }
+
+static struct Token scan_token();
 
 char advance() {
   lexer.current++;
@@ -348,7 +350,7 @@ struct Token scan_block_comment() {
   }
 }
 
-struct Token scan_token() {
+static struct Token scan_token() {
   lexer.start = lexer.current;
   if (is_at_end()) {
     return make_token(TOKEN_EOF);
@@ -575,12 +577,42 @@ struct Token scan_token() {
   return error_token("Unexpected character");
 }
 
-void dump_lex(const char *source) {
+struct TokenBuffer scan_tokens(const char *source) {
+  int capacity = 5 * 1024;
+
+  struct TokenBuffer buffer;
+  buffer.count = 0;
+  buffer.tokens = malloc(capacity * sizeof(struct Token));
+
   lexer_init(source);
+  for (;;) {
+    if (buffer.count == capacity) {
+      capacity *= 2;
+      buffer.tokens = realloc(buffer.tokens, sizeof(struct Token) * capacity);
+    }
+    struct Token token = scan_token();
+    buffer.tokens[buffer.count] = token;
+    buffer.count++;
+
+    if (token.type == TOKEN_EOF) {
+      break;
+    }
+  }
+
+  return buffer;
+}
+
+void free_token_buffer(struct TokenBuffer *buffer) {
+  free(buffer->tokens);
+  buffer->tokens = NULL;
+}
+
+void dump_lex(const char *source) {
+  struct TokenBuffer buffer = scan_tokens(source);
 
   int line = -1;
-  for (;;) {
-    struct Token token = scan_token();
+  for (int i = 0; i < buffer.count; i++) {
+    struct Token token = buffer.tokens[i];
     if (token.line != line) {
       printf("%4d ", token.line);
       line = token.line;

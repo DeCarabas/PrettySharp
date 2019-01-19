@@ -3,7 +3,12 @@
 
 #include "token.h"
 
-void lexer_init(const char *source);
-struct Token scan_token();
+struct TokenBuffer {
+  int count;
+  struct Token *tokens;
+};
+
+struct TokenBuffer scan_tokens(const char *source);
+void free_token_buffer(struct TokenBuffer *buffer);
 
 #endif

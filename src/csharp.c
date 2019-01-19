@@ -2,71 +2,14 @@
 #include "lexer.h"
 #include "token.h"
 
-struct TokenBuffer {
-  int head;
-  int tail;
-  int count;
-  int capacity;
-  struct Token *tokens;
-};
-
-void init_token_buffer(struct TokenBuffer *buffer) {
-  buffer->head = 0;
-  buffer->tail = 0;
-  buffer->count = 0;
-  buffer->capacity = 16;
-  buffer->tokens = malloc(sizeof(struct Token) * buffer->capacity);
-}
-
-void add_buffered_token(struct TokenBuffer *buffer, struct Token token) {
-  if (buffer->count == buffer->capacity) {
-    int new_capacity = buffer->capacity + buffer->capacity / 2;
-
-    struct Token *new_buffer = malloc(sizeof(struct Token) * new_capacity);
-
-    memcpy(new_buffer, buffer->tokens + buffer->head,
-           (buffer->capacity - buffer->head) * sizeof(struct Token));
-    memcpy(new_buffer + (buffer->capacity - buffer->head), buffer->tokens,
-           buffer->head * sizeof(struct Token));
-
-    buffer->tokens = new_buffer;
-    buffer->capacity = new_capacity;
-    buffer->head = 0;
-    buffer->tail = buffer->count;
-  }
-
-  buffer->tokens[buffer->tail] = token;
-  buffer->tail = (buffer->tail + 1) % buffer->capacity;
-  buffer->count++;
-}
-
-bool remove_buffered_token(struct TokenBuffer *buffer, struct Token *token) {
-  if (buffer->count == 0) {
-    return false;
-  }
-
-  *token = buffer->tokens[buffer->head];
-  buffer->head = (buffer->head + 1) % buffer->capacity;
-  buffer->count--;
-
-  return true;
-}
-
-bool last_buffered_token(struct TokenBuffer *buffer, struct Token *token) {
-  if (buffer->count == 0) {
-    return false;
-  }
-
-  int last = buffer->tail ? buffer->tail - 1 : buffer->capacity - 1;
-  *token = buffer->tokens[last];
-  return true;
-}
-
 struct Parser {
   struct DocBuilder *builder;
-  struct Token previous;
-  struct Token current;
   struct TokenBuffer buffer;
+  int index;
+
+  struct Token current;
+  struct Token previous;
+
   bool had_error;
   bool panic_mode;
 };
@@ -133,9 +76,11 @@ static void error_at_current(const char *format, ...) {
 static void advance() {
   parser.previous = parser.current;
   for (;;) {
-    if (!remove_buffered_token(&parser.buffer, &parser.current)) {
-      parser.current = scan_token();
+    if (parser.index == parser.buffer.count) {
+      break;
     }
+    parser.current = parser.buffer.tokens[parser.index];
+    parser.index += 1;
 
     if (parser.current.type == TOKEN_TRIVIA_BLOCK_COMMENT ||
         parser.current.type == TOKEN_TRIVIA_EOL ||
@@ -155,24 +100,26 @@ static void advance() {
 
 static bool check_next_and_return_token(enum TokenType type,
                                         struct Token *token_out) {
-  struct Token token;
-  if (!last_buffered_token(&parser.buffer, &token)) {
-    for (;;) {
-      token = scan_token();
-      add_buffered_token(&parser.buffer, token);
+  struct Token token = parser.current;
+  int index = parser.index;
+  for (;;) {
+    if (index == parser.buffer.count) {
+      break;
+    }
+    token = parser.buffer.tokens[index];
+    index += 1;
 
-      // N.B.: This logic here mirrors the logic in 'advance' with regards to
-      // skipping trivia and errors.
-      if (token.type == TOKEN_TRIVIA_BLOCK_COMMENT ||
-          token.type == TOKEN_TRIVIA_EOL ||
-          token.type == TOKEN_TRIVIA_LINE_COMMENT ||
-          token.type == TOKEN_TRIVIA_WHITESPACE) {
-        continue;
-      }
+    // N.B.: This logic here mirrors the logic in 'advance' with regards to
+    // skipping trivia and errors.
+    if (token.type == TOKEN_TRIVIA_BLOCK_COMMENT ||
+        token.type == TOKEN_TRIVIA_EOL ||
+        token.type == TOKEN_TRIVIA_LINE_COMMENT ||
+        token.type == TOKEN_TRIVIA_WHITESPACE) {
+      continue;
+    }
 
-      if (token.type != TOKEN_ERROR) {
-        break;
-      }
+    if (token.type != TOKEN_ERROR) {
+      break;
     }
   }
 
@@ -915,9 +862,10 @@ bool format_csharp(struct DocBuilder *builder, const char *source) {
   parser.builder = builder;
   parser.had_error = false;
   parser.panic_mode = false;
-  init_token_buffer(&parser.buffer);
 
-  lexer_init(source);
+  parser.buffer = scan_tokens(source);
+  parser.index = 0;
+
   advance();
 
   compilation_unit();
