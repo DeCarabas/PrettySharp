@@ -110,7 +110,7 @@ static void error(const char *format, ...) {
 }
 
 static void verror_at_current(const char *format, va_list args) {
-  verror_at(&parser.previous, format, args);
+  verror_at(&parser.current, format, args);
 }
 
 static void error_at_current(const char *format, ...) {
