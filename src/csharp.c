@@ -1,6 +1,6 @@
 #include "csharp.h"
-#include "keywords.h"
 #include "lexer.h"
+#include "token.h"
 
 struct TokenBuffer {
   int head;
@@ -72,6 +72,27 @@ struct Parser {
 };
 
 struct Parser parser;
+
+int last_debug_line = -1;
+static void vdebug(const char *format, va_list args) {
+#ifdef PRINT_DEBUG_ENABLED
+  if (parser.current.line != last_debug_line) {
+    fprintf(stderr, "%4d ", parser.current.line);
+    last_debug_line = parser.current.line;
+  } else {
+    fprintf(stderr, "   | ");
+  }
+  vfprintf(stderr, format, args);
+  fprintf(stderr, "\n");
+#endif
+}
+
+static void debug(const char *format, ...) {
+  va_list args;
+  va_start(args, format);
+  vdebug(format, args);
+  va_end(args);
+}
 
 static void verror_at(struct Token *token, const char *format, va_list args) {
   if (parser.panic_mode) {
@@ -179,19 +200,22 @@ static bool check_next(enum TokenType type) {
   return check_next_and_return_token(type, &token);
 }
 
-static void token(enum TokenType type, const char *format, ...) {
+static void token(enum TokenType type) {
   if (parser.current.type == type) {
     doc_text(parser.builder, parser.current.start, parser.current.length);
     advance();
   } else {
-    va_list args;
-    va_start(args, format);
-    verror_at_current(format, args);
-    va_end(args);
+    error_at_current("Expected '%s'", token_text(type));
   }
 }
 
-static bool check(enum TokenType type) { return parser.current.type == type; }
+static bool check(enum TokenType type) {
+  bool result = parser.current.type == type;
+  debug("check: %d (%s) vs %d (%s) => %s", parser.current.type,
+        token_text(parser.current.type), type, token_text(type),
+        result ? "true" : "false");
+  return result;
+}
 
 static bool match(enum TokenType type) {
   if (!check(type)) {
@@ -200,43 +224,6 @@ static bool match(enum TokenType type) {
   doc_text(parser.builder, parser.current.start, parser.current.length);
   advance();
   return true;
-}
-
-static bool check_keyword_token(struct Keyword *keyword, struct Token *token) {
-  return (token->type == TOKEN_IDENTIFIER && token->length == keyword->length &&
-          memcmp(token->start, keyword->text, keyword->length) == 0);
-}
-
-static bool check_keyword(struct Keyword *keyword) {
-  return check_keyword_token(keyword, &parser.current);
-}
-
-static void keyword(struct Keyword *keyword) {
-  if (check_keyword(keyword)) {
-    doc_text(parser.builder, parser.current.start, parser.current.length);
-    advance();
-  } else {
-    error_at_current("Expected '%s'", keyword->text);
-  }
-}
-
-static bool match_keyword(struct Keyword *keyword) {
-  if (!check_keyword(keyword)) {
-    return false;
-  }
-  doc_text(parser.builder, parser.current.start, parser.current.length);
-  advance();
-  return true;
-}
-
-static bool check_next_keyword(struct Keyword *keyword) {
-  struct Token token;
-  if (check_next_and_return_token(TOKEN_IDENTIFIER, &token)) {
-    if (check_keyword_token(keyword, &token)) {
-      return true;
-    }
-  }
-  return false;
 }
 
 static void group() { doc_group(parser.builder); }
@@ -248,20 +235,27 @@ static void indent() { doc_indent(parser.builder); }
 static void dedent() { doc_dedent(parser.builder); }
 static void space() { doc_text(parser.builder, " ", 1); }
 
-static void identifier() { token(TOKEN_IDENTIFIER, "Expected an identifier"); }
+static void identifier() {
+  if (is_identifier_token(parser.current.type)) {
+    doc_text(parser.builder, parser.current.start, parser.current.length);
+    advance();
+  } else {
+    error_at_current("Expected an identifier");
+  }
+}
 
 static void extern_alias() {
-  keyword(kw_extern);
+  token(TOKEN_KW_EXTERN);
   space();
-  keyword(kw_alias);
+  token(TOKEN_KW_ALIAS);
   space();
   identifier();
-  token(TOKEN_SEMICOLON, "Expected extern alias to end with a semicolon");
+  token(TOKEN_SEMICOLON);
 }
 
 static void extern_alias_directives() {
-  if (check_keyword(kw_extern)) {
-    while (check_keyword(kw_extern)) {
+  if (check(TOKEN_KW_EXTERN)) {
+    while (check(TOKEN_KW_EXTERN)) {
       extern_alias();
       line();
     }
@@ -272,7 +266,7 @@ static void extern_alias_directives() {
 static void name_equals() {
   identifier();
   space();
-  token(TOKEN_EQUALS, "Expected '=' after name");
+  token(TOKEN_EQUALS);
 }
 
 static void type_name();
@@ -291,7 +285,7 @@ static void optional_type_parameter_list() {
 
     dedent();
     softline();
-    token(TOKEN_GREATERTHAN, "Expected > to close the type argument list");
+    token(TOKEN_GREATERTHAN);
   }
   end();
 }
@@ -317,11 +311,10 @@ static bool check_name_equals() {
 
 static void using_directive() {
   group();
-  keyword(kw_using);
+  token(TOKEN_KW_USING);
   space();
 
-  if (check_keyword(kw_static)) {
-    keyword(kw_static);
+  if (match(TOKEN_KW_STATIC)) {
     space();
   }
 
@@ -335,7 +328,7 @@ static void using_directive() {
   }
 
   namespace_or_type_name();
-  token(TOKEN_SEMICOLON, "Expected 'using' to end with a semicolon");
+  token(TOKEN_SEMICOLON);
 
   if (indented) {
     dedent();
@@ -344,8 +337,8 @@ static void using_directive() {
 }
 
 static void using_directives() {
-  if (check_keyword(kw_using)) {
-    while (check_keyword(kw_using)) {
+  if (check(TOKEN_KW_USING)) {
+    while (check(TOKEN_KW_USING)) {
       using_directive();
       line();
     }
@@ -361,7 +354,7 @@ static void expression() {
 static void attribute_name() { type_name(); }
 
 static void attribute_arguments() {
-  token(TOKEN_OPENPAREN, "Exepct '(' to start argument list");
+  token(TOKEN_OPENPAREN);
   indent();
   softline();
 
@@ -386,7 +379,7 @@ static void attribute_arguments() {
 
   dedent();
   softline();
-  token(TOKEN_CLOSEPAREN, "Expect ')' to end argument list");
+  token(TOKEN_CLOSEPAREN);
 }
 
 static void attribute() {
@@ -406,13 +399,13 @@ static void attribute_list() {
 
 static void attribute_section() {
   group();
-  token(TOKEN_OPENBRACKET, "Expect '[' to start attribute list");
+  token(TOKEN_OPENBRACKET);
   indent();
   softline();
 
   if (check(TOKEN_IDENTIFIER) && check_next(TOKEN_COLON)) {
     identifier();
-    token(TOKEN_COLON, "Expect ':' after attribute target");
+    token(TOKEN_COLON);
     line();
   }
 
@@ -420,7 +413,7 @@ static void attribute_section() {
 
   dedent();
   softline();
-  token(TOKEN_CLOSEBRACKET, "Expect ']' to end attribute list");
+  token(TOKEN_CLOSEBRACKET);
   end();
 }
 
@@ -442,35 +435,63 @@ static void global_attributes() {
   }
 }
 
-static bool is_type_keyword() {
-  return (check_keyword(kw_class) || check_keyword(kw_struct) ||
-          check_keyword(kw_interface) || check_keyword(kw_enum) ||
-          check_keyword(kw_delegate));
-}
-
 static void type_constraint() {
-  if (match_keyword(kw_new)) {
-    token(TOKEN_OPENPAREN, "Expect ( in constructor type constraint");
-    token(TOKEN_CLOSEPAREN, "Expect ) in constructor type constraint");
+  if (match(TOKEN_KW_NEW)) {
+    token(TOKEN_OPENPAREN);
+    token(TOKEN_CLOSEPAREN);
   } else {
     identifier();
   }
+}
+
+static bool check_type_keyword() {
+  return (check(TOKEN_KW_CLASS) || check(TOKEN_KW_STRUCT) ||
+          check(TOKEN_KW_INTERFACE) || check(TOKEN_KW_ENUM) ||
+          check(TOKEN_KW_DELEGATE));
+}
+
+static bool match_type_keyword() {
+  return (match(TOKEN_KW_CLASS) || match(TOKEN_KW_STRUCT) ||
+          match(TOKEN_KW_INTERFACE) || match(TOKEN_KW_ENUM) ||
+          match(TOKEN_KW_DELEGATE));
+}
+
+static bool check_modifier() {
+  return check(TOKEN_KW_NEW) || check(TOKEN_KW_PUBLIC) ||
+         check(TOKEN_KW_PROTECTED) || check(TOKEN_KW_INTERNAL) ||
+         check(TOKEN_KW_PRIVATE) || check(TOKEN_KW_ABSTRACT) ||
+         check(TOKEN_KW_SEALED) || check(TOKEN_KW_STATIC) ||
+         check(TOKEN_KW_UNSAFE);
+}
+
+static bool match_modifier() {
+  return match(TOKEN_KW_NEW) || match(TOKEN_KW_PUBLIC) ||
+         match(TOKEN_KW_PROTECTED) || match(TOKEN_KW_INTERNAL) ||
+         match(TOKEN_KW_PRIVATE) || match(TOKEN_KW_ABSTRACT) ||
+         match(TOKEN_KW_SEALED) || match(TOKEN_KW_STATIC) ||
+         match(TOKEN_KW_UNSAFE);
+}
+
+static bool check_type_declaration() {
+  return check(TOKEN_OPENBRACKET) || check_modifier() || check_type_keyword();
 }
 
 static void type_declaration() {
   attributes();
   {
     group();
-    while (check(TOKEN_IDENTIFIER) && !is_type_keyword()) {
-      // public static partial virtual blah blah blah who cares
-      identifier();
+    while (match_modifier()) {
       line();
     }
     end();
   }
 
-  // TODO: Switch on type type?
-  token(TOKEN_IDENTIFIER, "Expect type keyword");
+  match(TOKEN_KW_PARTIAL);
+
+  // TODO: Switch on type type? Probably!
+  if (!match_type_keyword()) {
+    error_at_current("Expected a type declaration");
+  }
   space();
   identifier();
 
@@ -491,7 +512,7 @@ static void type_declaration() {
 
       dedent();
       softline();
-      token(TOKEN_GREATERTHAN, "Expect type argument list to end with '>'");
+      token(TOKEN_GREATERTHAN);
     }
     end();
   }
@@ -502,7 +523,7 @@ static void type_declaration() {
     line();
     {
       group();
-      token(TOKEN_COLON, "Expect a ':' for base types");
+      token(TOKEN_COLON);
       space();
       type_name();
       {
@@ -519,15 +540,15 @@ static void type_declaration() {
   }
 
   // Type parameters constraints clauses
-  if (check_keyword(kw_where)) {
+  if (check(TOKEN_KW_WHERE)) {
     indent();
     line();
     {
       group();
-      keyword(kw_where);
+      token(TOKEN_KW_WHERE);
       space();
       identifier();
-      token(TOKEN_COLON, "Expect a ':' after type identifier");
+      token(TOKEN_COLON);
       {
         indent();
         line();
@@ -547,9 +568,45 @@ static void type_declaration() {
   // Body.
   if (match(TOKEN_OPENBRACE)) {
     // Fuck.
-    token(TOKEN_CLOSEBRACE, "Expected type to end");
+    token(TOKEN_CLOSEBRACE);
   }
 
+  match(TOKEN_SEMICOLON);
+}
+
+static void namespace_members();
+
+static void namespace_body() {
+  extern_alias_directives();
+  using_directives();
+  namespace_members();
+}
+
+static void qualified_identifier() {
+  identifier();
+  while (match(TOKEN_DOT)) {
+    identifier();
+  }
+}
+
+static void namespace_declaration() {
+  token(TOKEN_KW_NAMESPACE);
+  space();
+  qualified_identifier();
+  space();
+  token(TOKEN_OPENBRACE);
+
+  {
+    indent();
+    line();
+
+    namespace_body();
+
+    dedent();
+    line();
+  }
+
+  token(TOKEN_CLOSEBRACE);
   match(TOKEN_SEMICOLON);
 }
 
@@ -563,26 +620,14 @@ static void namespace_members() {
     }
     first = false;
 
-    if (match_keyword(kw_namespace)) {
-      space();
-      namespace_name();
-      space();
-      token(TOKEN_OPENBRACE, "Expect '{' in namespace declaration");
-      indent();
-      line();
-      namespace_members();
-
-      dedent();
-      line();
-      token(TOKEN_CLOSEBRACE, "Expect '}' to close namespace");
-    } else if (check(TOKEN_IDENTIFIER)) {
+    if (check(TOKEN_KW_NAMESPACE)) {
+      namespace_declaration();
+    } else if (check_type_declaration()) {
       type_declaration();
     } else {
       break;
     }
   }
-  // A namespace member is a namespace or a type.
-  // Types are hard because they're buried under a bunch of modifiers.
 }
 
 static void compilation_unit() {
@@ -602,7 +647,7 @@ bool format_csharp(struct DocBuilder *builder, const char *source) {
   advance();
 
   compilation_unit();
-  token(TOKEN_EOF, "Expect end of compilation unit");
+  token(TOKEN_EOF);
 
   return !parser.had_error;
 }

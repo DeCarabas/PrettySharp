@@ -235,7 +235,7 @@ struct Token scan_identifier_or_keyword() {
     advance();
   }
 
-  return make_token(TOKEN_IDENTIFIER);
+  return make_token(keyword_type(lexer.start, lexer.current - lexer.start));
 }
 
 struct Token scan_verbatim_string_literal() {
@@ -587,7 +587,7 @@ void dump_lex(const char *source) {
     } else {
       printf("   | ");
     }
-    printf("%2d '%.*s'\n", token.type, token.length, token.start);
+    printf("%3d '%.*s'\n", token.type, token.length, token.start);
 
     if (token.type == TOKEN_EOF || token.type == TOKEN_ERROR)
       break;
