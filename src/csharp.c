@@ -1,6 +1,7 @@
 #include "csharp.h"
 #include "lexer.h"
 #include "token.h"
+#include <assert.h>
 
 struct Parser {
   struct DocBuilder *builder;
@@ -344,6 +345,11 @@ static void expression() {
   advance();
 }
 
+static void block() {
+  error_at_current("Block not implemented");
+  advance();
+}
+
 static void attribute_name() { type_name(); }
 
 static void attribute_arguments() {
@@ -442,7 +448,7 @@ static bool check_formal_parameter() {
   return check(TOKEN_OPENBRACKET) ||
          check_any(parameter_modifier_tokens,
                    ARRAY_SIZE(parameter_modifier_tokens)) ||
-         check_type();
+         check_type() || check(TOKEN_COMMA);
 }
 
 static void formal_parameter_list() {
@@ -761,7 +767,7 @@ static void const_declaration() {
     line();
 
     bool first = true;
-    while (check_identifier()) {
+    while (check_identifier() || check(TOKEN_COMMA)) {
       if (!first) {
         token(TOKEN_COMMA);
         line();
@@ -787,7 +793,7 @@ static void const_declaration() {
 
 static void variable_declarators() {
   bool first = true;
-  while (check_identifier()) {
+  while (check_identifier() || check(TOKEN_COMMA)) {
     if (!first) {
       token(TOKEN_COMMA);
       line();
@@ -813,14 +819,136 @@ static void field_declaration() {
   advance();
 }
 
+static void member_name() {
+  // This might seem weird, but since members can be qualified by interface type
+  // (e.g., a.b<t,y>.c.interface.foo) they're basically indistinguishable from a
+  // type name without an analysis pass, or without deciding to split off the
+  // last segment, and none of that matters for what we're doing.
+  type_name();
+}
+
 static void method_declaration() {
-  error_at_current("Not Implemented: Method");
-  advance();
+  // method header
+  attributes();
+  declaration_modifiers();
+
+  group();
+
+  if (match(TOKEN_KW_PARTIAL)) {
+    line();
+  }
+  return_type();
+  line();
+  member_name();
+  optional_type_parameter_list();
+  formal_parameter_list();
+
+  if (check(TOKEN_KW_WHERE)) {
+    indent();
+    line();
+    type_parameter_constraint_clauses();
+    dedent();
+  }
+
+  if (!match(TOKEN_SEMICOLON)) {
+    if (check(TOKEN_EQUALS_GREATERTHAN)) {
+      indent();
+      line();
+      token(TOKEN_EQUALS_GREATERTHAN);
+      {
+        indent();
+        line();
+        expression();
+        token(TOKEN_SEMICOLON);
+        dedent();
+      }
+      dedent();
+    } else {
+      line();
+      block();
+    }
+  }
+
+  end();
+}
+
+const static enum TokenType accessor_modifiers[] = {
+    TOKEN_KW_PROTECTED,
+    TOKEN_KW_INTERNAL,
+    TOKEN_KW_PRIVATE,
+};
+
+static bool check_accessor() {
+  return check(TOKEN_OPENBRACKET) ||
+         check_any(accessor_modifiers, ARRAY_SIZE(accessor_modifiers)) ||
+         check(TOKEN_KW_GET) || check(TOKEN_KW_SET);
 }
 
 static void property_declaration() {
-  error_at_current("Not Implemented: Property");
-  advance();
+  attributes();
+  declaration_modifiers();
+
+  group();
+
+  type();
+  space();
+  member_name();
+
+  // property_body
+  if (check(TOKEN_EQUALS_GREATERTHAN)) {
+    // Simple "getter" property.
+    space();
+    token(TOKEN_EQUALS_GREATERTHAN);
+    indent();
+    line();
+    expression();
+    token(TOKEN_SEMICOLON);
+    dedent();
+  } else {
+    line();
+    token(TOKEN_OPENBRACE);
+    {
+      indent();
+      line();
+
+      // accessor_declarations
+      while (check_accessor()) {
+        attributes();
+
+        group();
+        while (match_any(accessor_modifiers, ARRAY_SIZE(accessor_modifiers))) {
+          space();
+        }
+
+        match(TOKEN_KW_GET);
+        match(TOKEN_KW_SET);
+        if (!match(TOKEN_SEMICOLON)) {
+          block();
+        }
+        end();
+
+        line();
+      }
+      dedent();
+    }
+    token(TOKEN_CLOSEBRACE);
+
+    // property_initializer?
+    if (check(TOKEN_EQUALS)) {
+      group();
+
+      space();
+      token(TOKEN_EQUALS);
+      indent();
+      line();
+      expression();
+      token(TOKEN_SEMICOLON);
+
+      end();
+    }
+  }
+
+  end();
 }
 
 static void event_declaration() {
@@ -843,6 +971,19 @@ static void event_declaration() {
         indent();
         line();
 
+        while (check(TOKEN_KW_ADD) || check(TOKEN_KW_REMOVE) ||
+               check(TOKEN_OPENBRACKET)) {
+          attributes();
+
+          group();
+          match(TOKEN_KW_ADD);
+          match(TOKEN_KW_REMOVE);
+          line();
+          block();
+          end();
+
+          line();
+        }
         // Stuff
 
         dedent();
@@ -877,6 +1018,74 @@ static void destructor_declaration() {
   advance();
 }
 
+static void member_declarations() {
+  enum MemberKind last_member_kind = MEMBERKIND_NONE;
+  for (;;) {
+    // Before we parse *anything* scan ahead to figure out what we're looking
+    // at. That way we can figure out how much whitespace to put in.
+    enum MemberKind member_kind = check_member();
+    if (member_kind == MEMBERKIND_NONE) {
+      break;
+    }
+
+    if (last_member_kind != MEMBERKIND_NONE) {
+      // I've been around before, need to terminate the previous member.
+      line();
+      if (last_member_kind != member_kind ||
+          (member_kind != MEMBERKIND_FIELD &&
+           member_kind != MEMBERKIND_CONST)) {
+        // Everything except fields gets a blank line in between.
+        line();
+      }
+    }
+
+    switch (member_kind) {
+    case MEMBERKIND_CONST:
+      const_declaration();
+      break;
+
+    case MEMBERKIND_FIELD:
+      field_declaration();
+      break;
+
+    case MEMBERKIND_METHOD:
+      method_declaration();
+      break;
+
+    case MEMBERKIND_PROPERTY:
+      property_declaration();
+      break;
+
+    case MEMBERKIND_EVENT:
+      event_declaration();
+      break;
+
+    case MEMBERKIND_INDEXER:
+      indexer_declaration();
+      break;
+
+    case MEMBERKIND_OPERATOR:
+      operator_declaration();
+      break;
+
+    case MEMBERKIND_DESTRUCTOR:
+      destructor_declaration();
+      break;
+
+    case MEMBERKIND_TYPE:
+      type_declaration();
+      break;
+
+    case MEMBERKIND_NONE:
+    default:
+      assert(!"Never reached");
+      break;
+    }
+
+    last_member_kind = member_kind;
+  }
+}
+
 static void interface_declaration() {
   token(TOKEN_KW_INTERFACE);
   space();
@@ -903,70 +1112,7 @@ static void interface_declaration() {
     indent();
     line();
 
-    enum MemberKind last_member_kind = MEMBERKIND_NONE;
-    for (;;) {
-      // Before we parse *anything* scan ahead to figure out what we're looking
-      // at. That way we can figure out how much whitespace to put in.
-      enum MemberKind member_kind = check_member();
-      if (member_kind == MEMBERKIND_NONE) {
-        break;
-      }
-
-      if (last_member_kind != MEMBERKIND_NONE) {
-        // I've been around before, need to terminate the previous member.
-        line();
-        if (last_member_kind != member_kind ||
-            (member_kind != MEMBERKIND_FIELD &&
-             member_kind != MEMBERKIND_CONST)) {
-          // Everything except fields gets a blank line in between.
-          line();
-        }
-      }
-
-      switch (member_kind) {
-      case MEMBERKIND_CONST:
-        const_declaration();
-        break;
-
-      case MEMBERKIND_FIELD:
-        field_declaration();
-        break;
-
-      case MEMBERKIND_METHOD:
-        method_declaration();
-        break;
-
-      case MEMBERKIND_PROPERTY:
-        property_declaration();
-        break;
-
-      case MEMBERKIND_EVENT:
-        event_declaration();
-        break;
-
-      case MEMBERKIND_INDEXER:
-        indexer_declaration();
-        break;
-
-      case MEMBERKIND_OPERATOR:
-        operator_declaration();
-        break;
-
-      case MEMBERKIND_DESTRUCTOR:
-        destructor_declaration();
-        break;
-
-      case MEMBERKIND_TYPE:
-        type_declaration();
-        break;
-
-      case MEMBERKIND_NONE:
-      default:
-        break;
-      }
-
-      last_member_kind = member_kind;
-    }
+    member_declarations();
 
     dedent();
   }
@@ -993,7 +1139,8 @@ static void enum_declaration() {
     line();
 
     bool first = true;
-    while (check(TOKEN_OPENBRACKET) || check_identifier()) {
+    while (check(TOKEN_OPENBRACKET) || check_identifier() ||
+           check(TOKEN_COMMA)) {
       if (!first) {
         token(TOKEN_COMMA);
         line();
