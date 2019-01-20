@@ -202,26 +202,6 @@ static void identifier() {
     error_at_current("Expected an identifier");
   }
 }
-
-static void extern_alias() {
-  token(TOKEN_KW_EXTERN);
-  space();
-  token(TOKEN_KW_ALIAS);
-  space();
-  identifier();
-  token(TOKEN_SEMICOLON);
-}
-
-static void extern_alias_directives() {
-  if (check(TOKEN_KW_EXTERN)) {
-    while (check(TOKEN_KW_EXTERN)) {
-      extern_alias();
-      line();
-    }
-    line();
-  }
-}
-
 static void name_equals() {
   identifier();
   space();
@@ -265,43 +245,6 @@ static void type_name() { namespace_or_type_name(); }
 
 static bool check_name_equals() {
   return check(TOKEN_IDENTIFIER) && check_next(TOKEN_EQUALS);
-}
-
-static void using_directive() {
-  group();
-  token(TOKEN_KW_USING);
-  space();
-
-  if (match(TOKEN_KW_STATIC)) {
-    space();
-  }
-
-  bool indented = false;
-  if (check_name_equals()) {
-    name_equals();
-
-    indented = true;
-    indent();
-    line();
-  }
-
-  namespace_or_type_name();
-  token(TOKEN_SEMICOLON);
-
-  if (indented) {
-    dedent();
-  }
-  end();
-}
-
-static void using_directives() {
-  if (check(TOKEN_KW_USING)) {
-    while (check(TOKEN_KW_USING)) {
-      using_directive();
-      line();
-    }
-    line();
-  }
 }
 
 const static enum TokenType builtin_type_tokens[] = {
@@ -571,52 +514,12 @@ static void type_parameter_constraint_clauses() {
   }
 }
 
-static void class_declaration() {
-  token(TOKEN_KW_CLASS);
-  space();
-  identifier();
-  optional_type_parameter_list();
+// ============================================================================
+// Member Declarations
+// ============================================================================
 
-  if (check(TOKEN_COLON)) {
-    indent();
-    line();
-    base_types();
-    dedent();
-  }
-
-  if (check(TOKEN_KW_WHERE)) {
-    indent();
-    line();
-    type_parameter_constraint_clauses();
-    dedent();
-  }
-
-  match(TOKEN_SEMICOLON);
-}
-
-static void struct_declaration() {
-  token(TOKEN_KW_STRUCT);
-  space();
-  identifier();
-  optional_type_parameter_list();
-
-  if (check(TOKEN_COLON)) {
-    indent();
-    line();
-    base_types();
-    dedent();
-  }
-
-  if (check(TOKEN_KW_WHERE)) {
-    indent();
-    line();
-    type_parameter_constraint_clauses();
-    dedent();
-  }
-
-  match(TOKEN_SEMICOLON);
-}
-
+// These are shared through lots of different declarations; we allow all of them
+// everywhere, even though it doesn't make sense to have e.g. `async struct`.
 const static enum TokenType modifier_tokens[] = {
     TOKEN_KW_NEW,     TOKEN_KW_PUBLIC,   TOKEN_KW_PROTECTED, TOKEN_KW_INTERNAL,
     TOKEN_KW_PRIVATE, TOKEN_KW_ABSTRACT, TOKEN_KW_SEALED,    TOKEN_KW_STATIC,
@@ -632,106 +535,7 @@ static bool match_modifier() {
   return match_any(modifier_tokens, ARRAY_SIZE(modifier_tokens));
 }
 
-const static enum TokenType type_keyword_tokens[] = {
-    TOKEN_KW_CLASS, TOKEN_KW_STRUCT,   TOKEN_KW_INTERFACE,
-    TOKEN_KW_ENUM,  TOKEN_KW_DELEGATE,
-};
-
-static bool check_type_keyword() {
-  return check_any(type_keyword_tokens, ARRAY_SIZE(type_keyword_tokens));
-}
-
-static bool is_type_keyword(enum TokenType token) {
-  for (size_t i = 0; i < ARRAY_SIZE(type_keyword_tokens); i++) {
-    if (type_keyword_tokens[i] == token) {
-      return true;
-    }
-  }
-  return false;
-}
-
-enum MemberKind {
-  MEMBERKIND_NONE,
-  MEMBERKIND_CONST,
-  MEMBERKIND_FIELD,
-  MEMBERKIND_METHOD,
-  MEMBERKIND_PROPERTY,
-  MEMBERKIND_EVENT,
-  MEMBERKIND_INDEXER,
-  MEMBERKIND_OPERATOR,
-  MEMBERKIND_DESTRUCTOR,
-  MEMBERKIND_TYPE,
-};
-
-static enum MemberKind check_member() {
-  // OK this one sucks because we need to scan forward through tokens to figure
-  // out what we're actually looking at. If we don't appear to be looking at a
-  // member, then we return MEMBERKIND_NONE.
-  int index = parser.index - 1;
-  while (index < parser.buffer.count) {
-    enum TokenType token = parser.buffer.tokens[index].type;
-    index += 1;
-
-    // Maybe this token has the clue about what we are...
-    if (token == TOKEN_KW_CONST) {
-      return MEMBERKIND_CONST;
-    }
-    if (token == TOKEN_KW_THIS) {
-      return MEMBERKIND_INDEXER;
-    }
-    if (token == TOKEN_KW_EVENT) {
-      return MEMBERKIND_EVENT;
-    }
-    if (token == TOKEN_KW_OPERATOR) {
-      return MEMBERKIND_OPERATOR;
-    }
-    if (token == TOKEN_TILDE) {
-      return MEMBERKIND_DESTRUCTOR; // Destructors are like methods.
-    }
-    if (token == TOKEN_KW_ASYNC) {
-      return MEMBERKIND_METHOD; // Only methods can be async.
-    }
-    if (token == TOKEN_KW_PARTIAL) {
-      return MEMBERKIND_METHOD; // Only methods can be partial.
-    }
-
-    if (is_type_keyword(token)) {
-      return MEMBERKIND_TYPE;
-    }
-
-    if (token == TOKEN_EQUALS) {
-      // Well.... if I have got this far and I see an '=' it must be a field.
-      // (Otherwise it would have been a const.)
-      return MEMBERKIND_FIELD;
-    }
-    if (token == TOKEN_COMMA) {
-      return MEMBERKIND_FIELD;
-    }
-    if (token == TOKEN_OPENPAREN) {
-      // ...must be the arg list of a method.
-      return MEMBERKIND_METHOD;
-    }
-    if (token == TOKEN_OPENBRACE) {
-      // If we see an open brace before a paren then it's a property.
-      return MEMBERKIND_PROPERTY;
-    }
-    if (token == TOKEN_EQUALS_GREATERTHAN) {
-      // If we see one of those arrow thingies it's definitely a property.
-      return MEMBERKIND_PROPERTY;
-    }
-    if (token == TOKEN_SEMICOLON) {
-      // No brace, no arrow, no special keyword, must be a field.
-      return MEMBERKIND_FIELD;
-    }
-    if (token == TOKEN_CLOSEBRACE) {
-      // Welp, I don't know, we missed all the clues somehow!
-      return MEMBERKIND_NONE;
-    }
-  }
-
-  return MEMBERKIND_NONE;
-}
-
+static bool is_type_keyword(enum TokenType token);
 static void type_declaration();
 
 static void declaration_modifiers() {
@@ -1018,6 +822,88 @@ static void destructor_declaration() {
   advance();
 }
 
+enum MemberKind {
+  MEMBERKIND_NONE,
+  MEMBERKIND_CONST,
+  MEMBERKIND_FIELD,
+  MEMBERKIND_METHOD,
+  MEMBERKIND_PROPERTY,
+  MEMBERKIND_EVENT,
+  MEMBERKIND_INDEXER,
+  MEMBERKIND_OPERATOR,
+  MEMBERKIND_DESTRUCTOR,
+  MEMBERKIND_TYPE,
+};
+
+static enum MemberKind check_member() {
+  // OK this one sucks because we need to scan forward through tokens to figure
+  // out what we're actually looking at. If we don't appear to be looking at a
+  // member, then we return MEMBERKIND_NONE.
+  int index = parser.index - 1;
+  while (index < parser.buffer.count) {
+    enum TokenType token = parser.buffer.tokens[index].type;
+    index += 1;
+
+    // Maybe this token has the clue about what we are...
+    if (token == TOKEN_KW_CONST) {
+      return MEMBERKIND_CONST;
+    }
+    if (token == TOKEN_KW_THIS) {
+      return MEMBERKIND_INDEXER;
+    }
+    if (token == TOKEN_KW_EVENT) {
+      return MEMBERKIND_EVENT;
+    }
+    if (token == TOKEN_KW_OPERATOR) {
+      return MEMBERKIND_OPERATOR;
+    }
+    if (token == TOKEN_TILDE) {
+      return MEMBERKIND_DESTRUCTOR; // Destructors are like methods.
+    }
+    if (token == TOKEN_KW_ASYNC) {
+      return MEMBERKIND_METHOD; // Only methods can be async.
+    }
+    if (token == TOKEN_KW_PARTIAL) {
+      return MEMBERKIND_METHOD; // Only methods can be partial.
+    }
+
+    if (is_type_keyword(token)) {
+      return MEMBERKIND_TYPE;
+    }
+
+    if (token == TOKEN_EQUALS) {
+      // Well.... if I have got this far and I see an '=' it must be a field.
+      // (Otherwise it would have been a const.)
+      return MEMBERKIND_FIELD;
+    }
+    if (token == TOKEN_COMMA) {
+      return MEMBERKIND_FIELD;
+    }
+    if (token == TOKEN_OPENPAREN) {
+      // ...must be the arg list of a method.
+      return MEMBERKIND_METHOD;
+    }
+    if (token == TOKEN_OPENBRACE) {
+      // If we see an open brace before a paren then it's a property.
+      return MEMBERKIND_PROPERTY;
+    }
+    if (token == TOKEN_EQUALS_GREATERTHAN) {
+      // If we see one of those arrow thingies it's definitely a property.
+      return MEMBERKIND_PROPERTY;
+    }
+    if (token == TOKEN_SEMICOLON) {
+      // No brace, no arrow, no special keyword, must be a field.
+      return MEMBERKIND_FIELD;
+    }
+    if (token == TOKEN_CLOSEBRACE) {
+      // Welp, I don't know, we missed all the clues somehow!
+      return MEMBERKIND_NONE;
+    }
+  }
+
+  return MEMBERKIND_NONE;
+}
+
 static void member_declarations() {
   enum MemberKind last_member_kind = MEMBERKIND_NONE;
   for (;;) {
@@ -1084,6 +970,56 @@ static void member_declarations() {
 
     last_member_kind = member_kind;
   }
+}
+
+// ============================================================================
+// Type Declarations
+// ============================================================================
+
+static void class_declaration() {
+  token(TOKEN_KW_CLASS);
+  space();
+  identifier();
+  optional_type_parameter_list();
+
+  if (check(TOKEN_COLON)) {
+    indent();
+    line();
+    base_types();
+    dedent();
+  }
+
+  if (check(TOKEN_KW_WHERE)) {
+    indent();
+    line();
+    type_parameter_constraint_clauses();
+    dedent();
+  }
+
+  match(TOKEN_SEMICOLON);
+}
+
+static void struct_declaration() {
+  token(TOKEN_KW_STRUCT);
+  space();
+  identifier();
+  optional_type_parameter_list();
+
+  if (check(TOKEN_COLON)) {
+    indent();
+    line();
+    base_types();
+    dedent();
+  }
+
+  if (check(TOKEN_KW_WHERE)) {
+    indent();
+    line();
+    type_parameter_constraint_clauses();
+    dedent();
+  }
+
+  match(TOKEN_SEMICOLON);
 }
 
 static void interface_declaration() {
@@ -1186,6 +1122,24 @@ static void delegate_declaration() {
   end();
 }
 
+const static enum TokenType type_keyword_tokens[] = {
+    TOKEN_KW_CLASS, TOKEN_KW_STRUCT,   TOKEN_KW_INTERFACE,
+    TOKEN_KW_ENUM,  TOKEN_KW_DELEGATE,
+};
+
+static bool check_type_keyword() {
+  return check_any(type_keyword_tokens, ARRAY_SIZE(type_keyword_tokens));
+}
+
+static bool is_type_keyword(enum TokenType token) {
+  for (size_t i = 0; i < ARRAY_SIZE(type_keyword_tokens); i++) {
+    if (type_keyword_tokens[i] == token) {
+      return true;
+    }
+  }
+  return false;
+}
+
 static bool check_type_declaration() {
   return check(TOKEN_OPENBRACKET) || check_modifier() || check_type_keyword();
 }
@@ -1219,7 +1173,87 @@ static void type_declaration() {
   }
 }
 
-static void namespace_members();
+// ============================================================================
+// Namespaces, Compilation Units
+// ============================================================================
+
+static void extern_alias() {
+  token(TOKEN_KW_EXTERN);
+  space();
+  token(TOKEN_KW_ALIAS);
+  space();
+  identifier();
+  token(TOKEN_SEMICOLON);
+}
+
+static void extern_alias_directives() {
+  if (check(TOKEN_KW_EXTERN)) {
+    while (check(TOKEN_KW_EXTERN)) {
+      extern_alias();
+      line();
+    }
+    line();
+  }
+}
+
+static void using_directive() {
+  group();
+  token(TOKEN_KW_USING);
+  space();
+
+  if (match(TOKEN_KW_STATIC)) {
+    space();
+  }
+
+  bool indented = false;
+  if (check_name_equals()) {
+    name_equals();
+
+    indented = true;
+    indent();
+    line();
+  }
+
+  namespace_or_type_name();
+  token(TOKEN_SEMICOLON);
+
+  if (indented) {
+    dedent();
+  }
+  end();
+}
+
+static void using_directives() {
+  if (check(TOKEN_KW_USING)) {
+    while (check(TOKEN_KW_USING)) {
+      using_directive();
+      line();
+    }
+    line();
+  }
+}
+
+static void namespace_declaration();
+
+static void namespace_members() {
+  bool first = true;
+  for (;;) {
+    if (!first) {
+      // Blank lines between members.
+      line();
+      line();
+    }
+    first = false;
+
+    if (check(TOKEN_KW_NAMESPACE)) {
+      namespace_declaration();
+    } else if (check_type_declaration()) {
+      type_declaration();
+    } else {
+      break;
+    }
+  }
+}
 
 static void namespace_body() {
   extern_alias_directives();
@@ -1253,26 +1287,6 @@ static void namespace_declaration() {
 
   token(TOKEN_CLOSEBRACE);
   match(TOKEN_SEMICOLON);
-}
-
-static void namespace_members() {
-  bool first = true;
-  for (;;) {
-    if (!first) {
-      // Blank lines between members.
-      line();
-      line();
-    }
-    first = false;
-
-    if (check(TOKEN_KW_NAMESPACE)) {
-      namespace_declaration();
-    } else if (check_type_declaration()) {
-      type_declaration();
-    } else {
-      break;
-    }
-  }
 }
 
 static void compilation_unit() {
