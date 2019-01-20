@@ -153,7 +153,7 @@ static bool check(enum TokenType type) {
   return result;
 }
 
-static bool check_any(enum TokenType *types, int count) {
+static bool check_any(const enum TokenType *types, int count) {
   for (int i = 0; i < count; i++) {
     if (check(types[i])) {
       return true;
@@ -171,7 +171,7 @@ static bool match(enum TokenType type) {
   return true;
 }
 
-static bool match_any(enum TokenType *types, int count) {
+static bool match_any(const enum TokenType *types, int count) {
   for (int i = 0; i < count; i++) {
     if (match(types[i])) {
       return true;
@@ -303,7 +303,7 @@ static void using_directives() {
   }
 }
 
-static enum TokenType builtin_type_tokens[] = {
+const static enum TokenType builtin_type_tokens[] = {
     TOKEN_KW_SBYTE, TOKEN_KW_BYTE,   TOKEN_KW_SHORT,   TOKEN_KW_USHORT,
     TOKEN_KW_INT,   TOKEN_KW_UINT,   TOKEN_KW_LONG,    TOKEN_KW_ULONG,
     TOKEN_KW_CHAR,  TOKEN_KW_FLOAT,  TOKEN_KW_DOUBLE,  TOKEN_KW_DECIMAL,
@@ -434,7 +434,7 @@ static void return_type() {
   }
 }
 
-static enum TokenType parameter_modifier_tokens[] = {
+const static enum TokenType parameter_modifier_tokens[] = {
     TOKEN_KW_IN, TOKEN_KW_OUT, TOKEN_KW_REF, TOKEN_KW_THIS, TOKEN_KW_PARAMS,
 };
 
@@ -611,10 +611,11 @@ static void struct_declaration() {
   match(TOKEN_SEMICOLON);
 }
 
-static enum TokenType modifier_tokens[] = {
-    TOKEN_KW_NEW,      TOKEN_KW_PUBLIC,  TOKEN_KW_PROTECTED,
-    TOKEN_KW_INTERNAL, TOKEN_KW_PRIVATE, TOKEN_KW_ABSTRACT,
-    TOKEN_KW_SEALED,   TOKEN_KW_STATIC,  TOKEN_KW_UNSAFE,
+const static enum TokenType modifier_tokens[] = {
+    TOKEN_KW_NEW,     TOKEN_KW_PUBLIC,   TOKEN_KW_PROTECTED, TOKEN_KW_INTERNAL,
+    TOKEN_KW_PRIVATE, TOKEN_KW_ABSTRACT, TOKEN_KW_SEALED,    TOKEN_KW_STATIC,
+    TOKEN_KW_UNSAFE,  TOKEN_KW_VIRTUAL,  TOKEN_KW_OVERRIDE,  TOKEN_KW_EXTERN,
+    TOKEN_KW_ASYNC,
 };
 
 static bool check_modifier() {
@@ -625,29 +626,255 @@ static bool match_modifier() {
   return match_any(modifier_tokens, ARRAY_SIZE(modifier_tokens));
 }
 
-static bool check_member() { return false; }
+const static enum TokenType type_keyword_tokens[] = {
+    TOKEN_KW_CLASS, TOKEN_KW_STRUCT,   TOKEN_KW_INTERFACE,
+    TOKEN_KW_ENUM,  TOKEN_KW_DELEGATE,
+};
+
+static bool check_type_keyword() {
+  return check_any(type_keyword_tokens, ARRAY_SIZE(type_keyword_tokens));
+}
+
+static bool is_type_keyword(enum TokenType token) {
+  for (size_t i = 0; i < ARRAY_SIZE(type_keyword_tokens); i++) {
+    if (type_keyword_tokens[i] == token) {
+      return true;
+    }
+  }
+  return false;
+}
 
 enum MemberKind {
   MEMBERKIND_NONE,
-  MEMBERKIND_GARBAGE_ATTRIBUTES,
-  MEMBERKIND_CONSTANT,
+  MEMBERKIND_CONST,
   MEMBERKIND_FIELD,
   MEMBERKIND_METHOD,
   MEMBERKIND_PROPERTY,
   MEMBERKIND_EVENT,
   MEMBERKIND_INDEXER,
   MEMBERKIND_OPERATOR,
-  MEMBERKIND_CONSTRUCTOR,
   MEMBERKIND_DESTRUCTOR,
-  MEMBERKIND_STATIC_CONSTRUCTOR,
   MEMBERKIND_TYPE,
 };
 
-static enum MemberKind member(enum MemberKind last_member_kind) {
-  // OK this is tough in a single-pass system like mine because I need to figure
-  // out what I'm looking at before I decide what the inter-kind spacing is.
+static enum MemberKind check_member() {
+  // OK this one sucks because we need to scan forward through tokens to figure
+  // out what we're actually looking at. If we don't appear to be looking at a
+  // member, then we return MEMBERKIND_NONE.
+  int index = parser.index - 1;
+  while (index < parser.buffer.count) {
+    enum TokenType token = parser.buffer.tokens[index].type;
+    index += 1;
+
+    // Maybe this token has the clue about what we are...
+    if (token == TOKEN_KW_CONST) {
+      return MEMBERKIND_CONST;
+    }
+    if (token == TOKEN_KW_THIS) {
+      return MEMBERKIND_INDEXER;
+    }
+    if (token == TOKEN_KW_EVENT) {
+      return MEMBERKIND_EVENT;
+    }
+    if (token == TOKEN_KW_OPERATOR) {
+      return MEMBERKIND_OPERATOR;
+    }
+    if (token == TOKEN_TILDE) {
+      return MEMBERKIND_DESTRUCTOR; // Destructors are like methods.
+    }
+    if (token == TOKEN_KW_ASYNC) {
+      return MEMBERKIND_METHOD; // Only methods can be async.
+    }
+    if (token == TOKEN_KW_PARTIAL) {
+      return MEMBERKIND_METHOD; // Only methods can be partial.
+    }
+
+    if (is_type_keyword(token)) {
+      return MEMBERKIND_TYPE;
+    }
+
+    if (token == TOKEN_EQUALS) {
+      // Well.... if I have got this far and I see an '=' it must be a field.
+      // (Otherwise it would have been a const.)
+      return MEMBERKIND_FIELD;
+    }
+    if (token == TOKEN_COMMA) {
+      return MEMBERKIND_FIELD;
+    }
+    if (token == TOKEN_OPENPAREN) {
+      // ...must be the arg list of a method.
+      return MEMBERKIND_METHOD;
+    }
+    if (token == TOKEN_OPENBRACE) {
+      // If we see an open brace before a paren then it's a property.
+      return MEMBERKIND_PROPERTY;
+    }
+    if (token == TOKEN_EQUALS_GREATERTHAN) {
+      // If we see one of those arrow thingies it's definitely a property.
+      return MEMBERKIND_PROPERTY;
+    }
+    if (token == TOKEN_SEMICOLON) {
+      // No brace, no arrow, no special keyword, must be a field.
+      return MEMBERKIND_FIELD;
+    }
+    if (token == TOKEN_CLOSEBRACE) {
+      // Welp, I don't know, we missed all the clues somehow!
+      return MEMBERKIND_NONE;
+    }
+  }
 
   return MEMBERKIND_NONE;
+}
+
+static void type_declaration();
+
+static void declaration_modifiers() {
+  group();
+  bool first = true;
+  while (check_modifier()) {
+    if (!first) {
+      line();
+    }
+    first = false;
+
+    match_modifier();
+  }
+  end();
+
+  if (!first) {
+    line();
+  }
+}
+
+static void const_declaration() {
+  attributes();
+  declaration_modifiers();
+
+  {
+    group();
+
+    token(TOKEN_KW_CONST);
+    space();
+    type();
+
+    indent();
+    line();
+
+    bool first = true;
+    while (check_identifier()) {
+      if (!first) {
+        token(TOKEN_COMMA);
+        line();
+      }
+
+      group();
+      identifier();
+      space();
+      token(TOKEN_EQUALS);
+      {
+        indent();
+        line();
+        expression();
+        dedent();
+      }
+      end();
+    }
+
+    dedent();
+    end();
+  }
+}
+
+static void variable_declarators() {
+  bool first = true;
+  while (check_identifier()) {
+    if (!first) {
+      token(TOKEN_COMMA);
+      line();
+    }
+    first = false;
+
+    identifier();
+    if (check(TOKEN_EQUALS)) {
+      space();
+      token(TOKEN_EQUALS);
+      {
+        indent();
+        line();
+        expression();
+        dedent();
+      }
+    }
+  }
+}
+
+static void field_declaration() {
+  error_at_current("Not Implemented: Field");
+  advance();
+}
+
+static void method_declaration() {
+  error_at_current("Not Implemented: Method");
+  advance();
+}
+
+static void property_declaration() {
+  error_at_current("Not Implemented: Property");
+  advance();
+}
+
+static void event_declaration() {
+  attributes();
+  declaration_modifiers();
+
+  {
+    group();
+    token(TOKEN_KW_EVENT);
+    space();
+    type();
+
+    if (check_next(TOKEN_OPENBRACE)) {
+      space();
+      identifier();
+
+      line();
+      token(TOKEN_OPENBRACE);
+      {
+        indent();
+        line();
+
+        // Stuff
+
+        dedent();
+      }
+      token(TOKEN_CLOSEBRACE);
+    } else {
+      indent();
+      line();
+      variable_declarators();
+      dedent();
+
+      token(TOKEN_SEMICOLON);
+    }
+
+    dedent();
+    end();
+  }
+}
+
+static void indexer_declaration() {
+  error_at_current("Not Implemented: Indexer");
+  advance();
+}
+
+static void operator_declaration() {
+  error_at_current("Not Implemented: Operator");
+  advance();
+}
+
+static void destructor_declaration() {
+  error_at_current("Not Implemented: Destructor");
+  advance();
 }
 
 static void interface_declaration() {
@@ -677,9 +904,68 @@ static void interface_declaration() {
     line();
 
     enum MemberKind last_member_kind = MEMBERKIND_NONE;
-    while (check_member()) {
-      attributes();
-      last_member_kind = member(last_member_kind);
+    for (;;) {
+      // Before we parse *anything* scan ahead to figure out what we're looking
+      // at. That way we can figure out how much whitespace to put in.
+      enum MemberKind member_kind = check_member();
+      if (member_kind == MEMBERKIND_NONE) {
+        break;
+      }
+
+      if (last_member_kind != MEMBERKIND_NONE) {
+        // I've been around before, need to terminate the previous member.
+        line();
+        if (last_member_kind != member_kind ||
+            (member_kind != MEMBERKIND_FIELD &&
+             member_kind != MEMBERKIND_CONST)) {
+          // Everything except fields gets a blank line in between.
+          line();
+        }
+      }
+
+      switch (member_kind) {
+      case MEMBERKIND_CONST:
+        const_declaration();
+        break;
+
+      case MEMBERKIND_FIELD:
+        field_declaration();
+        break;
+
+      case MEMBERKIND_METHOD:
+        method_declaration();
+        break;
+
+      case MEMBERKIND_PROPERTY:
+        property_declaration();
+        break;
+
+      case MEMBERKIND_EVENT:
+        event_declaration();
+        break;
+
+      case MEMBERKIND_INDEXER:
+        indexer_declaration();
+        break;
+
+      case MEMBERKIND_OPERATOR:
+        operator_declaration();
+        break;
+
+      case MEMBERKIND_DESTRUCTOR:
+        destructor_declaration();
+        break;
+
+      case MEMBERKIND_TYPE:
+        type_declaration();
+        break;
+
+      case MEMBERKIND_NONE:
+      default:
+        break;
+      }
+
+      last_member_kind = member_kind;
     }
 
     dedent();
@@ -751,15 +1037,6 @@ static void delegate_declaration() {
   }
 
   end();
-}
-
-static enum TokenType type_keyword_tokens[] = {
-    TOKEN_KW_CLASS, TOKEN_KW_STRUCT,   TOKEN_KW_INTERFACE,
-    TOKEN_KW_ENUM,  TOKEN_KW_DELEGATE,
-};
-
-static bool check_type_keyword() {
-  return check_any(type_keyword_tokens, ARRAY_SIZE(type_keyword_tokens));
 }
 
 static bool check_type_declaration() {
