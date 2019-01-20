@@ -17,6 +17,10 @@ struct Parser {
 
 struct Parser parser;
 
+// ============================================================================
+// Error Reporting
+// ============================================================================
+
 int last_debug_line = -1;
 static void vdebug(const char *format, va_list args) {
 #ifdef PRINT_DEBUG_ENABLED
@@ -73,6 +77,10 @@ static void error_at_current(const char *format, ...) {
   verror_at_current(format, args);
   va_end(args);
 }
+
+// ============================================================================
+// Checking and Consuming Tokens
+// ============================================================================
 
 static void advance() {
   parser.previous = parser.current;
@@ -181,6 +189,10 @@ static bool match_any(const enum TokenType *types, int count) {
   return false;
 }
 
+// ============================================================================
+// Formatting
+// ============================================================================
+
 static void group() { doc_group(parser.builder); }
 static void end() { doc_end(parser.builder); }
 static void line() { doc_line(parser.builder); }
@@ -189,6 +201,10 @@ static void breakparent() { doc_breakparent(parser.builder); }
 static void indent() { doc_indent(parser.builder); }
 static void dedent() { doc_dedent(parser.builder); }
 static void space() { doc_text(parser.builder, " ", 1); }
+
+// ============================================================================
+// Names
+// ============================================================================
 
 static bool check_identifier() {
   return is_identifier_token(parser.current.type);
@@ -283,15 +299,27 @@ static void type() {
   }
 }
 
+// ============================================================================
+// Expressions
+// ============================================================================
+
 static void expression() {
   error_at_current("Expression not implemented");
   advance();
 }
 
+// ============================================================================
+// Statements
+// ============================================================================
+
 static void block() {
   error_at_current("Block not implemented");
   advance();
 }
+
+// ============================================================================
+// Member Declarations
+// ============================================================================
 
 static void attribute_name() { type_name(); }
 
@@ -376,147 +404,6 @@ static void global_attributes() {
     line();
   }
 }
-
-static void return_type() {
-  if (!match(TOKEN_KW_VOID)) {
-    type();
-  }
-}
-
-const static enum TokenType parameter_modifier_tokens[] = {
-    TOKEN_KW_IN, TOKEN_KW_OUT, TOKEN_KW_REF, TOKEN_KW_THIS, TOKEN_KW_PARAMS,
-};
-
-static bool check_formal_parameter() {
-  return check(TOKEN_OPENBRACKET) ||
-         check_any(parameter_modifier_tokens,
-                   ARRAY_SIZE(parameter_modifier_tokens)) ||
-         check_type() || check(TOKEN_COMMA);
-}
-
-static void formal_parameter_list() {
-  token(TOKEN_OPENPAREN);
-  {
-    indent();
-    softline();
-
-    bool first = true;
-    while (check_formal_parameter()) {
-      if (!first) {
-        token(TOKEN_COMMA);
-        line();
-      }
-      first = false;
-
-      attributes();
-      if (match_any(parameter_modifier_tokens,
-                    ARRAY_SIZE(parameter_modifier_tokens))) {
-        space();
-      }
-      type();
-      space();
-      identifier();
-      if (check(TOKEN_EQUALS)) {
-        space();
-        token(TOKEN_EQUALS);
-        line();
-        indent();
-        expression();
-        dedent();
-      }
-    }
-
-    dedent();
-  }
-  token(TOKEN_CLOSEPAREN);
-}
-
-static void type_constraint() {
-  if (match(TOKEN_KW_NEW)) {
-    token(TOKEN_OPENPAREN);
-    token(TOKEN_CLOSEPAREN);
-  } else {
-    identifier();
-  }
-}
-
-static void optional_type_parameter_list() {
-  group();
-  if (match(TOKEN_LESSTHAN)) {
-    indent();
-    softline();
-
-    attributes();
-    if (match(TOKEN_KW_IN) || match(TOKEN_KW_OUT)) {
-      space();
-    }
-    identifier();
-    while (match(TOKEN_COMMA)) {
-      line();
-      attributes();
-      if (match(TOKEN_KW_IN) || match(TOKEN_KW_OUT)) {
-        space();
-      }
-      identifier();
-    }
-
-    dedent();
-    softline();
-    token(TOKEN_GREATERTHAN);
-  }
-  end();
-}
-
-static void base_types() {
-  group();
-  token(TOKEN_COLON);
-  space();
-  type_name();
-  {
-    indent();
-    while (match(TOKEN_COMMA)) {
-      line();
-      type_name();
-    }
-    dedent();
-  }
-  end();
-}
-
-static void type_parameter_constraint() {
-  group();
-  token(TOKEN_KW_WHERE);
-  space();
-  identifier();
-  token(TOKEN_COLON);
-  {
-    indent();
-    line();
-    type_constraint();
-    while (match(TOKEN_COMMA)) {
-      line();
-      type_constraint();
-    }
-    dedent();
-  }
-  end();
-}
-
-static void type_parameter_constraint_clauses() {
-  type_parameter_constraint();
-  if (check(TOKEN_KW_WHERE)) {
-    // MORE THAN ONE, UGH.
-    breakparent();
-    while (check(TOKEN_KW_WHERE)) {
-      line();
-      type_parameter_constraint();
-    }
-  }
-}
-
-// ============================================================================
-// Member Declarations
-// ============================================================================
 
 // These are shared through lots of different declarations; we allow all of them
 // everywhere, even though it doesn't make sense to have e.g. `async struct`.
@@ -621,6 +508,127 @@ static void variable_declarators() {
 static void field_declaration() {
   error_at_current("Not Implemented: Field");
   advance();
+}
+
+static void return_type() {
+  if (!match(TOKEN_KW_VOID)) {
+    type();
+  }
+}
+
+const static enum TokenType parameter_modifier_tokens[] = {
+    TOKEN_KW_IN, TOKEN_KW_OUT, TOKEN_KW_REF, TOKEN_KW_THIS, TOKEN_KW_PARAMS,
+};
+
+static bool check_formal_parameter() {
+  return check(TOKEN_OPENBRACKET) ||
+         check_any(parameter_modifier_tokens,
+                   ARRAY_SIZE(parameter_modifier_tokens)) ||
+         check_type() || check(TOKEN_COMMA);
+}
+
+static void formal_parameter_list() {
+  token(TOKEN_OPENPAREN);
+  {
+    indent();
+    softline();
+
+    bool first = true;
+    while (check_formal_parameter()) {
+      if (!first) {
+        token(TOKEN_COMMA);
+        line();
+      }
+      first = false;
+
+      attributes();
+      if (match_any(parameter_modifier_tokens,
+                    ARRAY_SIZE(parameter_modifier_tokens))) {
+        space();
+      }
+      type();
+      space();
+      identifier();
+      if (check(TOKEN_EQUALS)) {
+        space();
+        token(TOKEN_EQUALS);
+        line();
+        indent();
+        expression();
+        dedent();
+      }
+    }
+
+    dedent();
+  }
+  token(TOKEN_CLOSEPAREN);
+}
+
+static void type_constraint() {
+  if (match(TOKEN_KW_NEW)) {
+    token(TOKEN_OPENPAREN);
+    token(TOKEN_CLOSEPAREN);
+  } else {
+    identifier();
+  }
+}
+
+static void optional_type_parameter_list() {
+  group();
+  if (match(TOKEN_LESSTHAN)) {
+    indent();
+    softline();
+
+    attributes();
+    if (match(TOKEN_KW_IN) || match(TOKEN_KW_OUT)) {
+      space();
+    }
+    identifier();
+    while (match(TOKEN_COMMA)) {
+      line();
+      attributes();
+      if (match(TOKEN_KW_IN) || match(TOKEN_KW_OUT)) {
+        space();
+      }
+      identifier();
+    }
+
+    dedent();
+    softline();
+    token(TOKEN_GREATERTHAN);
+  }
+  end();
+}
+
+static void type_parameter_constraint() {
+  group();
+  token(TOKEN_KW_WHERE);
+  space();
+  identifier();
+  token(TOKEN_COLON);
+  {
+    indent();
+    line();
+    type_constraint();
+    while (match(TOKEN_COMMA)) {
+      line();
+      type_constraint();
+    }
+    dedent();
+  }
+  end();
+}
+
+static void type_parameter_constraint_clauses() {
+  type_parameter_constraint();
+  if (check(TOKEN_KW_WHERE)) {
+    // MORE THAN ONE, UGH.
+    breakparent();
+    while (check(TOKEN_KW_WHERE)) {
+      line();
+      type_parameter_constraint();
+    }
+  }
 }
 
 static void member_name() {
@@ -975,6 +983,21 @@ static void member_declarations() {
 // ============================================================================
 // Type Declarations
 // ============================================================================
+static void base_types() {
+  group();
+  token(TOKEN_COLON);
+  space();
+  type_name();
+  {
+    indent();
+    while (match(TOKEN_COMMA)) {
+      line();
+      type_name();
+    }
+    dedent();
+  }
+  end();
+}
 
 static void class_declaration() {
   token(TOKEN_KW_CLASS);
