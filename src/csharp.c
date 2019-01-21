@@ -527,7 +527,6 @@ static void attribute_section() {
 
 static bool attributes() {
   if (check(TOKEN_OPENBRACKET)) {
-    breakparent();
     while (check(TOKEN_OPENBRACKET)) {
       attribute_section();
       line();
@@ -792,9 +791,15 @@ static void method_declaration() {
   if (match(TOKEN_KW_PARTIAL)) {
     line();
   }
-  return_type();
-  line();
-  member_name();
+
+  {
+    group();
+    return_type();
+    line();
+    member_name();
+    end();
+  }
+
   optional_type_parameter_list();
   formal_parameter_list();
 
@@ -1217,6 +1222,7 @@ static void interface_declaration() {
 
     dedent();
   }
+  line();
   token(TOKEN_CLOSEBRACE);
   match(TOKEN_SEMICOLON);
 }
@@ -1437,7 +1443,7 @@ static void namespace_declaration() {
   token(TOKEN_KW_NAMESPACE);
   space();
   qualified_identifier();
-  space();
+  line();
   token(TOKEN_OPENBRACE);
 
   {
