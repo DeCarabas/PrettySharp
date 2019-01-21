@@ -1413,20 +1413,26 @@ static void namespace_declaration();
 static void namespace_members() {
   bool first = true;
   for (;;) {
-    if (!first) {
-      // Blank lines between members.
-      line();
-      line();
-    }
-    first = false;
-
     if (check(TOKEN_KW_NAMESPACE)) {
+      if (!first) {
+        // Blank lines between members.
+        line();
+        line();
+      }
+
       namespace_declaration();
     } else if (check_type_declaration()) {
+      if (!first) {
+        // Blank lines between members.
+        line();
+        line();
+      }
+
       type_declaration();
     } else {
       break;
     }
+    first = false;
   }
 }
 
