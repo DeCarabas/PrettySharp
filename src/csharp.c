@@ -679,23 +679,27 @@ static void formal_parameter_list() {
       }
       first = false;
 
-      attributes();
-      if (match_any(parameter_modifier_tokens,
-                    ARRAY_SIZE(parameter_modifier_tokens))) {
-        space();
-      }
-      type();
-      space();
-      identifier();
-      if (check(TOKEN_EQUALS)) {
-        space();
-        token(TOKEN_EQUALS);
-        {
-          indent();
-          line();
-          expression();
-          dedent();
+      {
+        group();
+        attributes();
+        if (match_any(parameter_modifier_tokens,
+                      ARRAY_SIZE(parameter_modifier_tokens))) {
+          space();
         }
+        type();
+        space();
+        identifier();
+        if (check(TOKEN_EQUALS)) {
+          space();
+          token(TOKEN_EQUALS);
+          {
+            indent();
+            line();
+            expression();
+            dedent();
+          }
+        }
+        end();
       }
     }
 
