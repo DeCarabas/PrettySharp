@@ -4,7 +4,7 @@
 #include "common.h"
 
 enum TokenType {
-#define TKN(id, txt, isid) TOKEN_##id,
+#define TKN(id, txt, is_id, prefix, infix, prec) TOKEN_##id,
 #include "token.inc"
 #undef TKN
 };

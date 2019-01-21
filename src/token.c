@@ -4,7 +4,7 @@
 const char *token_text(enum TokenType type) {
   switch (type) {
 
-#define TKN(id, txt, is_id)                                                    \
+#define TKN(id, txt, is_id, prefix, infix, prec)                               \
   case TOKEN_##id:                                                             \
     return txt;
 
@@ -20,7 +20,7 @@ const char *token_text(enum TokenType type) {
 bool is_identifier_token(enum TokenType type) {
   switch (type) {
 
-#define TKN(id, txt, is_id)                                                    \
+#define TKN(id, txt, is_id, prefix, infix, prec)                               \
   case TOKEN_##id:                                                             \
     return is_id;
 

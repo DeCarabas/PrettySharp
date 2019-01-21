@@ -67,14 +67,21 @@ static void verror_at(struct Token *token, const char *format, va_list args) {
   fprintf(stderr, "\n");
 }
 
-static void verror_at_current(const char *format, va_list args) {
+static void error_at_previous(const char *format, ...) {
+  va_list args;
+  va_start(args, format);
+  verror_at(&parser.previous, format, args);
+  va_end(args);
+}
+
+static void verror(const char *format, va_list args) {
   verror_at(&parser.current, format, args);
 }
 
-static void error_at_current(const char *format, ...) {
+static void error(const char *format, ...) {
   va_list args;
   va_start(args, format);
-  verror_at_current(format, args);
+  verror(format, args);
   va_end(args);
 }
 
@@ -103,7 +110,7 @@ static void advance() {
       break;
     }
 
-    error_at_current("%s", parser.current.start);
+    error("%s", parser.current.start);
   }
 }
 
@@ -145,12 +152,16 @@ static bool check_next(enum TokenType type) {
   return check_next_and_return_token(type, &token);
 }
 
+static void single_token() {
+  doc_text(parser.builder, parser.current.start, parser.current.length);
+  advance();
+}
+
 static void token(enum TokenType type) {
   if (parser.current.type == type) {
-    doc_text(parser.builder, parser.current.start, parser.current.length);
-    advance();
+    single_token();
   } else {
-    error_at_current("Expected '%s'", token_text(type));
+    error("Expected '%s'", token_text(type));
   }
 }
 
@@ -215,7 +226,7 @@ static void identifier() {
     doc_text(parser.builder, parser.current.start, parser.current.length);
     advance();
   } else {
-    error_at_current("Expected an identifier");
+    error("Expected an identifier");
   }
 }
 static void name_equals() {
@@ -302,18 +313,137 @@ static void type() {
 // ============================================================================
 // Expressions
 // ============================================================================
+static void expression();
 
-static void expression() {
-  error_at_current("Expression not implemented");
+static const struct ParseRule *get_rule(enum TokenType type);
+
+enum Precedence {
+  PREC_NONE,
+
+  // NOTE: These are from lowest precedence to highest precedence.
+  // https://docs.microsoft.com/en-us/dotnet/csharp/language-reference/language-specification/expressions#operator-precedence-and-associativity
+  PREC_ASSIGNMENT,
+  PREC_CONDITIONAL,
+  PREC_NULL_COALESCING,
+  PREC_CONDITIONAL_OR,
+  PREC_CONDITIONAL_AND,
+  PREC_LOGICAL_OR,
+  PREC_LOGICAL_XOR,
+  PREC_LOGICAL_AND,
+  PREC_EQUALITY,
+  PREC_RELATIONAL,
+  PREC_GREATERTHAN,
+  PREC_SHIFT,
+  PREC_ADDITIVE,
+  PREC_MULTIPLICATIVE,
+  PREC_UNARY,
+  PREC_PRIMARY,
+};
+
+typedef void (*ParseFn)();
+
+struct ParseRule {
+  ParseFn prefix;
+  ParseFn infix;
+  enum Precedence precedence;
+};
+
+static const struct ParseRule *get_rule(enum TokenType type);
+
+// These things all look at "previous".
+static void parse_precedence(enum Precedence precedence) {
+  group();
+  ParseFn prefix_rule = get_rule(parser.current.type)->prefix;
+  if (prefix_rule == NULL) {
+    error("Expect expression.");
+    return;
+  }
+
+  prefix_rule();
+
+  while (precedence <= get_rule(parser.current.type)->precedence) {
+    ParseFn infix_rule = get_rule(parser.current.type)->infix;
+    infix_rule();
+  }
+  end();
+}
+
+static void primary() { single_token(); }
+
+static void grouping() {
+  // TODO: CASTING??? What if.... what..... hm.
+  group();
+  token(TOKEN_OPENPAREN);
+  indent();
+  softline();
+
+  expression();
+
+  dedent();
+  softline();
+  token(TOKEN_CLOSEPAREN);
+  end();
+}
+
+static void unary_prefix() {
+  single_token();
+  expression();
+}
+
+// TODO: UNARY!
+
+static void query_expression() {
+  error("Not Implemented: query_expression ('from')");
   advance();
 }
+
+static void binary() {
+  enum TokenType op = parser.current.type;
+
+  space();
+  token(op);
+  line();
+
+  const struct ParseRule *rule = get_rule(op);
+  parse_precedence((enum Precedence)(rule->precedence + 1));
+}
+
+static void greater_than() {
+  // This one is weird because it *might* be a shift operator, but might also be
+  // a less than operator. Good thing our lexer doesn't discard whitespace,
+  // right?
+  error("Not Implemented: greater than");
+  advance();
+}
+
+static void is_as() {
+  error("Not Implemented: is or as");
+  advance();
+}
+
+static void conditional() {
+  error("Not Implemented: conditional");
+  advance();
+}
+
+const static struct ParseRule rules[] = {
+#define TKN(id, txt, is_id, prefix, infix, prec) {prefix, infix, prec},
+#include "token.inc"
+#undef TKN
+};
+
+static const struct ParseRule *get_rule(enum TokenType type) {
+  return &rules[type];
+}
+
+static void expression() { parse_precedence(PREC_ASSIGNMENT); }
 
 // ============================================================================
 // Statements
 // ============================================================================
 
 static void block() {
-  error_at_current("Block not implemented");
+  error("Block not implemented");
   advance();
 }
 
@@ -506,7 +636,7 @@ static void variable_declarators() {
 }
 
 static void field_declaration() {
-  error_at_current("Not Implemented: Field");
+  error("Not Implemented: Field");
   advance();
 }
 
@@ -816,17 +946,17 @@ static void event_declaration() {
 }
 
 static void indexer_declaration() {
-  error_at_current("Not Implemented: Indexer");
+  error("Not Implemented: Indexer");
   advance();
 }
 
 static void operator_declaration() {
-  error_at_current("Not Implemented: Operator");
+  error("Not Implemented: Operator");
   advance();
 }
 
 static void destructor_declaration() {
-  error_at_current("Not Implemented: Destructor");
+  error("Not Implemented: Destructor");
   advance();
 }
 
@@ -882,9 +1012,6 @@ static enum MemberKind check_member() {
     if (token == TOKEN_EQUALS) {
       // Well.... if I have got this far and I see an '=' it must be a field.
       // (Otherwise it would have been a const.)
-      return MEMBERKIND_FIELD;
-    }
-    if (token == TOKEN_COMMA) {
       return MEMBERKIND_FIELD;
     }
     if (token == TOKEN_OPENPAREN) {
@@ -1192,7 +1319,7 @@ static void type_declaration() {
   } else if (check(TOKEN_KW_DELEGATE)) {
     delegate_declaration();
   } else {
-    error_at_current("Expected some kind of type keyword.");
+    error("Expected some kind of type keyword.");
   }
 }
 
