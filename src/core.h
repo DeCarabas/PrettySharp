@@ -27,6 +27,7 @@ void builder_free(struct DocBuilder *builder);
 void doc_indent(struct DocBuilder *builder);
 void doc_dedent(struct DocBuilder *builder);
 void doc_text(struct DocBuilder *builder, const char *text, int length);
+void doc_textz(struct DocBuilder *builder, const char *text);
 void doc_line(struct DocBuilder *builder);
 void doc_softline(struct DocBuilder *builder);
 void doc_breakparent(struct DocBuilder *builder);

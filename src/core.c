@@ -155,6 +155,8 @@ static struct OutputDoc *output_add(struct OutputBuilder *builder) {
 
 static void output_push_string(struct OutputBuilder *result, int length,
                                const char *string) {
+  assert(length >= 0);
+
   struct OutputDoc *doc = output_add(result);
   doc->type = OUT_TEXT;
   doc->length = length;
@@ -162,6 +164,8 @@ static void output_push_string(struct OutputBuilder *result, int length,
 }
 
 static void output_push_line(struct OutputBuilder *result, int margin) {
+  assert(margin >= 0);
+
   struct OutputDoc *doc = output_add(result);
   doc->type = OUT_LINE;
   doc->length = margin;
@@ -219,11 +223,11 @@ static void best_rep(struct OutputBuilder *result, int width, struct Doc *docs,
       assert(group_depth > 0);
       if (group_depth == 1) {
         // Transition from breaking to not breaking, so capture everything we
-        // need in order to rewind out of this group. Note that saved_it is it
-        // + 1, so we don't revisit this 'GROUP' instruction if we have to
-        // reset.
+        // need in order to rewind out of this group. It's OK that we save 'it'
+        // and not 'it + 1' because when we restore we will increment 'it' at
+        // the end of the loop.
         saved_result_count = result->count;
-        saved_it = it + 1;
+        saved_it = it;
         saved_used = used;
       }
       break;
@@ -252,7 +256,7 @@ static void layout(FILE *file, struct OutputDoc *docs, int length) {
   while (it != end) {
     switch (it->type) {
     case OUT_TEXT:
-      fwrite(it->string, 1, it->length, file);
+      fprintf(file, "%.*s", it->length, it->string);
       break;
 
     case OUT_LINE:
@@ -285,30 +289,30 @@ void dump_docs(struct Doc *docs, int length) {
   while (it != end) {
     switch (it->type) {
     case DOC_TEXT:
+      doc_line(&builder);
       doc_textz(&builder, "TEXT \"");
       doc_text(&builder, it->string, it->length);
       doc_textz(&builder, "\";");
-      doc_line(&builder);
       break;
     case DOC_LINE:
-      doc_textz(&builder, "LINE;");
       doc_line(&builder);
+      doc_textz(&builder, "LINE;");
       break;
     case DOC_GROUP:
+      doc_line(&builder);
       doc_group(&builder);
       doc_indent(&builder);
-      doc_textz(&builder, "BEGIN");
-      doc_line(&builder);
+      doc_textz(&builder, "{");
       break;
     case DOC_END:
       doc_dedent(&builder);
-      doc_textz(&builder, "END");
-      doc_end(&builder);
       doc_line(&builder);
+      doc_textz(&builder, "}");
+      doc_end(&builder);
       break;
     case DOC_BREAKPARENT:
-      doc_textz(&builder, "BREAKPARENT");
       doc_line(&builder);
+      doc_textz(&builder, "BREAKPARENT;");
       break;
     }
     it++;
