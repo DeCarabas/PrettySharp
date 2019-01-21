@@ -63,7 +63,8 @@ int main(int argc, const char *argv[]) {
   struct DocBuilder builder = builder_new(16);
 
   if (format_csharp(&builder, source)) {
-    pretty(stdout, 80, builder.contents, builder.count);
+    // pretty(stdout, 80, builder.contents, builder.count);
+    dump_docs(builder.contents, builder.count);
   }
 
   builder_free(&builder);

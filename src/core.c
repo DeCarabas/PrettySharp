@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -10,6 +11,7 @@ static void builder_init(struct DocBuilder *docs, int capacity) {
   docs->capacity = capacity;
   docs->margin = 0;
   docs->indent = 4;
+  docs->group_depth = 0;
   docs->contents = malloc(sizeof(struct Doc) * docs->capacity);
 }
 
@@ -41,16 +43,25 @@ static struct Doc *builder_add(struct DocBuilder *builder) {
 
 void doc_indent(struct DocBuilder *builder) {
   builder->margin += builder->indent;
+  assert(builder->margin >= 0);
 }
 
 void doc_dedent(struct DocBuilder *builder) {
   builder->margin -= builder->indent;
+  assert(builder->margin >= 0);
 }
 
 void doc_text(struct DocBuilder *builder, const char *text, int length) {
   struct Doc *out = builder_add(builder);
   out->type = DOC_TEXT;
   out->length = length;
+  out->string = text;
+}
+
+void doc_textz(struct DocBuilder *builder, const char *text) {
+  struct Doc *out = builder_add(builder);
+  out->type = DOC_TEXT;
+  out->length = strlen(text);
   out->string = text;
 }
 
@@ -74,11 +85,17 @@ void doc_breakparent(struct DocBuilder *builder) {
 }
 
 void doc_group(struct DocBuilder *builder) {
+  builder->group_depth += 1;
+  assert(builder->group_depth > 0);
+
   struct Doc *result = builder_add(builder);
   result->type = DOC_GROUP;
 }
 
 void doc_end(struct DocBuilder *builder) {
+  assert(builder->group_depth > 0);
+  builder->group_depth -= 1;
+
   struct Doc *result = builder_add(builder);
   result->type = DOC_END;
 }
@@ -199,6 +216,7 @@ static void best_rep(struct OutputBuilder *result, int width, struct Doc *docs,
 
     case DOC_GROUP:
       group_depth += 1;
+      assert(group_depth > 0);
       if (group_depth == 1) {
         // Transition from breaking to not breaking, so capture everything we
         // need in order to rewind out of this group. Note that saved_it is it
@@ -211,6 +229,7 @@ static void best_rep(struct OutputBuilder *result, int width, struct Doc *docs,
       break;
 
     case DOC_END:
+      assert(group_depth > 0);
       group_depth -= 1;
       if (group_depth == 0) {
         // Back to breaking again; clear these for diagnostic purposes. (We
@@ -253,4 +272,45 @@ void pretty(FILE *file, int width, struct Doc *docs, int length) {
   layout(file, builder.contents, builder.count);
 
   output_free(&builder);
+}
+
+void dump_docs(struct Doc *docs, int length) {
+  // Haha use ourselves to debug ourselves.
+  struct DocBuilder builder = builder_new(16);
+
+  struct Doc *it = docs;
+  struct Doc *end = docs + length;
+  while (it != end) {
+    switch (it->type) {
+    case DOC_TEXT:
+      doc_textz(&builder, "TEXT \"");
+      doc_text(&builder, it->string, it->length);
+      doc_textz(&builder, "\";");
+      doc_line(&builder);
+      break;
+    case DOC_LINE:
+      doc_textz(&builder, "LINE;");
+      doc_line(&builder);
+      break;
+    case DOC_GROUP:
+      doc_group(&builder);
+      doc_indent(&builder);
+      doc_textz(&builder, "BEGIN");
+      doc_line(&builder);
+      break;
+    case DOC_END:
+      doc_dedent(&builder);
+      doc_textz(&builder, "END");
+      doc_end(&builder);
+      doc_line(&builder);
+      break;
+    case DOC_BREAKPARENT:
+      doc_textz(&builder, "BREAKPARENT");
+      doc_line(&builder);
+      break;
+    }
+    it++;
+  }
+
+  pretty(stdout, 80, builder.contents, builder.count);
 }

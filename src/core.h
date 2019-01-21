@@ -17,6 +17,7 @@ struct DocBuilder {
   int capacity;
   int margin;
   int indent;
+  int group_depth;
   struct Doc *contents;
 };
 
@@ -35,5 +36,6 @@ void doc_bracket_open(struct DocBuilder *builder, const char *left);
 void doc_bracket_close(struct DocBuilder *builder, const char *right);
 
 void pretty(FILE *file, int width, struct Doc *docs, int length);
+void dump_docs(struct Doc *docs, int length);
 
 #endif
