@@ -229,14 +229,16 @@ static void best_rep(struct OutputBuilder *result, int width, struct Doc *docs,
       break;
 
     case DOC_END:
-      assert(group_depth > 0);
-      group_depth -= 1;
-      if (group_depth == 0) {
-        // Back to breaking again; clear these for diagnostic purposes. (We
-        // don't really need to, of course.)
-        saved_result_count = 0;
-        saved_it = NULL;
-        saved_used = used;
+      // We can have END without BEGIN if we skipped the parent BEGINS.
+      if (group_depth > 0) {
+        group_depth -= 1;
+        if (group_depth == 0) {
+          // Back to breaking again; clear these for diagnostic purposes. (We
+          // don't really need to, of course.)
+          saved_result_count = 0;
+          saved_it = NULL;
+          saved_used = used;
+        }
       }
       break;
     }

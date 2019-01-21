@@ -240,16 +240,18 @@ static void type_name();
 static void optional_type_argument_list() {
   group();
   if (match(TOKEN_LESSTHAN)) {
-    indent();
-    softline();
+    {
+      indent();
+      softline();
 
-    type_name();
-    while (match(TOKEN_COMMA)) {
-      line();
       type_name();
-    }
+      while (match(TOKEN_COMMA)) {
+        line();
+        type_name();
+      }
 
-    dedent();
+      dedent();
+    }
     softline();
     token(TOKEN_GREATERTHAN);
   }
@@ -374,12 +376,14 @@ static void grouping() {
   // TODO: CASTING??? What if.... what..... hm.
   group();
   token(TOKEN_OPENPAREN);
-  indent();
-  softline();
+  {
+    indent();
+    softline();
 
-  expression();
+    expression();
 
-  dedent();
+    dedent();
+  }
   softline();
   token(TOKEN_CLOSEPAREN);
   end();
@@ -455,29 +459,31 @@ static void attribute_name() { type_name(); }
 
 static void attribute_arguments() {
   token(TOKEN_OPENPAREN);
-  indent();
-  softline();
+  {
+    indent();
+    softline();
 
-  while (!check(TOKEN_CLOSEPAREN) && !check(TOKEN_EOF)) {
-    group();
-    bool indented = false;
-    if (check_name_equals()) {
-      name_equals();
+    while (!check(TOKEN_CLOSEPAREN) && !check(TOKEN_EOF)) {
+      group();
+      bool indented = false;
+      if (check_name_equals()) {
+        name_equals();
 
-      indent();
-      line();
-      indented = true;
+        indent();
+        line();
+        indented = true;
+      }
+
+      expression();
+
+      if (indented) {
+        dedent();
+      }
+      end();
     }
 
-    expression();
-
-    if (indented) {
-      dedent();
-    }
-    end();
+    dedent();
   }
-
-  dedent();
   softline();
   token(TOKEN_CLOSEPAREN);
 }
@@ -500,18 +506,20 @@ static void attribute_list() {
 static void attribute_section() {
   group();
   token(TOKEN_OPENBRACKET);
-  indent();
-  softline();
+  {
+    indent();
+    softline();
 
-  if (check(TOKEN_IDENTIFIER) && check_next(TOKEN_COLON)) {
-    identifier();
-    token(TOKEN_COLON);
-    line();
+    if (check(TOKEN_IDENTIFIER) && check_next(TOKEN_COLON)) {
+      identifier();
+      token(TOKEN_COLON);
+      line();
+    }
+
+    attribute_list();
+
+    dedent();
   }
-
-  attribute_list();
-
-  dedent();
   softline();
   token(TOKEN_CLOSEBRACKET);
   end();
@@ -583,31 +591,32 @@ static void const_declaration() {
     token(TOKEN_KW_CONST);
     space();
     type();
+    {
+      indent();
+      line();
 
-    indent();
-    line();
+      bool first = true;
+      while (check_identifier() || check(TOKEN_COMMA)) {
+        if (!first) {
+          token(TOKEN_COMMA);
+          line();
+        }
 
-    bool first = true;
-    while (check_identifier() || check(TOKEN_COMMA)) {
-      if (!first) {
-        token(TOKEN_COMMA);
-        line();
+        group();
+        identifier();
+        space();
+        token(TOKEN_EQUALS);
+        {
+          indent();
+          line();
+          expression();
+          dedent();
+        }
+        end();
       }
 
-      group();
-      identifier();
-      space();
-      token(TOKEN_EQUALS);
-      {
-        indent();
-        line();
-        expression();
-        dedent();
-      }
-      end();
+      dedent();
     }
-
-    dedent();
     end();
   }
 }
@@ -682,10 +691,12 @@ static void formal_parameter_list() {
       if (check(TOKEN_EQUALS)) {
         space();
         token(TOKEN_EQUALS);
-        line();
-        indent();
-        expression();
-        dedent();
+        {
+          indent();
+          line();
+          expression();
+          dedent();
+        }
       }
     }
 
@@ -706,24 +717,26 @@ static void type_constraint() {
 static void optional_type_parameter_list() {
   group();
   if (match(TOKEN_LESSTHAN)) {
-    indent();
-    softline();
+    {
+      indent();
+      softline();
 
-    attributes();
-    if (match(TOKEN_KW_IN) || match(TOKEN_KW_OUT)) {
-      space();
-    }
-    identifier();
-    while (match(TOKEN_COMMA)) {
-      line();
       attributes();
       if (match(TOKEN_KW_IN) || match(TOKEN_KW_OUT)) {
         space();
       }
       identifier();
-    }
+      while (match(TOKEN_COMMA)) {
+        line();
+        attributes();
+        if (match(TOKEN_KW_IN) || match(TOKEN_KW_OUT)) {
+          space();
+        }
+        identifier();
+      }
 
-    dedent();
+      dedent();
+    }
     softline();
     token(TOKEN_GREATERTHAN);
   }
@@ -841,11 +854,13 @@ static void property_declaration() {
     // Simple "getter" property.
     space();
     token(TOKEN_EQUALS_GREATERTHAN);
-    indent();
-    line();
-    expression();
-    token(TOKEN_SEMICOLON);
-    dedent();
+    {
+      indent();
+      line();
+      expression();
+      token(TOKEN_SEMICOLON);
+      dedent();
+    }
   } else {
     line();
     token(TOKEN_OPENBRACE);
@@ -932,15 +947,15 @@ static void event_declaration() {
       }
       token(TOKEN_CLOSEBRACE);
     } else {
-      indent();
-      line();
-      variable_declarators();
-      dedent();
-
+      {
+        indent();
+        line();
+        variable_declarators();
+        dedent();
+      }
       token(TOKEN_SEMICOLON);
     }
 
-    dedent();
     end();
   }
 }
