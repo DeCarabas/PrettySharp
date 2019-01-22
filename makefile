@@ -1,4 +1,8 @@
-SOURCES=main.c csharp.c core.c lexer.c token.c
+SOURCES=*.c
+HEADERS=*.h *.inc
 
-prettysharp: $(SOURCES)
+prettysharp: $(SOURCES) $(HEADERS)
 	clang -o prettysharp -Werror $(SOURCES)
+
+clean:
+	rm prettysharp
