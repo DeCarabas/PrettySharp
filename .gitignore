@@ -1,8 +1,1 @@
-bin
-obj
-packages
-paket_files
-.fake
-src/prettysharp
-src/prettiercs/bin
-src/prettiercs/obj
+prettysharp
