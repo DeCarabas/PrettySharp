@@ -1362,7 +1362,8 @@ static bool is_type_keyword(enum TokenType token) {
 }
 
 static bool check_type_declaration() {
-  return check(TOKEN_OPENBRACKET) || check_modifier() || check_type_keyword();
+  return check(TOKEN_OPENBRACKET) || check_modifier() || check_type_keyword() ||
+         check(TOKEN_KW_PARTIAL);
 }
 
 static void type_declaration() {
