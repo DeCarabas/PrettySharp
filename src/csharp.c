@@ -86,6 +86,22 @@ static void error(const char *format, ...) {
 }
 
 // ============================================================================
+// Formatting
+// ============================================================================
+
+static void text(struct Token token) {
+  doc_text(parser.builder, token.start, token.length);
+}
+static void group() { doc_group(parser.builder); }
+static void end() { doc_end(parser.builder); }
+static void line() { doc_line(parser.builder); }
+static void softline() { doc_softline(parser.builder); }
+static void breakparent() { doc_breakparent(parser.builder); }
+static void indent() { doc_indent(parser.builder); }
+static void dedent() { doc_dedent(parser.builder); }
+static void space() { doc_text(parser.builder, " ", 1); }
+
+// ============================================================================
 // Checking and Consuming Tokens
 // ============================================================================
 
@@ -98,12 +114,21 @@ static void advance() {
     parser.current = parser.buffer.tokens[parser.index];
     parser.index += 1;
 
-    if (parser.current.type == TOKEN_TRIVIA_BLOCK_COMMENT ||
-        parser.current.type == TOKEN_TRIVIA_EOL ||
-        parser.current.type == TOKEN_TRIVIA_LINE_COMMENT ||
-        parser.current.type == TOKEN_TRIVIA_WHITESPACE) {
-      // TODO: Handle trivia properly.
+    if (parser.current.type == TOKEN_TRIVIA_BLOCK_COMMENT) {
+      // N.B.: Should I wrap newlines and stuff? Or no?
+      text(parser.current);
+      line();
       continue;
+    } else if (parser.current.type == TOKEN_TRIVIA_LINE_COMMENT) {
+      // By god that line needs to land.
+      breakparent();
+      text(parser.current);
+      line();
+      continue;
+    } else if (parser.current.type == TOKEN_TRIVIA_WHITESPACE) {
+      continue; // Skip!
+    } else if (parser.current.type == TOKEN_TRIVIA_EOL) {
+      continue; // Skip!
     }
 
     if (parser.current.type != TOKEN_ERROR) {
@@ -153,7 +178,7 @@ static bool check_next(enum TokenType type) {
 }
 
 static void single_token() {
-  doc_text(parser.builder, parser.current.start, parser.current.length);
+  text(parser.current);
   advance();
 }
 
@@ -186,8 +211,7 @@ static bool match(enum TokenType type) {
   if (!check(type)) {
     return false;
   }
-  doc_text(parser.builder, parser.current.start, parser.current.length);
-  advance();
+  single_token();
   return true;
 }
 
@@ -201,19 +225,6 @@ static bool match_any(const enum TokenType *types, int count) {
 }
 
 // ============================================================================
-// Formatting
-// ============================================================================
-
-static void group() { doc_group(parser.builder); }
-static void end() { doc_end(parser.builder); }
-static void line() { doc_line(parser.builder); }
-static void softline() { doc_softline(parser.builder); }
-static void breakparent() { doc_breakparent(parser.builder); }
-static void indent() { doc_indent(parser.builder); }
-static void dedent() { doc_dedent(parser.builder); }
-static void space() { doc_text(parser.builder, " ", 1); }
-
-// ============================================================================
 // Names
 // ============================================================================
 
@@ -223,8 +234,7 @@ static bool check_identifier() {
 
 static void identifier() {
   if (check_identifier()) {
-    doc_text(parser.builder, parser.current.start, parser.current.length);
-    advance();
+    single_token();
   } else {
     error("Expected an identifier");
   }
