@@ -11,6 +11,9 @@ struct Parser {
   struct Token current;
   struct Token previous;
 
+  int trivia_index;
+  bool has_trivia;
+
   bool had_error;
   bool panic_mode;
 };
@@ -86,13 +89,53 @@ static void error(const char *format, ...) {
 }
 
 // ============================================================================
+// Trivia
+// ============================================================================
+
+// N.B.: Trivia is super hard to deal with. On the one hand, we don't want to
+//       force ourselves to handle trivia explicitly before and after every
+//       token, or to weave it through the productions: that's why it's
+//       *trivia*. On the other hand, we can't just throw it on the floor,
+//       because we need to at least save comments. What we do is a compromise:
+//       we flush trivia just before we write a token or start a group. This is
+//       correct enough, most of the time: we don't want to write the trivia
+//       before we've had a chance to look at .current, because we might be
+//       writing inter-production whitespace. And we don't want the trivia to be
+//       part of a group started by the main code (in general). So, this.
+static void flush_trivia() {
+  if (!parser.has_trivia) {
+    return;
+  }
+
+  for (; parser.trivia_index < parser.index; parser.trivia_index++) {
+    struct Token trivia = parser.buffer.tokens[parser.trivia_index];
+    if (trivia.type == TOKEN_TRIVIA_BLOCK_COMMENT) {
+      doc_text(parser.builder, trivia.start, trivia.length);
+      doc_line(parser.builder);
+    } else if (trivia.type == TOKEN_TRIVIA_LINE_COMMENT) {
+      doc_breakparent(parser.builder);
+      doc_text(parser.builder, trivia.start, trivia.length);
+      doc_line(parser.builder);
+    } else {
+      // TODO: Consecutive newlines?
+    }
+  }
+
+  parser.has_trivia = false;
+}
+
+// ============================================================================
 // Formatting
 // ============================================================================
 
 static void text(struct Token token) {
+  flush_trivia();
   doc_text(parser.builder, token.start, token.length);
 }
-static void group() { doc_group(parser.builder); }
+static void group() {
+  flush_trivia();
+  doc_group(parser.builder);
+}
 static void end() { doc_end(parser.builder); }
 static void line() { doc_line(parser.builder); }
 static void softline() { doc_softline(parser.builder); }
@@ -107,6 +150,7 @@ static void space() { doc_text(parser.builder, " ", 1); }
 
 static void advance() {
   parser.previous = parser.current;
+  parser.trivia_index = parser.index;
   for (;;) {
     if (parser.index == parser.buffer.count) {
       break;
@@ -114,20 +158,12 @@ static void advance() {
     parser.current = parser.buffer.tokens[parser.index];
     parser.index += 1;
 
-    if (parser.current.type == TOKEN_TRIVIA_BLOCK_COMMENT) {
-      // N.B.: Should I wrap newlines and stuff? Or no?
-      text(parser.current);
-      line();
+    if (parser.current.type == TOKEN_TRIVIA_BLOCK_COMMENT ||
+        parser.current.type == TOKEN_TRIVIA_LINE_COMMENT) {
+      parser.has_trivia = true;
       continue;
-    } else if (parser.current.type == TOKEN_TRIVIA_LINE_COMMENT) {
-      // By god that line needs to land.
-      breakparent();
-      text(parser.current);
-      line();
-      continue;
-    } else if (parser.current.type == TOKEN_TRIVIA_WHITESPACE) {
-      continue; // Skip!
-    } else if (parser.current.type == TOKEN_TRIVIA_EOL) {
+    } else if (parser.current.type == TOKEN_TRIVIA_WHITESPACE ||
+               parser.current.type == TOKEN_TRIVIA_EOL) {
       continue; // Skip!
     }
 
@@ -1494,6 +1530,8 @@ bool format_csharp(struct DocBuilder *builder, const char *source) {
 
   parser.buffer = scan_tokens(source);
   parser.index = 0;
+  parser.trivia_index = 0;
+  parser.has_trivia = false;
 
   advance();
 
