@@ -62,12 +62,14 @@ int main(int argc, const char *argv[]) {
   char *source = read_file(input);
   struct DocBuilder builder = builder_new(16);
 
+  int rc = 27;
   if (format_csharp(&builder, source)) {
     pretty(stdout, 80, builder.contents, builder.count);
     // dump_docs(builder.contents, builder.count);
+    rc = 0;
   }
 
   builder_free(&builder);
   free(source);
-  return 0;
+  return rc;
 }
