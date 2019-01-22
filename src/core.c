@@ -261,8 +261,14 @@ static void layout(FILE *file, struct OutputDoc *docs, int length) {
 
     case OUT_LINE:
       fputs("\n", file);
-      for (int i = 0; i < it->length; i++) {
-        fputc(' ', file);
+
+      // Don't write spaces if we're just going to write another blank line,
+      // it's ugly.
+      struct OutputDoc *next = it + 1;
+      if (next != end && next->type != OUT_LINE) {
+        for (int i = 0; i < it->length; i++) {
+          fputc(' ', file);
+        }
       }
       break;
     }
