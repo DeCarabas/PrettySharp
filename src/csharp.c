@@ -70,18 +70,19 @@ static void verror_at(struct Token *token, const char *format, va_list args) {
   fprintf(stderr, "\n");
 }
 
-static void error_at_previous(const char *format, ...) {
-  va_list args;
-  va_start(args, format);
-  verror_at(&parser.previous, format, args);
-  va_end(args);
-}
-
 static void verror(const char *format, va_list args) {
   verror_at(&parser.current, format, args);
 }
 
 static void error(const char *format, ...) {
+  va_list args;
+  va_start(args, format);
+  verror(format, args);
+  va_end(args);
+}
+
+// We only have this to help tracking parts we haven't done yet.
+static void notimplemented(const char *format, ...) {
   va_list args;
   va_start(args, format);
   verror(format, args);
@@ -443,7 +444,7 @@ static void unary_prefix() {
 // TODO: UNARY!
 
 static void query_expression() {
-  error("Not Implemented: query_expression ('from')");
+  notimplemented("Not Implemented: query_expression ('from')");
   advance();
 }
 
@@ -462,17 +463,17 @@ static void greater_than() {
   // This one is weird because it *might* be a shift operator, but might also be
   // a less than operator. Good thing our lexer doesn't discard whitespace,
   // right?
-  error("Not Implemented: greater than");
+  notimplemented("Not Implemented: greater than");
   advance();
 }
 
 static void is_as() {
-  error("Not Implemented: is or as");
+  notimplemented("Not Implemented: is or as");
   advance();
 }
 
 static void conditional() {
-  error("Not Implemented: conditional");
+  notimplemented("Not Implemented: conditional");
   advance();
 }
 
@@ -493,7 +494,7 @@ static void expression() { parse_precedence(PREC_ASSIGNMENT); }
 // ============================================================================
 
 static void block() {
-  error("Block not implemented");
+  notimplemented("Block not implemented");
   advance();
 }
 
@@ -690,7 +691,7 @@ static void variable_declarators() {
 }
 
 static void field_declaration() {
-  error("Not Implemented: Field");
+  notimplemented("Not Implemented: Field");
   advance();
 }
 
@@ -1016,17 +1017,17 @@ static void event_declaration() {
 }
 
 static void indexer_declaration() {
-  error("Not Implemented: Indexer");
+  notimplemented("Not Implemented: Indexer");
   advance();
 }
 
 static void operator_declaration() {
-  error("Not Implemented: Operator");
+  notimplemented("Not Implemented: Operator");
   advance();
 }
 
 static void destructor_declaration() {
-  error("Not Implemented: Destructor");
+  notimplemented("Not Implemented: Destructor");
   advance();
 }
 
