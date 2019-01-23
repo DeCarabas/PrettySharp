@@ -68,6 +68,9 @@ static void verror_at(struct Token *token, const char *format, va_list args) {
   fprintf(stderr, ": ");
   vfprintf(stderr, format, args);
   fprintf(stderr, "\n");
+
+  // TODO: Fix all the bugs where we get stuck on parse errors.
+  exit(27);
 }
 
 static void verror(const char *format, va_list args) {
@@ -507,7 +510,7 @@ static void block() {
   {
     softline_indent();
     bool first = true;
-    while (!check(TOKEN_CLOSEBRACE) && !check(TOKEN_EOF)) {
+    while (!(check(TOKEN_CLOSEBRACE) || check(TOKEN_EOF))) {
       if (first) {
         breakparent();
       } else {
@@ -1088,7 +1091,7 @@ const static enum TokenType modifier_tokens[] = {
     TOKEN_KW_NEW,     TOKEN_KW_PUBLIC,   TOKEN_KW_PROTECTED, TOKEN_KW_INTERNAL,
     TOKEN_KW_PRIVATE, TOKEN_KW_ABSTRACT, TOKEN_KW_SEALED,    TOKEN_KW_STATIC,
     TOKEN_KW_UNSAFE,  TOKEN_KW_VIRTUAL,  TOKEN_KW_OVERRIDE,  TOKEN_KW_EXTERN,
-    TOKEN_KW_ASYNC,
+    TOKEN_KW_ASYNC,   TOKEN_KW_READONLY,
 };
 
 static bool check_modifier() {
