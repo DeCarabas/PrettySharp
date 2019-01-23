@@ -33,6 +33,22 @@ bool is_identifier_token(enum TokenType type) {
   }
 }
 
+const char *dbg_token_type(enum TokenType type) {
+  switch (type) {
+
+#define TKN(id, txt, is_id, prefix, infix, prec)                               \
+  case TOKEN_##id:                                                             \
+    return "TOKEN_" #id;
+
+#include "token.inc"
+
+#undef TKN
+
+  default:
+    return "<?>";
+  }
+}
+
 static enum TokenType check_kw(const char *token_start, int token_length,
                                int start, int length, const char *rest,
                                enum TokenType type) {

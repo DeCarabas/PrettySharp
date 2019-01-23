@@ -619,7 +619,8 @@ void dump_lex(const char *source) {
     } else {
       printf("   | ");
     }
-    printf("%3d '%.*s'\n", token.type, token.length, token.start);
+    printf("%3d %-25s '%.*s'\n", token.type, dbg_token_type(token.type),
+           token.length, token.start);
 
     if (token.type == TOKEN_EOF || token.type == TOKEN_ERROR)
       break;

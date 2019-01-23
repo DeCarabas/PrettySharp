@@ -6,10 +6,12 @@
 #include "common.h"
 #include "core.h"
 #include "csharp.h"
+#include "lexer.h"
 
 #define ERR_INVALID_ARGS 1
 #define ERR_CANNOT_OPEN 2
 #define ERR_CANNOT_READ 3
+#define ERR_PARSE_ERROR 72
 
 char *read_file(FILE *input) {
   const int chunk_size = 4 * 1024 * 1024;
@@ -45,9 +47,30 @@ char *read_file(FILE *input) {
 
 int main(int argc, const char *argv[]) {
   FILE *input;
-  if (argc == 1) {
-    input = stdin;
-  } else if (argc == 2) {
+  const char *fname = NULL;
+  bool dump_tokens = false;
+  bool dump_doc = false;
+
+  for (int i = 1; i < argc; i++) {
+    const char *arg = argv[i];
+    if (arg[0] == '-') {
+      if (strcmp(arg, "-dt") == 0) {
+        dump_tokens = true;
+      } else if (strcmp(arg, "-dd") == 0) {
+        dump_doc = true;
+      } else {
+        fprintf(stderr, "Unrecognized switch: %s\n", arg);
+        exit(ERR_INVALID_ARGS);
+      }
+    } else if (fname) {
+      fprintf(stderr, "Duplicate input file: %s\n", arg);
+      exit(ERR_INVALID_ARGS);
+    } else {
+      fname = arg;
+    }
+  }
+
+  if (fname) {
     input = fopen(argv[1], "r");
     if (!input) {
       fprintf(stderr, "Unable to open input file '%s': %s", argv[1],
@@ -55,21 +78,28 @@ int main(int argc, const char *argv[]) {
       exit(ERR_CANNOT_OPEN);
     }
   } else {
-    fprintf(stderr, "Unrecognized command line arguments.\n");
-    exit(ERR_INVALID_ARGS);
+    input = stdin;
   }
 
+  int rc = ERR_PARSE_ERROR;
   char *source = read_file(input);
-  struct DocBuilder builder = builder_new(16);
+  if (dump_tokens) {
+    dump_lex(source);
+    exit(0);
+  }
 
-  int rc = 27;
+  struct DocBuilder builder = builder_new(16);
   if (format_csharp(&builder, source)) {
+    if (dump_doc) {
+      dump_docs(builder.contents, builder.count);
+      exit(0);
+    }
+
     pretty(stdout, 80, builder.contents, builder.count);
-    // dump_docs(builder.contents, builder.count);
     rc = 0;
   }
-
   builder_free(&builder);
+
   free(source);
   return rc;
 }

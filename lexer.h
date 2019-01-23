@@ -10,5 +10,6 @@ struct TokenBuffer {
 
 struct TokenBuffer scan_tokens(const char *source);
 void free_token_buffer(struct TokenBuffer *buffer);
+void dump_lex(const char *source);
 
 #endif

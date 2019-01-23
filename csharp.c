@@ -1217,6 +1217,8 @@ static void class_declaration() {
     dedent();
   }
 
+  notimplemented("Not Implemented: Class Declaration");
+
   match(TOKEN_SEMICOLON);
 }
 
@@ -1239,6 +1241,8 @@ static void struct_declaration() {
     type_parameter_constraint_clauses();
     dedent();
   }
+
+  notimplemented("Not Implemented: Struct Declaration");
 
   match(TOKEN_SEMICOLON);
 }
