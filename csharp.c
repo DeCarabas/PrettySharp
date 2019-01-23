@@ -138,11 +138,19 @@ static void group() {
   doc_group(parser.builder);
 }
 static void end() { doc_end(parser.builder); }
-static void line() { doc_line(parser.builder); }
-static void softline() { doc_softline(parser.builder); }
-static void breakparent() { doc_breakparent(parser.builder); }
 static void indent() { doc_indent(parser.builder); }
 static void dedent() { doc_dedent(parser.builder); }
+static void line() { doc_line(parser.builder); }
+static void line_indent() {
+  indent();
+  line();
+}
+static void softline() { doc_softline(parser.builder); }
+static void softline_indent() {
+  indent();
+  softline();
+}
+static void breakparent() { doc_breakparent(parser.builder); }
 static void space() { doc_text(parser.builder, " ", 1); }
 
 // ============================================================================
@@ -176,8 +184,7 @@ static void advance() {
   }
 }
 
-static bool check_next_and_return_token(enum TokenType type,
-                                        struct Token *token_out) {
+static struct Token next_significant_token() {
   struct Token token = parser.current;
   int index = parser.index;
   for (;;) {
@@ -200,18 +207,17 @@ static bool check_next_and_return_token(enum TokenType type,
       break;
     }
   }
-
-  if (token.type == type) {
-    *token_out = token;
-    return true;
-  } else {
-    return false;
-  }
+  return token;
 }
 
 static bool check_next(enum TokenType type) {
-  struct Token token;
-  return check_next_and_return_token(type, &token);
+  struct Token token = next_significant_token();
+  return token.type == type;
+}
+
+static bool check_next_identifier() {
+  struct Token token = next_significant_token();
+  return is_identifier_token(token.type);
 }
 
 static void single_token() {
@@ -288,15 +294,12 @@ static void optional_type_argument_list() {
   group();
   if (match(TOKEN_LESSTHAN)) {
     {
-      indent();
-      softline();
-
+      softline_indent();
       type_name();
       while (match(TOKEN_COMMA)) {
         line();
         type_name();
       }
-
       dedent();
     }
     softline();
@@ -419,21 +422,24 @@ static void parse_precedence(enum Precedence precedence) {
 
 static void primary() { single_token(); }
 
-static void grouping() {
-  // TODO: CASTING??? What if.... what..... hm.
+// This comes up all the time, both here in expression land and down in
+// statement land.
+static void parenthesized_expression() {
   group();
   token(TOKEN_OPENPAREN);
   {
-    indent();
-    softline();
-
+    softline_indent();
     expression();
-
     dedent();
   }
   softline();
   token(TOKEN_CLOSEPAREN);
   end();
+}
+
+static void grouping() {
+  // TODO: CASTING??? What if.... what..... hm.
+  parenthesized_expression();
 }
 
 static void unary_prefix() {
@@ -493,9 +499,503 @@ static void expression() { parse_precedence(PREC_ASSIGNMENT); }
 // Statements
 // ============================================================================
 
+static void statement();
+static void embedded_statement(bool embedded);
+
 static void block() {
-  notimplemented("Block not implemented");
-  advance();
+  token(TOKEN_OPENBRACE);
+  {
+    softline_indent();
+    bool first = true;
+    while (!check(TOKEN_CLOSEBRACE) && !check(TOKEN_EOF)) {
+      if (first) {
+        breakparent();
+      } else {
+        line();
+      }
+      first = false;
+
+      statement();
+    }
+    dedent();
+  }
+  softline();
+  token(TOKEN_CLOSEBRACE);
+}
+
+static void variable_declarators() {
+  group();
+  line_indent();
+  identifier();
+  if (check(TOKEN_EQUALS)) {
+    space();
+    token(TOKEN_EQUALS);
+    {
+      line_indent();
+      // N.B.: This is technically a "fixed_poiner_initializer", not a real
+      // initializer, but we fold it in because it's pretty harmless (this code
+      // is way more lenient by design than the real C# parser) and the
+      // indentation & formatting logic is complex and needs to be kept the
+      // same.
+      match(TOKEN_AMPERSAND);
+      expression();
+      dedent();
+    }
+  }
+
+  while (check(TOKEN_COMMA)) {
+    token(TOKEN_COMMA);
+    end();
+    group();
+    line();
+
+    identifier();
+    if (check(TOKEN_EQUALS)) {
+      space();
+      token(TOKEN_EQUALS);
+      {
+        line_indent();
+        // ("fixed_pointer_initializer", See above.)
+        match(TOKEN_AMPERSAND);
+        expression();
+        dedent();
+      }
+    }
+  }
+  token(TOKEN_SEMICOLON);
+  end();
+  dedent();
+}
+
+static bool check_local_variable_type() {
+  return check_type() || check(TOKEN_KW_VAR);
+}
+
+static void local_variable_type() {
+  if (!match(TOKEN_KW_VAR)) {
+    type();
+  }
+}
+
+static bool check_local_variable_declaration() {
+  return check_local_variable_type() && check_next_identifier();
+}
+
+static void local_variable_declaration() {
+  group();
+  local_variable_type();
+  variable_declarators();
+  end();
+}
+
+static void local_const_declaration() {
+  token(TOKEN_KW_CONST);
+  space();
+  local_variable_declaration();
+}
+
+static void if_statement() {
+  token(TOKEN_KW_IF);
+  space();
+  parenthesized_expression();
+  embedded_statement(/*embedded*/ true);
+}
+
+const static enum TokenType switch_section_end_tokens[] = {
+    TOKEN_KW_CASE,
+    TOKEN_KW_DEFAULT,
+    TOKEN_CLOSEBRACE,
+};
+
+static void case_statement() {
+  token(TOKEN_KW_CASE);
+  space();
+  parenthesized_expression();
+  line();
+  token(TOKEN_OPENBRACE);
+  line();
+  while (check(TOKEN_KW_CASE) || check(TOKEN_KW_DEFAULT)) {
+    if (match(TOKEN_KW_CASE)) {
+      space();
+      {
+        indent();
+        expression();
+        dedent();
+      }
+    } else {
+      token(TOKEN_KW_DEFAULT);
+    }
+    token(TOKEN_COLON);
+    {
+      line_indent();
+      bool first = true;
+      while (!check_any(switch_section_end_tokens,
+                        ARRAY_SIZE(switch_section_end_tokens))) {
+        if (!first) {
+          line();
+        }
+        first = false;
+        statement();
+      }
+      dedent();
+    }
+    line();
+  }
+  token(TOKEN_CLOSEBRACE);
+}
+
+static void while_statement() {
+  token(TOKEN_KW_WHILE);
+  space();
+  parenthesized_expression();
+  embedded_statement(/*embedded*/ true);
+}
+
+static void do_statement() {
+  token(TOKEN_KW_DO);
+  embedded_statement(/*embedded*/ true);
+  line();
+  token(TOKEN_KW_WHILE);
+  space();
+  parenthesized_expression();
+  token(TOKEN_SEMICOLON);
+}
+
+static void statement_expression_list() {
+  expression();
+  while (match(TOKEN_COMMA)) {
+    line();
+    expression();
+  }
+}
+
+static void for_initializer() {
+  if (check_local_variable_declaration()) {
+    local_variable_declaration();
+  } else {
+    statement_expression_list();
+  }
+}
+static void for_condition() { expression(); }
+static void for_iterator() { statement_expression_list(); }
+
+static void for_statement() {
+  token(TOKEN_KW_FOR);
+  space();
+  {
+    group();
+    token(TOKEN_OPENPAREN);
+    {
+      softline_indent();
+      for_initializer();
+
+      token(TOKEN_SEMICOLON);
+      line();
+
+      for_condition();
+
+      token(TOKEN_SEMICOLON);
+      line();
+
+      for_iterator();
+      dedent();
+    }
+    softline();
+    token(TOKEN_CLOSEPAREN);
+    end();
+  }
+  embedded_statement(/*embedded*/ true);
+}
+
+static void foreach_statement() {
+  token(TOKEN_KW_FOREACH);
+  space();
+  {
+    group();
+    token(TOKEN_OPENPAREN);
+    {
+      softline_indent();
+      local_variable_type();
+      space();
+      identifier();
+      space();
+      token(TOKEN_KW_IN);
+      line();
+      expression();
+      dedent();
+    }
+    softline();
+    token(TOKEN_CLOSEPAREN);
+    end();
+  }
+  embedded_statement(/*embedded*/ true);
+}
+
+static void goto_statement() {
+  token(TOKEN_KW_GOTO);
+  space();
+  if (match(TOKEN_KW_CASE)) {
+    space();
+    identifier();
+  } else if (!match(TOKEN_KW_DEFAULT)) {
+    identifier();
+  }
+  token(TOKEN_SEMICOLON);
+}
+
+static void return_statement() {
+  token(TOKEN_KW_RETURN);
+  if (!check(TOKEN_SEMICOLON)) {
+    space();
+    expression();
+  }
+  token(TOKEN_SEMICOLON);
+}
+
+static void throw_statement() {
+  token(TOKEN_KW_THROW);
+  if (!check(TOKEN_SEMICOLON)) {
+    space();
+    expression();
+  }
+  token(TOKEN_SEMICOLON);
+}
+
+static void try_statement() {
+  token(TOKEN_KW_TRY);
+  line();
+  block();
+  while (check(TOKEN_KW_CATCH)) {
+    line();
+    {
+      group();
+      token(TOKEN_KW_CATCH);
+      space();
+      token(TOKEN_OPENPAREN);
+      type();
+      if (check_identifier()) {
+        space();
+        identifier();
+      }
+      token(TOKEN_CLOSEPAREN);
+
+      if (check(TOKEN_KW_WHEN)) {
+        line_indent();
+        token(TOKEN_KW_WHEN);
+        space();
+        parenthesized_expression();
+        dedent();
+      }
+      end();
+    }
+    line();
+    block();
+  }
+  if (check(TOKEN_KW_FINALLY)) {
+    token(TOKEN_KW_FINALLY);
+    line();
+    block();
+  }
+}
+
+static void checked_statement() {
+  token(TOKEN_KW_CHECKED);
+  line();
+  block();
+}
+
+static void unchecked_statement() {
+  token(TOKEN_KW_UNCHECKED);
+  line();
+  block();
+}
+
+static void lock_statement() {
+  token(TOKEN_KW_LOCK);
+  space();
+  parenthesized_expression();
+  embedded_statement(/*embedded*/ true);
+}
+
+static void using_statement() {
+  token(TOKEN_KW_USING);
+  space();
+  {
+    group();
+    token(TOKEN_OPENPAREN);
+    {
+      softline_indent();
+      if (check_local_variable_declaration()) {
+        local_variable_declaration();
+      } else {
+        expression();
+      }
+      dedent();
+    }
+    softline();
+    token(TOKEN_CLOSEPAREN);
+    end();
+  }
+  embedded_statement(/*embedded*/ true);
+}
+
+static void yield_statement() {
+  group();
+  token(TOKEN_KW_YIELD);
+  space();
+  if (!match(TOKEN_KW_BREAK)) {
+    token(TOKEN_KW_RETURN);
+    {
+      line_indent();
+      expression();
+      dedent();
+    }
+  }
+  token(TOKEN_SEMICOLON);
+  end();
+}
+
+static void unsafe_statement() {
+  token(TOKEN_KW_UNSAFE);
+  line();
+  block();
+}
+
+static void fixed_statement() {
+  token(TOKEN_KW_FIXED);
+  space();
+  {
+    group();
+    token(TOKEN_OPENPAREN);
+    {
+      softline_indent();
+      // N.B.: According to the spec this must be a pointer type and cannot use
+      // 'var', but meh.
+      local_variable_declaration();
+      dedent();
+    }
+    softline();
+    token(TOKEN_CLOSEPAREN);
+    end();
+  }
+  embedded_statement(/*embedded*/ true);
+}
+
+// Pass 'true' for embedded if this is a true embedded statement: it controls
+// whitespace and indentation. In particular, blocks are indented differently
+// than everything else. Returns 'true' if it matched a block, otherwise
+// 'false', so that we can consume optional semicolons properly.
+static void embedded_statement(bool embedded) {
+  if (check(TOKEN_OPENBRACE)) {
+    if (embedded) {
+      line();
+    }
+    block();
+  } else {
+    if (embedded) {
+      line_indent();
+    }
+    if (!match(TOKEN_SEMICOLON)) {
+      switch (parser.current.type) {
+      case TOKEN_KW_IF:
+        if_statement();
+        break;
+      case TOKEN_KW_CASE:
+        case_statement();
+        break;
+      case TOKEN_KW_WHILE:
+        while_statement();
+        break;
+      case TOKEN_KW_DO:
+        do_statement();
+        break;
+      case TOKEN_KW_FOR:
+        for_statement();
+        break;
+      case TOKEN_KW_FOREACH:
+        foreach_statement();
+        break;
+
+      case TOKEN_KW_BREAK:
+      case TOKEN_KW_CONTINUE:
+        single_token();
+        token(TOKEN_SEMICOLON);
+        break;
+
+      case TOKEN_KW_GOTO:
+        goto_statement();
+        break;
+
+      case TOKEN_KW_RETURN:
+        return_statement();
+        break;
+
+      case TOKEN_KW_THROW:
+        throw_statement();
+        break;
+
+      case TOKEN_KW_TRY:
+        try_statement();
+        break;
+
+      case TOKEN_KW_CHECKED:
+        checked_statement();
+        break;
+
+      case TOKEN_KW_UNCHECKED:
+        unchecked_statement();
+        break;
+
+      case TOKEN_KW_LOCK:
+        lock_statement();
+        break;
+
+      case TOKEN_KW_USING:
+        using_statement();
+        break;
+
+      case TOKEN_KW_YIELD:
+        yield_statement();
+        break;
+
+      case TOKEN_KW_UNSAFE:
+        unsafe_statement();
+        break;
+
+      case TOKEN_KW_FIXED:
+        fixed_statement();
+        break;
+
+      default:
+        expression();
+        token(TOKEN_SEMICOLON);
+        break;
+      }
+    }
+
+    if (embedded) {
+      dedent();
+    }
+  }
+}
+
+static void statement() {
+  // Label.
+  if (check_identifier() && check_next(TOKEN_COLON)) {
+    dedent();
+    identifier();
+    token(TOKEN_COLON);
+    line_indent();
+  }
+
+  // Declaration?
+  if (check_local_variable_declaration()) {
+    local_variable_declaration();
+  } else if (check(TOKEN_KW_CONST)) {
+    local_const_declaration();
+  } else {
+    embedded_statement(/*embedded*/ false);
+  }
 }
 
 // ============================================================================
@@ -507,17 +1007,14 @@ static void attribute_name() { type_name(); }
 static void attribute_arguments() {
   token(TOKEN_OPENPAREN);
   {
-    indent();
-    softline();
-
+    softline_indent();
     while (!check(TOKEN_CLOSEPAREN) && !check(TOKEN_EOF)) {
       group();
       bool indented = false;
       if (check_name_equals()) {
         name_equals();
 
-        indent();
-        line();
+        line_indent();
         indented = true;
       }
 
@@ -528,7 +1025,6 @@ static void attribute_arguments() {
       }
       end();
     }
-
     dedent();
   }
   softline();
@@ -554,9 +1050,7 @@ static void attribute_section() {
   group();
   token(TOKEN_OPENBRACKET);
   {
-    indent();
-    softline();
-
+    softline_indent();
     if (check(TOKEN_IDENTIFIER) && check_next(TOKEN_COLON)) {
       identifier();
       token(TOKEN_COLON);
@@ -564,7 +1058,6 @@ static void attribute_section() {
     }
 
     attribute_list();
-
     dedent();
   }
   softline();
@@ -638,9 +1131,7 @@ static void const_declaration() {
     space();
     type();
     {
-      indent();
-      line();
-
+      line_indent();
       bool first = true;
       while (check_identifier() || check(TOKEN_COMMA)) {
         if (!first) {
@@ -653,8 +1144,7 @@ static void const_declaration() {
         space();
         token(TOKEN_EQUALS);
         {
-          indent();
-          line();
+          line_indent();
           expression();
           dedent();
         }
@@ -667,32 +1157,16 @@ static void const_declaration() {
   }
 }
 
-static void variable_declarators() {
-  bool first = true;
-  while (check_identifier() || check(TOKEN_COMMA)) {
-    if (!first) {
-      token(TOKEN_COMMA);
-      line();
-    }
-    first = false;
-
-    identifier();
-    if (check(TOKEN_EQUALS)) {
-      space();
-      token(TOKEN_EQUALS);
-      {
-        indent();
-        line();
-        expression();
-        dedent();
-      }
-    }
-  }
-}
-
 static void field_declaration() {
-  notimplemented("Not Implemented: Field");
-  advance();
+  attributes();
+  declaration_modifiers();
+
+  {
+    group();
+    type();
+    variable_declarators();
+    end();
+  }
 }
 
 static void return_type() {
@@ -713,11 +1187,10 @@ static bool check_formal_parameter() {
 }
 
 static void formal_parameter_list() {
+  group();
   token(TOKEN_OPENPAREN);
   {
-    indent();
-    softline();
-
+    softline_indent();
     bool first = true;
     while (check_formal_parameter()) {
       if (!first) {
@@ -753,6 +1226,7 @@ static void formal_parameter_list() {
     dedent();
   }
   token(TOKEN_CLOSEPAREN);
+  end();
 }
 
 static void type_constraint() {
@@ -768,9 +1242,7 @@ static void optional_type_parameter_list() {
   group();
   if (match(TOKEN_LESSTHAN)) {
     {
-      indent();
-      softline();
-
+      softline_indent();
       attributes();
       if (match(TOKEN_KW_IN) || match(TOKEN_KW_OUT)) {
         space();
@@ -800,8 +1272,7 @@ static void type_parameter_constraint() {
   identifier();
   token(TOKEN_COLON);
   {
-    indent();
-    line();
+    line_indent();
     type_constraint();
     while (match(TOKEN_COMMA)) {
       line();
@@ -855,20 +1326,17 @@ static void method_declaration() {
   formal_parameter_list();
 
   if (check(TOKEN_KW_WHERE)) {
-    indent();
-    line();
+    line_indent();
     type_parameter_constraint_clauses();
     dedent();
   }
 
   if (!match(TOKEN_SEMICOLON)) {
     if (check(TOKEN_EQUALS_GREATERTHAN)) {
-      indent();
-      line();
+      line_indent();
       token(TOKEN_EQUALS_GREATERTHAN);
       {
-        indent();
-        line();
+        line_indent();
         expression();
         token(TOKEN_SEMICOLON);
         dedent();
@@ -911,8 +1379,7 @@ static void property_declaration() {
     space();
     token(TOKEN_EQUALS_GREATERTHAN);
     {
-      indent();
-      line();
+      line_indent();
       expression();
       token(TOKEN_SEMICOLON);
       dedent();
@@ -921,8 +1388,7 @@ static void property_declaration() {
     line();
     token(TOKEN_OPENBRACE);
     {
-      indent();
-      line();
+      line_indent();
 
       // accessor_declarations
       while (check_accessor()) {
@@ -952,11 +1418,12 @@ static void property_declaration() {
 
       space();
       token(TOKEN_EQUALS);
-      indent();
-      line();
-      expression();
-      token(TOKEN_SEMICOLON);
-
+      {
+        line_indent();
+        expression();
+        token(TOKEN_SEMICOLON);
+        dedent();
+      }
       end();
     }
   }
@@ -981,9 +1448,7 @@ static void event_declaration() {
       line();
       token(TOKEN_OPENBRACE);
       {
-        indent();
-        line();
-
+        line_indent();
         while (check(TOKEN_KW_ADD) || check(TOKEN_KW_REMOVE) ||
                check(TOKEN_OPENBRACKET)) {
           attributes();
@@ -1003,12 +1468,7 @@ static void event_declaration() {
       }
       token(TOKEN_CLOSEBRACE);
     } else {
-      {
-        indent();
-        line();
-        variable_declarators();
-        dedent();
-      }
+      variable_declarators();
       token(TOKEN_SEMICOLON);
     }
 
@@ -1204,21 +1664,26 @@ static void class_declaration() {
   optional_type_parameter_list();
 
   if (check(TOKEN_COLON)) {
-    indent();
-    line();
+    line_indent();
     base_types();
     dedent();
   }
 
   if (check(TOKEN_KW_WHERE)) {
-    indent();
-    line();
+    line_indent();
     type_parameter_constraint_clauses();
     dedent();
   }
 
-  notimplemented("Not Implemented: Class Declaration");
-
+  line();
+  token(TOKEN_OPENBRACE);
+  {
+    line_indent();
+    member_declarations();
+    dedent();
+  }
+  line();
+  token(TOKEN_CLOSEBRACE);
   match(TOKEN_SEMICOLON);
 }
 
@@ -1229,21 +1694,26 @@ static void struct_declaration() {
   optional_type_parameter_list();
 
   if (check(TOKEN_COLON)) {
-    indent();
-    line();
+    line_indent();
     base_types();
     dedent();
   }
 
   if (check(TOKEN_KW_WHERE)) {
-    indent();
-    line();
+    line_indent();
     type_parameter_constraint_clauses();
     dedent();
   }
 
-  notimplemented("Not Implemented: Struct Declaration");
-
+  line();
+  token(TOKEN_OPENBRACE);
+  {
+    line_indent();
+    member_declarations();
+    dedent();
+  }
+  line();
+  token(TOKEN_CLOSEBRACE);
   match(TOKEN_SEMICOLON);
 }
 
@@ -1254,15 +1724,13 @@ static void interface_declaration() {
   optional_type_parameter_list();
 
   if (check(TOKEN_COLON)) {
-    indent();
-    line();
+    line_indent();
     base_types();
     dedent();
   }
 
   if (check(TOKEN_KW_WHERE)) {
-    indent();
-    line();
+    line_indent();
     type_parameter_constraint_clauses();
     dedent();
   }
@@ -1270,11 +1738,8 @@ static void interface_declaration() {
   line();
   token(TOKEN_OPENBRACE);
   {
-    indent();
-    line();
-
+    line_indent();
     member_declarations();
-
     dedent();
   }
   line();
@@ -1288,8 +1753,7 @@ static void enum_declaration() {
   identifier();
 
   if (check(TOKEN_COLON)) {
-    indent();
-    line();
+    line_indent();
     type();
     dedent();
   }
@@ -1297,8 +1761,7 @@ static void enum_declaration() {
   line();
   token(TOKEN_OPENBRACE);
   {
-    indent();
-    line();
+    line_indent();
 
     bool first = true;
     while (check(TOKEN_OPENBRACKET) || check_identifier() ||
@@ -1313,10 +1776,11 @@ static void enum_declaration() {
       if (check(TOKEN_EQUALS)) {
         space();
         token(TOKEN_EQUALS);
-        indent();
-        line();
-        expression();
-        dedent();
+        {
+          line_indent();
+          expression();
+          dedent();
+        }
       }
     }
 
@@ -1339,8 +1803,7 @@ static void delegate_declaration() {
   formal_parameter_list();
 
   if (check(TOKEN_KW_WHERE)) {
-    indent();
-    line();
+    line_indent();
     type_parameter_constraint_clauses();
     dedent();
   }
@@ -1437,8 +1900,7 @@ static void using_directive() {
     name_equals();
 
     indented = true;
-    indent();
-    line();
+    line_indent();
   }
 
   namespace_or_type_name();
@@ -1509,15 +1971,12 @@ static void namespace_declaration() {
   token(TOKEN_OPENBRACE);
 
   {
-    indent();
-    line();
-
+    line_indent();
     namespace_body();
-
     dedent();
-    line();
   }
 
+  line();
   token(TOKEN_CLOSEBRACE);
   match(TOKEN_SEMICOLON);
 }
