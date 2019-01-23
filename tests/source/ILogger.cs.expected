@@ -1,5 +1,6 @@
 using System;
 using System.ComponentModel;
+
 namespace NLog.Interface
 {
     /// <summary>
@@ -15,48 +16,48 @@ namespace NLog.Interface
         /// <summary>
         /// Gets the name of the logger.
         /// </summary>
-        string Name { get ; }
+        string Name { get; }
 
         /// <summary>
         /// Gets the factory that created this logger.
         /// </summary>
-        LogFactory Factory { get ; }
+        LogFactory Factory { get; }
 
         /// <summary>
         /// Gets a value indicating whether logging is enabled for the <c>Trace</c> level.
         /// </summary>
         /// <returns>A value of <see langword="true" /> if logging is enabled for the <c>Trace</c> level, otherwise it returns <see langword="false" />.</returns>
-        bool IsTraceEnabled { get ; }
+        bool IsTraceEnabled { get; }
 
         /// <summary>
         /// Gets a value indicating whether logging is enabled for the <c>Debug</c> level.
         /// </summary>
         /// <returns>A value of <see langword="true" /> if logging is enabled for the <c>Debug</c> level, otherwise it returns <see langword="false" />.</returns>
-        bool IsDebugEnabled { get ; }
+        bool IsDebugEnabled { get; }
 
         /// <summary>
         /// Gets a value indicating whether logging is enabled for the <c>Info</c> level.
         /// </summary>
         /// <returns>A value of <see langword="true" /> if logging is enabled for the <c>Info</c> level, otherwise it returns <see langword="false" />.</returns>
-        bool IsInfoEnabled { get ; }
+        bool IsInfoEnabled { get; }
 
         /// <summary>
         /// Gets a value indicating whether logging is enabled for the <c>Warn</c> level.
         /// </summary>
         /// <returns>A value of <see langword="true" /> if logging is enabled for the <c>Warn</c> level, otherwise it returns <see langword="false" />.</returns>
-        bool IsWarnEnabled { get ; }
+        bool IsWarnEnabled { get; }
 
         /// <summary>
         /// Gets a value indicating whether logging is enabled for the <c>Error</c> level.
         /// </summary>
         /// <returns>A value of <see langword="true" /> if logging is enabled for the <c>Error</c> level, otherwise it returns <see langword="false" />.</returns>
-        bool IsErrorEnabled { get ; }
+        bool IsErrorEnabled { get; }
 
         /// <summary>
         /// Gets a value indicating whether logging is enabled for the <c>Fatal</c> level.
         /// </summary>
         /// <returns>A value of <see langword="true" /> if logging is enabled for the <c>Fatal</c> level, otherwise it returns <see langword="false" />.</returns>
-        bool IsFatalEnabled { get ; }
+        bool IsFatalEnabled { get; }
 
         /// <summary>
         /// Gets a value indicating whether logging is enabled for the specified level.
@@ -244,9 +245,9 @@ namespace NLog.Interface
             TArgument3 argument3);
 
         /// <summary>
-		/// Writes the diagnostic message and exception at the <c>Trace</c> level.
-		/// </summary>
-		/// <param name="message">A <see langword="string"/> to be written.</param><param name="exception">An exception to be logged.</param>
+        /// Writes the diagnostic message and exception at the <c>Trace</c> level.
+        /// </summary>
+        /// <param name="message">A <see langword="string"/> to be written.</param><param name="exception">An exception to be logged.</param>
         void TraceException(
             [Localizable(false)] string message,
             Exception exception);
@@ -391,9 +392,9 @@ namespace NLog.Interface
             TArgument3 argument3);
 
         /// <summary>
-		/// Writes the diagnostic message and exception at the <c>Debug</c> level.
-		/// </summary>
-		/// <param name="message">A <see langword="string"/> to be written.</param><param name="exception">An exception to be logged.</param>
+        /// Writes the diagnostic message and exception at the <c>Debug</c> level.
+        /// </summary>
+        /// <param name="message">A <see langword="string"/> to be written.</param><param name="exception">An exception to be logged.</param>
         void DebugException(
             [Localizable(false)] string message,
             Exception exception);
@@ -538,9 +539,9 @@ namespace NLog.Interface
             TArgument3 argument3);
 
         /// <summary>
-		/// Writes the diagnostic message and exception at the <c>Info</c> level.
-		/// </summary>
-		/// <param name="message">A <see langword="string"/> to be written.</param><param name="exception">An exception to be logged.</param>
+        /// Writes the diagnostic message and exception at the <c>Info</c> level.
+        /// </summary>
+        /// <param name="message">A <see langword="string"/> to be written.</param><param name="exception">An exception to be logged.</param>
         void InfoException(
             [Localizable(false)] string message,
             Exception exception);
@@ -685,9 +686,9 @@ namespace NLog.Interface
             TArgument3 argument3);
 
         /// <summary>
-		/// Writes the diagnostic message and exception at the <c>Warn</c> level.
-		/// </summary>
-		/// <param name="message">A <see langword="string"/> to be written.</param><param name="exception">An exception to be logged.</param>
+        /// Writes the diagnostic message and exception at the <c>Warn</c> level.
+        /// </summary>
+        /// <param name="message">A <see langword="string"/> to be written.</param><param name="exception">An exception to be logged.</param>
         void WarnException(
             [Localizable(false)] string message,
             Exception exception);
@@ -832,9 +833,9 @@ namespace NLog.Interface
             TArgument3 argument3);
 
         /// <summary>
-		/// Writes the diagnostic message and exception at the <c>Error</c> level.
-		/// </summary>
-		/// <param name="message">A <see langword="string"/> to be written.</param><param name="exception">An exception to be logged.</param>
+        /// Writes the diagnostic message and exception at the <c>Error</c> level.
+        /// </summary>
+        /// <param name="message">A <see langword="string"/> to be written.</param><param name="exception">An exception to be logged.</param>
         void ErrorException(
             [Localizable(false)] string message,
             Exception exception);
@@ -979,9 +980,9 @@ namespace NLog.Interface
             TArgument3 argument3);
 
         /// <summary>
-		/// Writes the diagnostic message and exception at the <c>Fatal</c> level.
-		/// </summary>
-		/// <param name="message">A <see langword="string"/> to be written.</param><param name="exception">An exception to be logged.</param>
+        /// Writes the diagnostic message and exception at the <c>Fatal</c> level.
+        /// </summary>
+        /// <param name="message">A <see langword="string"/> to be written.</param><param name="exception">An exception to be logged.</param>
         void FatalException(
             [Localizable(false)] string message,
             Exception exception);

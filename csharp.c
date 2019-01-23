@@ -1538,6 +1538,8 @@ bool format_csharp(struct DocBuilder *builder, const char *source) {
   advance();
 
   compilation_unit();
+  line();
+
   token(TOKEN_EOF);
 
   return !parser.had_error;
