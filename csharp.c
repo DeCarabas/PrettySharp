@@ -549,17 +549,19 @@ static void embedded_statement(bool embedded);
 
 static void block() {
   token(TOKEN_OPENBRACE);
+  if (check(TOKEN_CLOSEBRACE)) {
+    space();
+    token(TOKEN_CLOSEBRACE);
+    return;
+  }
+
+  // There *is* a body of some kind.
+  breakparent();
   {
     softline_indent();
-    bool first = true;
+    statement();
     while (!(check(TOKEN_CLOSEBRACE) || check(TOKEN_EOF))) {
-      if (first) {
-        breakparent();
-      } else {
-        line();
-      }
-      first = false;
-
+      line();
       statement();
     }
     dedent();
@@ -1363,29 +1365,36 @@ static void member_name() {
 static void method_declaration() {
   // method header
   attributes();
-  declaration_modifiers();
-
-  group();
-
-  if (match(TOKEN_KW_PARTIAL)) {
-    line();
-  }
 
   {
     group();
-    return_type();
-    line();
-    member_name();
+    {
+      group();
+      declaration_modifiers();
+      if (match(TOKEN_KW_PARTIAL)) {
+        line();
+      }
+
+      {
+        group();
+        return_type();
+        line();
+        member_name();
+        end();
+      }
+
+      optional_type_parameter_list();
+      end();
+    }
+
+    formal_parameter_list();
+
+    if (check(TOKEN_KW_WHERE)) {
+      line_indent();
+      type_parameter_constraint_clauses();
+      dedent();
+    }
     end();
-  }
-
-  optional_type_parameter_list();
-  formal_parameter_list();
-
-  if (check(TOKEN_KW_WHERE)) {
-    line_indent();
-    type_parameter_constraint_clauses();
-    dedent();
   }
 
   if (!match(TOKEN_SEMICOLON)) {
@@ -1404,8 +1413,6 @@ static void method_declaration() {
       block();
     }
   }
-
-  end();
 }
 
 const static enum TokenType accessor_modifiers[] = {
