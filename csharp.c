@@ -340,21 +340,39 @@ static bool check_type() {
   return check_any(builtin_type_tokens, ARRAY_SIZE(builtin_type_tokens)) ||
          check_identifier();
 }
-static void type() {
+
+static void non_array_type() {
   if (!match_any(builtin_type_tokens, ARRAY_SIZE(builtin_type_tokens))) {
     type_name();
   }
+
+  while (check(TOKEN_QUESTION) || check(TOKEN_ASTERISK)) {
+    // Nullable.
+    match(TOKEN_QUESTION);
+
+    // Pointer.
+    match(TOKEN_ASTERISK);
+  }
+}
+
+static void rank_specifier() {
+  token(TOKEN_OPENBRACKET);
+  while (match(TOKEN_COMMA)) {
+    ;
+  }
+  token(TOKEN_CLOSEBRACKET);
+}
+
+static void type() {
+  non_array_type();
 
   // Handle all the stuff at the end....
   while (check(TOKEN_OPENBRACKET) || check(TOKEN_QUESTION) ||
          check(TOKEN_ASTERISK)) {
 
     // Array ranks.
-    if (match(TOKEN_OPENBRACKET)) {
-      while (match(TOKEN_COMMA)) {
-        ;
-      }
-      token(TOKEN_CLOSEBRACKET);
+    if (check(TOKEN_OPENBRACKET)) {
+      rank_specifier();
     }
 
     // Nullable.
@@ -450,7 +468,7 @@ static void grouping() {
   parenthesized_expression();
 }
 
-static void invocation() {
+static void argument_list() {
   group();
   token(TOKEN_OPENPAREN);
   {
@@ -487,12 +505,111 @@ static void invocation() {
   end();
 }
 
+static void invocation() { argument_list(); }
+
 static void unary_prefix() {
   single_token();
   expression();
 }
 
 // TODO: UNARY!
+
+static void array_initializer() {
+  group();
+  token(TOKEN_OPENBRACE);
+  if (check(TOKEN_CLOSEBRACE)) {
+    space();
+  } else {
+    softline_indent();
+    group();
+    if (check(TOKEN_OPENBRACE)) {
+      array_initializer();
+    } else {
+      expression();
+    }
+
+    while (check(TOKEN_COMMA)) {
+      token(TOKEN_COMMA);
+      end();
+
+      line();
+
+      group();
+      if (check(TOKEN_OPENBRACE)) {
+        array_initializer();
+      } else {
+        expression();
+      }
+    }
+    end();
+    dedent();
+  }
+  token(TOKEN_CLOSEBRACE);
+  end();
+}
+
+static void object_initializer() {
+  token(TOKEN_OPENBRACE);
+  if (!check(TOKEN_CLOSEBRACE)) {
+    notimplemented("Object stuff.");
+  }
+  token(TOKEN_CLOSEBRACE);
+}
+
+static void object_creation() {
+  token(TOKEN_KW_NEW);
+
+  bool had_type = false;
+  if (check_type()) {
+    space();
+    non_array_type();
+    had_type = true;
+  }
+
+  if (check(TOKEN_OPENPAREN)) {
+    // Object or delegate creation.
+    argument_list();
+
+    if (check(TOKEN_OPENBRACE)) {
+      line();
+      object_initializer();
+    }
+  } else if (check(TOKEN_OPENBRACKET)) {
+    // Array creation.
+    if (!check_next(TOKEN_COMMA)) {
+      token(TOKEN_OPENBRACKET);
+      {
+        softline_indent();
+        group();
+        expression();
+        while (check(TOKEN_COMMA)) {
+          token(TOKEN_COMMA);
+          end();
+
+          line();
+
+          group();
+          expression();
+        }
+        end();
+        dedent();
+      }
+      token(TOKEN_CLOSEBRACKET);
+    }
+
+    while (check(TOKEN_OPENBRACKET)) {
+      rank_specifier();
+    }
+
+    if (check(TOKEN_OPENBRACE)) {
+      line();
+      array_initializer();
+    }
+  } else if (had_type) {
+    line();
+    object_initializer();
+  }
+}
 
 static void query_expression() {
   notimplemented("Not Implemented: query_expression ('from')");

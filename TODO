@@ -1,3 +1,12 @@
+- Finish parser
+  - Handle ambiguities?
+    https://docs.microsoft.com/en-us/dotnet/csharp/language-reference/language-specification/expressions#grammar-ambiguities
+
+- Error Handling:
+  - Remove 'exit'
+  - Add stuck detector
+  - Add "production context" to error reporter
+
 - Trivia
     See [empty lines](https://prettier.io/docs/en/rationale.html#empty-lines)
 - Fix variable declarations with long types and long initializers (see `VisitVariableDeclaration`)
