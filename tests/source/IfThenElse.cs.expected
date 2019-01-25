@@ -1,12 +1,18 @@
-if (a)
+class T
 {
-    b();
-}
-else if (c)
-{
-    d();
-}
-else
-{
-    e();
+    int V()
+    {
+        if (a)
+        {
+            b();
+        }
+        else if (c)
+        {
+            d();
+        }
+        else
+        {
+            e();
+        }
+    }
 }

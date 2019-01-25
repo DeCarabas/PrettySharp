@@ -418,6 +418,11 @@ static void parse_precedence(enum Precedence precedence) {
 
   while (precedence <= get_rule(parser.current.type)->precedence) {
     ParseFn infix_rule = get_rule(parser.current.type)->infix;
+    if (infix_rule == NULL) {
+      fprintf(stderr, "OH NO: tok: %s prec: %d tok_prec %d\n",
+              token_text(parser.current.type), precedence,
+              get_rule(parser.current.type)->precedence);
+    }
     infix_rule();
   }
   end();
@@ -443,6 +448,43 @@ static void parenthesized_expression() {
 static void grouping() {
   // TODO: CASTING??? What if.... what..... hm.
   parenthesized_expression();
+}
+
+static void invocation() {
+  group();
+  token(TOKEN_OPENPAREN);
+  {
+    softline_indent();
+    if (!check(TOKEN_CLOSEPAREN)) {
+      group();
+      if (check(TOKEN_IDENTIFIER)) {
+        identifier();
+        token(TOKEN_COLON);
+        space();
+      }
+      expression();
+
+      while (check(TOKEN_COMMA)) {
+        token(TOKEN_COMMA);
+        end();
+
+        line();
+
+        group();
+        if (check(TOKEN_IDENTIFIER)) {
+          identifier();
+          token(TOKEN_COLON);
+          space();
+        }
+        expression();
+      }
+      end();
+    }
+    dedent();
+  }
+  softline();
+  token(TOKEN_CLOSEPAREN);
+  end();
 }
 
 static void unary_prefix() {
@@ -602,6 +644,18 @@ static void if_statement() {
   space();
   parenthesized_expression();
   embedded_statement(/*embedded*/ true);
+  while (check(TOKEN_KW_ELSE)) {
+    line();
+    token(TOKEN_KW_ELSE);
+    if (check(TOKEN_KW_IF)) {
+      space();
+      token(TOKEN_KW_IF);
+      space();
+      parenthesized_expression();
+    }
+
+    embedded_statement(/*embedded*/ true);
+  }
 }
 
 const static enum TokenType switch_section_end_tokens[] = {
