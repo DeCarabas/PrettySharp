@@ -436,11 +436,6 @@ static void parse_precedence(enum Precedence precedence) {
 
   while (precedence <= get_rule(parser.current.type)->precedence) {
     ParseFn infix_rule = get_rule(parser.current.type)->infix;
-    if (infix_rule == NULL) {
-      fprintf(stderr, "OH NO: tok: %s prec: %d tok_prec %d\n",
-              token_text(parser.current.type), precedence,
-              get_rule(parser.current.type)->precedence);
-    }
     infix_rule();
   }
   end();
@@ -464,7 +459,9 @@ static void parenthesized_expression() {
 }
 
 static void grouping() {
+
   // TODO: CASTING??? What if.... what..... hm.
+  // TODO: Lambda????
   parenthesized_expression();
 }
 
@@ -569,26 +566,32 @@ static void object_initializer() {
       }
       first = false;
 
-      if (match(TOKEN_OPENBRACKET)) {
-        argument_list_inner();
-        token(TOKEN_CLOSEBRACKET);
+      if (check(TOKEN_OPENBRACE)) {
+        // I'm in a collection initializer and this is an element; it's going to
+        // be an expression list just like in an array initializer.
+        array_initializer();
       } else {
-        // In an object initializer this is technically only allowed to be an
-        // identifier. But in a collection this can be anything. And in an
-        // anonymous object expression this can be 'this.' or 'base.' or several
-        // other interesting forms. And I don't feel like building parsers for
-        // all those distinct forms right now, mainly because they're very
-        // difficult to distinguish from each other, and I can't be bothered.
-        // So. This allows more forms than it technically should, but I'm not
-        // worried.
-        expression();
-      }
-      if (check(TOKEN_EQUALS)) {
-        space();
-        token(TOKEN_EQUALS);
-        line_indent();
-        expression();
-        dedent();
+        if (match(TOKEN_OPENBRACKET)) {
+          argument_list_inner();
+          token(TOKEN_CLOSEBRACKET);
+        } else {
+          // In an object initializer this is technically only allowed to be an
+          // identifier. But in a collection this can be anything. And in an
+          // anonymous object expression this can be 'this.' or 'base.' or
+          // several other interesting forms. And I don't feel like building
+          // parsers for all those distinct forms right now, mainly because
+          // they're very difficult to distinguish from each other, and I can't
+          // be bothered. So. This allows more forms than it technically should,
+          // but I'm not worried.
+          expression();
+        }
+        if (check(TOKEN_EQUALS)) {
+          space();
+          token(TOKEN_EQUALS);
+          line_indent();
+          expression();
+          dedent();
+        }
       }
     }
     end();
@@ -690,6 +693,12 @@ static void binary() {
 
   const struct ParseRule *rule = get_rule(op);
   parse_precedence((enum Precedence)(rule->precedence + 1));
+}
+
+static void member_access() {
+  token(TOKEN_DOT);
+  identifier();
+  optional_type_argument_list();
 }
 
 static void greater_than() {
