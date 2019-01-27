@@ -680,7 +680,7 @@ static void argument_list_inner() {
   softline_indent();
   if (!check(TOKEN_CLOSEPAREN)) {
     group();
-    if (check(TOKEN_IDENTIFIER)) {
+    if (check(TOKEN_IDENTIFIER) && check_next(TOKEN_COLON)) {
       identifier();
       token(TOKEN_COLON);
       space();
@@ -694,7 +694,7 @@ static void argument_list_inner() {
       line();
 
       group();
-      if (check(TOKEN_IDENTIFIER)) {
+      if (check(TOKEN_IDENTIFIER) && check_next(TOKEN_COLON)) {
         identifier();
         token(TOKEN_COLON);
         space();
@@ -747,7 +747,7 @@ static void array_initializer() {
       group();
       if (check(TOKEN_OPENBRACE)) {
         array_initializer();
-      } else {
+      } else if (!check(TOKEN_CLOSEBRACE)) {
         expression();
       }
     }
@@ -781,7 +781,7 @@ static void object_initializer() {
         // I'm in a collection initializer and this is an element; it's going to
         // be an expression list just like in an array initializer.
         array_initializer();
-      } else {
+      } else if (!check(TOKEN_CLOSEBRACE)) {
         if (match(TOKEN_OPENBRACKET)) {
           argument_list_inner();
           token(TOKEN_CLOSEBRACKET);
@@ -1086,6 +1086,9 @@ static void case_statement() {
       }
     } else {
       token(TOKEN_KW_DEFAULT);
+    }
+    if (!check(TOKEN_COLON)) {
+      fprintf(stderr, "*** ZARG\n");
     }
     token(TOKEN_COLON);
     {
