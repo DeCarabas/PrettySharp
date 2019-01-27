@@ -187,15 +187,15 @@ static void advance() {
   }
 }
 
-static struct Token next_significant_token() {
-  struct Token token = parser.current;
-  int index = parser.index;
+static struct Token next_significant_token(int *index) {
+  int cursor = *index;
+  struct Token token = parser.buffer.tokens[*index];
   for (;;) {
-    if (index == parser.buffer.count) {
+    if (cursor == parser.buffer.count) {
       break;
     }
-    token = parser.buffer.tokens[index];
-    index += 1;
+    token = parser.buffer.tokens[cursor];
+    cursor += 1;
 
     // N.B.: This logic here mirrors the logic in 'advance' with regards to
     // skipping trivia and errors.
@@ -210,16 +210,19 @@ static struct Token next_significant_token() {
       break;
     }
   }
+  *index = cursor;
   return token;
 }
 
 static bool check_next(enum TokenType type) {
-  struct Token token = next_significant_token();
+  int i = parser.index;
+  struct Token token = next_significant_token(&i);
   return token.type == type;
 }
 
 static bool check_next_identifier() {
-  struct Token token = next_significant_token();
+  int i = parser.index;
+  struct Token token = next_significant_token(&i);
   return is_identifier_token(token.type);
 }
 
@@ -236,21 +239,20 @@ static void token(enum TokenType type) {
   }
 }
 
-static bool check(enum TokenType type) {
-  bool result = parser.current.type == type;
-  debug("check: %d (%s) vs %d (%s) => %s", parser.current.type,
-        token_text(parser.current.type), type, token_text(type),
-        result ? "true" : "false");
-  return result;
-}
+static bool check(enum TokenType type) { return parser.current.type == type; }
 
-static bool check_any(const enum TokenType *types, int count) {
+static bool check_is_any(enum TokenType type, const enum TokenType *types,
+                         int count) {
   for (int i = 0; i < count; i++) {
-    if (check(types[i])) {
+    if (type == types[i]) {
       return true;
     }
   }
   return false;
+}
+
+static bool check_any(const enum TokenType *types, int count) {
+  return check_is_any(parser.current.type, types, count);
 }
 
 static bool match(enum TokenType type) {
@@ -458,11 +460,220 @@ static void parenthesized_expression() {
   end();
 }
 
-static void grouping() {
+static bool check_parenthesized_implicitly_typed_lambda() {
+  // Case 1: ( x ,
+  // Case 2: ( x ) =>
+  // Case 3: ( ) =>
+  if (parser.current.type != TOKEN_OPENPAREN) {
+    return false;
+  }
 
-  // TODO: CASTING??? What if.... what..... hm.
-  // TODO: Lambda????
-  parenthesized_expression();
+  int index = parser.index;
+  struct Token token = next_significant_token(&index);
+  if (is_identifier_token(token.type)) {
+    token = next_significant_token(&index);
+    if (token.type == TOKEN_COMMA) {
+      return true; // 1
+    } else if (token.type == TOKEN_CLOSEPAREN) {
+      token = next_significant_token(&index);
+      if (token.type == TOKEN_EQUALS_GREATERTHAN) {
+        return true; // 2
+      }
+    }
+  } else if (token.type == TOKEN_CLOSEPAREN) {
+    token = next_significant_token(&index);
+    if (token.type == TOKEN_EQUALS_GREATERTHAN) {
+      return true; // 3
+    }
+  }
+
+  return false;
+}
+
+static void block();
+
+static void parenthesized_implicitly_typed_lambda() {
+  group();
+  {
+    group();
+    token(TOKEN_OPENPAREN);
+    if (check_identifier()) {
+      softline_indent();
+      bool first = true;
+      while (first || check(TOKEN_COMMA)) {
+        if (!first) {
+          token(TOKEN_COMMA);
+          line();
+        }
+        first = false;
+        identifier();
+      }
+      dedent();
+      softline();
+    }
+    token(TOKEN_CLOSEPAREN);
+    end();
+  }
+  space();
+  token(TOKEN_EQUALS_GREATERTHAN);
+  if (check(TOKEN_OPENBRACE)) {
+    space();
+    block();
+  } else {
+    line_indent();
+    group();
+    expression();
+    end();
+    dedent();
+  }
+  group();
+}
+
+static bool check_parenthesized_explicitly_typed_lambda() {
+  // do we have the following:
+  //   case 1: ( T x , ... ) =>
+  //   case 2: ( T x ) =>
+  //   case 3: ( out T x,
+  //   case 4: ( ref T x,
+  //   case 5: ( out T x ) =>
+  //   case 6: ( ref T x ) =>
+  //   case 7: ( in T x ) =>
+  //
+  // if so then parse it as a lambda
+
+  // Note: in the first two cases, we cannot distinguish a lambda from a tuple
+  // expression containing declaration expressions, so we scan forwards to the
+  // `=>` so we know for sure.
+  return false;
+}
+
+static void parenthesized_explicitly_typed_lambda() {
+  notimplemented("Not Implemented: Parenthesized explicitly typed lambda");
+}
+
+const static enum TokenType cannot_follow_cast_tokens[] = {
+    TOKEN_KW_AS,
+    TOKEN_KW_IS,
+    TOKEN_SEMICOLON,
+    TOKEN_CLOSEPAREN,
+    TOKEN_CLOSEBRACKET,
+    TOKEN_OPENBRACE,
+    TOKEN_CLOSEBRACE,
+    TOKEN_COMMA,
+    TOKEN_EQUALS,
+    TOKEN_PLUS_EQUALS,
+    TOKEN_MINUS_EQUALS,
+    TOKEN_ASTERISK_EQUALS,
+    TOKEN_SLASH_EQUALS,
+    TOKEN_PERCENT_EQUALS,
+    TOKEN_AMPERSAND_EQUALS,
+    TOKEN_CARET_EQUALS,
+    TOKEN_BAR_EQUALS,
+    TOKEN_LESSTHAN_LESSTHAN_EQUALS,
+    TOKEN_QUESTION,
+    TOKEN_COLON,
+    TOKEN_BAR_BAR,
+    TOKEN_AMPERSAND_AMPERSAND,
+    TOKEN_BAR,
+    TOKEN_CARET,
+    TOKEN_AMPERSAND,
+    TOKEN_EQUALS_EQUALS,
+    TOKEN_EXCLAMATION_EQUALS,
+    TOKEN_LESSTHAN,
+    TOKEN_LESSTHAN_EQUALS,
+    TOKEN_GREATERTHAN,
+    TOKEN_GREATERTHAN_EQUALS,
+    TOKEN_QUESTION_QUESTION_EQUALS,
+    TOKEN_LESSTHAN_LESSTHAN,
+    TOKEN_PLUS,
+    TOKEN_MINUS,
+    TOKEN_ASTERISK,
+    TOKEN_SLASH,
+    TOKEN_PERCENT,
+    TOKEN_PLUS_PLUS,
+    TOKEN_MINUS_MINUS,
+    TOKEN_OPENBRACKET,
+    TOKEN_DOT,
+    TOKEN_MINUS_GREATERTHAN,
+    TOKEN_QUESTION_QUESTION,
+    TOKEN_KW_SWITCH,
+    TOKEN_EOF,
+};
+
+static bool check_cast() {
+  // This allows a lot of nonsense but if it makes sense we should provide the
+  // right answer.
+  if (parser.current.type != TOKEN_OPENPAREN) {
+    return false;
+  }
+
+  int balance = 0;
+  int index = parser.index;
+  struct Token token;
+  for (token = next_significant_token(&index); token.type != TOKEN_EOF;
+       token = next_significant_token(&index)) {
+
+    if (check_is_any(token.type, builtin_type_tokens,
+                     ARRAY_SIZE(builtin_type_tokens))) {
+      continue;
+    }
+
+    if (is_identifier_token(token.type)) {
+      continue;
+    }
+
+    if (token.type == TOKEN_DOT) {
+      continue;
+    }
+
+    if (token.type == TOKEN_GREATERTHAN) {
+      balance -= 1;
+      if (balance < 0) {
+        return false;
+      }
+      continue;
+    }
+
+    if (token.type == TOKEN_LESSTHAN) {
+      balance += 1;
+      continue;
+    }
+
+    if (token.type == TOKEN_COMMA) {
+      if (balance == 0) {
+        return false;
+      }
+      continue;
+    }
+
+    if (token.type == TOKEN_CLOSEPAREN) {
+      break;
+    }
+
+    return false;
+  }
+
+  token = next_significant_token(&index);
+  if (check_is_any(token.type, cannot_follow_cast_tokens,
+                   ARRAY_SIZE(cannot_follow_cast_tokens))) {
+    return false;
+  }
+
+  return true;
+}
+
+static void cast() { notimplemented("Not Implemented: cast"); }
+
+static void grouping() {
+  if (check_parenthesized_implicitly_typed_lambda()) {
+    parenthesized_implicitly_typed_lambda();
+  } else if (check_cast()) {
+    cast();
+  } else if (check_parenthesized_explicitly_typed_lambda()) {
+    parenthesized_explicitly_typed_lambda();
+  } else {
+    parenthesized_expression();
+  }
 }
 
 static void argument_list_inner() {
@@ -855,6 +1066,7 @@ const static enum TokenType switch_section_end_tokens[] = {
     TOKEN_KW_CASE,
     TOKEN_KW_DEFAULT,
     TOKEN_CLOSEBRACE,
+    TOKEN_EOF,
 };
 
 static void case_statement() {
@@ -2027,6 +2239,7 @@ static void enum_declaration() {
       }
       first = false;
 
+      // TODO: Attributes here??
       identifier();
       if (check(TOKEN_EQUALS)) {
         space();

@@ -50,7 +50,7 @@ TKN(QUESTION_QUESTION, "??", false, NULL, binary, PREC_NULL_COALESCING)
 TKN(QUESTION_QUESTION_EQUALS, "?\?=", false, NULL, NULL, PREC_NONE)
 TKN(SEMICOLON, ":", false, NULL, NULL, PREC_NONE)
 TKN(SLASH, "/", false, NULL, binary, PREC_MULTIPLICATIVE)
-TKN(SLASH_EQUAL, "/=", false, NULL, binary, PREC_ASSIGNMENT)
+TKN(SLASH_EQUALS, "/=", false, NULL, binary, PREC_ASSIGNMENT)
 TKN(STRING_LITERAL, "string literal", false, primary, NULL, PREC_NONE)
 TKN(TILDE, "~", false, unary_prefix, NULL, PREC_NONE)
 

@@ -384,7 +384,7 @@ static struct Token scan_token() {
     } else if (match('*')) {
       return scan_block_comment();
     }
-    return make_token(match('=') ? TOKEN_SLASH_EQUAL : TOKEN_SLASH);
+    return make_token(match('=') ? TOKEN_SLASH_EQUALS : TOKEN_SLASH);
 
   case '.':
     if (scan_numeric_literal(c)) {
