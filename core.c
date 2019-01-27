@@ -289,6 +289,7 @@ void pretty(FILE *file, int width, struct Doc *docs, int length) {
 void dump_docs(struct Doc *docs, int length) {
   // Haha use ourselves to debug ourselves.
   struct DocBuilder builder = builder_new(16);
+  builder.indent = 2;
 
   struct Doc *it = docs;
   struct Doc *end = docs + length;
@@ -323,6 +324,7 @@ void dump_docs(struct Doc *docs, int length) {
     }
     it++;
   }
+  doc_line(&builder);
 
   pretty(stdout, 80, builder.contents, builder.count);
 }

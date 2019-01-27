@@ -753,6 +753,7 @@ static void array_initializer() {
     }
     end();
     dedent();
+    softline();
   }
   token(TOKEN_CLOSEBRACE);
   end();
