@@ -468,12 +468,23 @@ static void grouping() {
   parenthesized_expression();
 }
 
-static void argument_list() {
-  group();
-  token(TOKEN_OPENPAREN);
-  {
-    softline_indent();
-    if (!check(TOKEN_CLOSEPAREN)) {
+static void argument_list_inner() {
+  softline_indent();
+  if (!check(TOKEN_CLOSEPAREN)) {
+    group();
+    if (check(TOKEN_IDENTIFIER)) {
+      identifier();
+      token(TOKEN_COLON);
+      space();
+    }
+    expression();
+
+    while (check(TOKEN_COMMA)) {
+      token(TOKEN_COMMA);
+      end();
+
+      line();
+
       group();
       if (check(TOKEN_IDENTIFIER)) {
         identifier();
@@ -481,26 +492,17 @@ static void argument_list() {
         space();
       }
       expression();
-
-      while (check(TOKEN_COMMA)) {
-        token(TOKEN_COMMA);
-        end();
-
-        line();
-
-        group();
-        if (check(TOKEN_IDENTIFIER)) {
-          identifier();
-          token(TOKEN_COLON);
-          space();
-        }
-        expression();
-      }
-      end();
     }
-    dedent();
+    end();
   }
+  dedent();
   softline();
+}
+
+static void argument_list() {
+  group();
+  token(TOKEN_OPENPAREN);
+  argument_list_inner();
   token(TOKEN_CLOSEPAREN);
   end();
 }
@@ -549,11 +551,71 @@ static void array_initializer() {
 }
 
 static void object_initializer() {
+  group();
   token(TOKEN_OPENBRACE);
-  if (!check(TOKEN_CLOSEBRACE)) {
-    notimplemented("Object stuff.");
+  if (check(TOKEN_CLOSEBRACE)) {
+    space();
+  } else {
+    group();
+    bool first = true;
+    while (first || check(TOKEN_COMMA)) {
+      if (!first) {
+        token(TOKEN_COMMA);
+        end();
+
+        line();
+
+        group();
+      }
+      first = false;
+
+      if (match(TOKEN_OPENBRACKET)) {
+        argument_list_inner();
+        token(TOKEN_CLOSEBRACKET);
+      } else {
+        // In an object initializer this is technically only allowed to be an
+        // identifier. But in a collection this can be anything. And in an
+        // anonymous object expression this can be 'this.' or 'base.' or several
+        // other interesting forms. And I don't feel like building parsers for
+        // all those distinct forms right now, mainly because they're very
+        // difficult to distinguish from each other, and I can't be bothered.
+        // So. This allows more forms than it technically should, but I'm not
+        // worried.
+        expression();
+      }
+      if (check(TOKEN_EQUALS)) {
+        space();
+        token(TOKEN_EQUALS);
+        line_indent();
+        expression();
+        dedent();
+      }
+    }
+    end();
   }
   token(TOKEN_CLOSEBRACE);
+  end();
+}
+
+static void array_sizes() {
+  token(TOKEN_OPENBRACKET);
+  {
+    softline_indent();
+    group();
+    expression();
+    while (check(TOKEN_COMMA)) {
+      token(TOKEN_COMMA);
+      end();
+
+      line();
+
+      group();
+      expression();
+    }
+    end();
+    dedent();
+  }
+  token(TOKEN_CLOSEBRACKET);
 }
 
 static void object_creation() {
@@ -564,37 +626,40 @@ static void object_creation() {
     space();
     non_array_type();
     had_type = true;
-  }
 
-  if (check(TOKEN_OPENPAREN)) {
-    // Object or delegate creation.
-    argument_list();
+    if (check(TOKEN_OPENPAREN)) {
+      // Object or delegate creation.
+      argument_list();
 
-    if (check(TOKEN_OPENBRACE)) {
+      if (check(TOKEN_OPENBRACE)) {
+        line();
+        object_initializer();
+      }
+    } else if (check(TOKEN_OPENBRACE)) {
       line();
       object_initializer();
-    }
-  } else if (check(TOKEN_OPENBRACKET)) {
-    // Array creation.
-    if (!check_next(TOKEN_COMMA)) {
-      token(TOKEN_OPENBRACKET);
-      {
-        softline_indent();
-        group();
-        expression();
-        while (check(TOKEN_COMMA)) {
-          token(TOKEN_COMMA);
-          end();
-
-          line();
-
-          group();
-          expression();
-        }
-        end();
-        dedent();
+    } else if (check(TOKEN_OPENBRACKET)) {
+      if (!check_next(TOKEN_COMMA)) {
+        array_sizes();
       }
-      token(TOKEN_CLOSEBRACKET);
+
+      while (check(TOKEN_OPENBRACKET)) {
+        rank_specifier();
+      }
+
+      if (check(TOKEN_OPENBRACE)) {
+        line();
+        array_initializer();
+      }
+    } else {
+      error("Expected constructor arguments, array size, or object "
+            "initialization");
+    }
+  } else if (check(TOKEN_OPENBRACE)) {
+    object_initializer();
+  } else if (check(TOKEN_OPENBRACKET)) {
+    if (!check_next(TOKEN_COMMA)) {
+      array_sizes();
     }
 
     while (check(TOKEN_OPENBRACKET)) {
@@ -605,9 +670,9 @@ static void object_creation() {
       line();
       array_initializer();
     }
-  } else if (had_type) {
-    line();
-    object_initializer();
+  } else {
+    error("Expected a type name, array size, or anonymous object "
+          "initialization.");
   }
 }
 
