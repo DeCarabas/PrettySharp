@@ -425,7 +425,6 @@ struct ParseRule {
 
 static const struct ParseRule *get_rule(enum TokenType type);
 
-// These things all look at "previous".
 static void parse_precedence(enum Precedence precedence) {
   group();
   ParseFn prefix_rule = get_rule(parser.current.type)->prefix;
@@ -934,8 +933,27 @@ static void is_as() {
 }
 
 static void conditional() {
-  notimplemented("Not Implemented: conditional");
-  advance();
+  const struct ParseRule *rule = get_rule(TOKEN_QUESTION);
+
+  if (check_next(TOKEN_DOT)) {
+    token(TOKEN_QUESTION);
+    token(TOKEN_DOT);
+    identifier();
+    optional_type_argument_list();
+  } else if (check_next(TOKEN_OPENBRACKET)) {
+    token(TOKEN_QUESTION);
+    token(TOKEN_OPENBRACKET);
+    argument_list_inner();
+    token(TOKEN_CLOSEBRACKET);
+  } else {
+    line_indent();
+    parse_precedence((enum Precedence)(rule->precedence + 1));
+    line();
+    token(TOKEN_COLON);
+    space();
+    parse_precedence((enum Precedence)(rule->precedence + 1));
+    dedent();
+  }
 }
 
 const static struct ParseRule rules[] = {
