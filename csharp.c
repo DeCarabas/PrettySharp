@@ -980,11 +980,13 @@ static void block() {
   token(TOKEN_CLOSEBRACE);
 }
 
+// I want the type and the first identifier to be grouped.
 static void variable_declarators() {
-  group();
-  line_indent();
+  line();
   identifier();
   if (check(TOKEN_EQUALS)) {
+    end();   // This is the end of the group with my type.
+    group(); // Re-group, but just the value.
     space();
     token(TOKEN_EQUALS);
     {
@@ -1020,8 +1022,6 @@ static void variable_declarators() {
     }
   }
   token(TOKEN_SEMICOLON);
-  end();
-  dedent();
 }
 
 static bool check_local_variable_type() {
