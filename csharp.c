@@ -23,10 +23,12 @@ struct Parser parser;
 // ============================================================================
 // Error Reporting
 // ============================================================================
+#define PRINT_DEBUG_ENABLED
+
+#ifdef PRINT_DEBUG_ENABLED
 
 int last_debug_line = -1;
-static void vdebug(const char *format, va_list args) {
-#ifdef PRINT_DEBUG_ENABLED
+static void vDEBUG(const char *format, va_list args) {
   if (parser.current.line != last_debug_line) {
     fprintf(stderr, "%4d ", parser.current.line);
     last_debug_line = parser.current.line;
@@ -35,18 +37,24 @@ static void vdebug(const char *format, va_list args) {
   }
   vfprintf(stderr, format, args);
   fprintf(stderr, "\n");
-#else
   UNUSED(format);
   UNUSED(args);
-#endif
 }
 
-static void debug(const char *format, ...) {
+static void DEBUG_(const char *format, ...) {
   va_list args;
   va_start(args, format);
-  vdebug(format, args);
+  vDEBUG(format, args);
   va_end(args);
 }
+
+#define DEBUG(x) (DEBUG_ x)
+
+#else
+
+#define DEBUG(x) ((void)0)
+
+#endif
 
 static void verror_at(struct Token *token, const char *format, va_list args) {
   if (parser.panic_mode) {
@@ -239,17 +247,30 @@ static void token(enum TokenType type) {
   }
 }
 
-static bool check(enum TokenType type) { return parser.current.type == type; }
+static bool check_(enum TokenType type, int line) {
+  bool result = parser.current.type == type;
+  DEBUG(("%4d Check %s == %s -> %s", line, token_text(type),
+         token_text(parser.current.type), result ? "true" : "false"));
+  return result;
+}
 
-static bool check_is_any(enum TokenType type, const enum TokenType *types,
-                         int count) {
+#define check(t) check_(t, __LINE__)
+
+static bool check_is_any_(enum TokenType type, const enum TokenType *types,
+                          int count, int line) {
+  DEBUG(("%4d Check any %s == ", line, token_text(type)));
   for (int i = 0; i < count; i++) {
-    if (type == types[i]) {
+    bool result = type == types[i];
+    DEBUG(
+        ("        %s -> %s", token_text(types[i]), result ? "true" : "false"));
+    if (result) {
       return true;
     }
   }
   return false;
 }
+
+#define check_is_any(t, ts, c) check_is_any_(t, ts, c, __LINE__)
 
 static bool check_any(const enum TokenType *types, int count) {
   return check_is_any(parser.current.type, types, count);
