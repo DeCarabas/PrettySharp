@@ -526,7 +526,7 @@ static void parenthesized_implicitly_typed_lambda() {
     end();
     dedent();
   }
-  group();
+  end();
 }
 
 static bool check_parenthesized_explicitly_typed_lambda() {
@@ -732,25 +732,26 @@ static void array_initializer() {
   } else {
     softline_indent();
     group();
-    if (check(TOKEN_OPENBRACE)) {
-      array_initializer();
-    } else {
-      expression();
-    }
 
-    while (check(TOKEN_COMMA)) {
-      token(TOKEN_COMMA);
-      end();
+    bool first = true;
+    while (first || check(TOKEN_COMMA)) {
+      if (!first) {
+        token(TOKEN_COMMA);
+        end();
 
-      line();
+        line();
 
-      group();
+        group();
+      }
+      first = false;
+
       if (check(TOKEN_OPENBRACE)) {
         array_initializer();
       } else if (!check(TOKEN_CLOSEBRACE)) {
         expression();
       }
     }
+
     end();
     dedent();
     softline();
@@ -765,11 +766,15 @@ static void object_initializer() {
   if (check(TOKEN_CLOSEBRACE)) {
     space();
   } else {
+    softline_indent();
     group();
     bool first = true;
     while (first || check(TOKEN_COMMA)) {
       if (!first) {
         token(TOKEN_COMMA);
+        if (check(TOKEN_CLOSEBRACE)) {
+          break;
+        }
         end();
 
         line();
@@ -807,7 +812,9 @@ static void object_initializer() {
       }
     }
     end();
+    dedent();
   }
+  softline();
   token(TOKEN_CLOSEBRACE);
   end();
 }
