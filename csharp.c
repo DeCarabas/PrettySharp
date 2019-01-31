@@ -239,11 +239,11 @@ static void single_token() {
   advance();
 }
 
-static void token(enum TokenType type) {
+static void token(enum TokenType type, const char *where) {
   if (parser.current.type == type) {
     single_token();
   } else {
-    error("Expected '%s'", token_text(type));
+    error("Expected '%s' %s", token_text(type), where);
   }
 }
 
@@ -301,17 +301,17 @@ static bool check_identifier() {
   return is_identifier_token(parser.current.type);
 }
 
-static void identifier() {
+static void identifier(const char *where) {
   if (check_identifier()) {
     single_token();
   } else {
-    error("Expected an identifier");
+    error("Expected an identifier %s", where);
   }
 }
-static void name_equals() {
-  identifier();
+static void name_equals(const char *where) {
+  identifier(where);
   space();
-  token(TOKEN_EQUALS);
+  token(TOKEN_EQUALS, where);
 }
 
 static void type_name();
@@ -329,24 +329,24 @@ static void optional_type_argument_list() {
       dedent();
     }
     softline();
-    token(TOKEN_GREATERTHAN);
+    token(TOKEN_GREATERTHAN, "at the end of a type argument list");
   }
   end();
 }
 
-static void simple_name() {
-  identifier();
+static void simple_name(const char *where) {
+  identifier(where);
   optional_type_argument_list();
 }
 
-static void namespace_or_type_name() {
-  simple_name();
+static void namespace_or_type_name(const char *where) {
+  simple_name(where);
   while (match(TOKEN_DOT) || match(TOKEN_COLON_COLON)) {
-    simple_name();
+    simple_name(where);
   }
 }
 
-static void type_name() { namespace_or_type_name(); }
+static void type_name() { namespace_or_type_name("in type name"); }
 
 static bool check_name_equals() {
   return check(TOKEN_IDENTIFIER) && check_next(TOKEN_EQUALS);
@@ -379,11 +379,11 @@ static void non_array_type() {
 }
 
 static void rank_specifier() {
-  token(TOKEN_OPENBRACKET);
+  token(TOKEN_OPENBRACKET, "in array rank specifier");
   while (match(TOKEN_COMMA)) {
     ;
   }
-  token(TOKEN_CLOSEBRACKET);
+  token(TOKEN_CLOSEBRACKET, "in array rank specifier");
 }
 
 static void type() {
@@ -463,20 +463,46 @@ static void parse_precedence(enum Precedence precedence) {
   end();
 }
 
-static void primary() { single_token(); }
+static void block(const char *where);
+
+static void implicitly_typed_lambda() {
+  group();
+  identifier("in implicitly typed lambda");
+  space();
+  token(TOKEN_EQUALS_GREATERTHAN, "in implicitly typed lambda");
+  if (check(TOKEN_OPENBRACE)) {
+    space();
+    block("at the beginning of the body of a lambda");
+  } else {
+    line_indent();
+    group();
+    expression();
+    end();
+    dedent();
+  }
+  end();
+}
+
+static void primary() {
+  if (check_identifier() && check_next(TOKEN_EQUALS_GREATERTHAN)) {
+    implicitly_typed_lambda();
+  } else {
+    single_token();
+  }
+}
 
 // This comes up all the time, both here in expression land and down in
 // statement land.
 static void parenthesized_expression() {
   group();
-  token(TOKEN_OPENPAREN);
+  token(TOKEN_OPENPAREN, "in parenthesized expression");
   {
     softline_indent();
     expression();
     dedent();
   }
   softline();
-  token(TOKEN_CLOSEPAREN);
+  token(TOKEN_CLOSEPAREN, "in parenthesized expression");
   end();
 }
 
@@ -510,35 +536,33 @@ static bool check_parenthesized_implicitly_typed_lambda() {
   return false;
 }
 
-static void block();
-
 static void parenthesized_implicitly_typed_lambda() {
   group();
   {
     group();
-    token(TOKEN_OPENPAREN);
+    token(TOKEN_OPENPAREN, "in parenthesized lambda");
     if (check_identifier()) {
       softline_indent();
       bool first = true;
       while (first || check(TOKEN_COMMA)) {
         if (!first) {
-          token(TOKEN_COMMA);
+          token(TOKEN_COMMA, "in parenthesized lambda");
           line();
         }
         first = false;
-        identifier();
+        identifier("in parenthesized lambda");
       }
       dedent();
       softline();
     }
-    token(TOKEN_CLOSEPAREN);
+    token(TOKEN_CLOSEPAREN, "in parenthesized lambda");
     end();
   }
   space();
-  token(TOKEN_EQUALS_GREATERTHAN);
+  token(TOKEN_EQUALS_GREATERTHAN, "in parenthesized lambda");
   if (check(TOKEN_OPENBRACE)) {
     space();
-    block();
+    block("at the beginning of the body of a lambda");
   } else {
     line_indent();
     group();
@@ -696,27 +720,26 @@ static void grouping() {
   }
 }
 
-static void argument_list_inner() {
+static void argument_list_inner(const char *where) {
   softline_indent();
   if (!check(TOKEN_CLOSEPAREN)) {
     group();
     if (check(TOKEN_IDENTIFIER) && check_next(TOKEN_COLON)) {
-      identifier();
-      token(TOKEN_COLON);
+      identifier(where);
+      token(TOKEN_COLON, where);
       space();
     }
     expression();
 
-    while (check(TOKEN_COMMA)) {
-      token(TOKEN_COMMA);
+    while (match(TOKEN_COMMA)) {
       end();
 
       line();
 
       group();
       if (check(TOKEN_IDENTIFIER) && check_next(TOKEN_COLON)) {
-        identifier();
-        token(TOKEN_COLON);
+        identifier(where);
+        token(TOKEN_COLON, where);
         space();
       }
       expression();
@@ -729,9 +752,9 @@ static void argument_list_inner() {
 
 static void argument_list() {
   group();
-  token(TOKEN_OPENPAREN);
-  argument_list_inner();
-  token(TOKEN_CLOSEPAREN);
+  token(TOKEN_OPENPAREN, "in argument list");
+  argument_list_inner("in argument list");
+  token(TOKEN_CLOSEPAREN, "in argument list");
   end();
 }
 
@@ -743,10 +766,9 @@ static void unary_prefix() {
 }
 
 // TODO: UNARY!
-
-static void array_initializer() {
+static void array_initializer_inner(const char *where) {
   group();
-  token(TOKEN_OPENBRACE);
+  token(TOKEN_OPENBRACE, where);
   if (check(TOKEN_CLOSEBRACE)) {
     space();
   } else {
@@ -756,7 +778,7 @@ static void array_initializer() {
     bool first = true;
     while (first || check(TOKEN_COMMA)) {
       if (!first) {
-        token(TOKEN_COMMA);
+        token(TOKEN_COMMA, "in array initializer");
         end();
 
         line();
@@ -766,7 +788,7 @@ static void array_initializer() {
       first = false;
 
       if (check(TOKEN_OPENBRACE)) {
-        array_initializer();
+        array_initializer_inner(where);
       } else if (!check(TOKEN_CLOSEBRACE)) {
         expression();
       }
@@ -776,13 +798,21 @@ static void array_initializer() {
     dedent();
     softline();
   }
-  token(TOKEN_CLOSEBRACE);
+  token(TOKEN_CLOSEBRACE, where);
   end();
+}
+
+static void collection_initializer() {
+  array_initializer_inner("in collection initializer");
+}
+
+static void array_initializer() {
+  array_initializer_inner("in array initializer");
 }
 
 static void object_initializer() {
   group();
-  token(TOKEN_OPENBRACE);
+  token(TOKEN_OPENBRACE, "in object initializer");
   if (check(TOKEN_CLOSEBRACE)) {
     space();
   } else {
@@ -791,7 +821,7 @@ static void object_initializer() {
     bool first = true;
     while (first || check(TOKEN_COMMA)) {
       if (!first) {
-        token(TOKEN_COMMA);
+        token(TOKEN_COMMA, "in object initializer");
         if (check(TOKEN_CLOSEBRACE)) {
           break;
         }
@@ -806,11 +836,11 @@ static void object_initializer() {
       if (check(TOKEN_OPENBRACE)) {
         // I'm in a collection initializer and this is an element; it's going to
         // be an expression list just like in an array initializer.
-        array_initializer();
+        collection_initializer();
       } else if (!check(TOKEN_CLOSEBRACE)) {
         if (match(TOKEN_OPENBRACKET)) {
-          argument_list_inner();
-          token(TOKEN_CLOSEBRACKET);
+          argument_list_inner("in object initializer");
+          token(TOKEN_CLOSEBRACKET, "in object initializer");
         } else {
           // In an object initializer this is technically only allowed to be an
           // identifier. But in a collection this can be anything. And in an
@@ -824,7 +854,7 @@ static void object_initializer() {
         }
         if (check(TOKEN_EQUALS)) {
           space();
-          token(TOKEN_EQUALS);
+          token(TOKEN_EQUALS, "in object initializer");
           line_indent();
           expression();
           dedent();
@@ -835,18 +865,17 @@ static void object_initializer() {
     dedent();
   }
   softline();
-  token(TOKEN_CLOSEBRACE);
+  token(TOKEN_CLOSEBRACE, "in object initializer");
   end();
 }
 
-static void array_sizes() {
-  token(TOKEN_OPENBRACKET);
+static void array_sizes(const char *where) {
+  token(TOKEN_OPENBRACKET, where);
   {
     softline_indent();
     group();
     expression();
-    while (check(TOKEN_COMMA)) {
-      token(TOKEN_COMMA);
+    while (match(TOKEN_COMMA)) {
       end();
 
       line();
@@ -857,11 +886,11 @@ static void array_sizes() {
     end();
     dedent();
   }
-  token(TOKEN_CLOSEBRACKET);
+  token(TOKEN_CLOSEBRACKET, where);
 }
 
 static void object_creation() {
-  token(TOKEN_KW_NEW);
+  token(TOKEN_KW_NEW, "in object creation");
 
   bool had_type = false;
   if (check_type()) {
@@ -882,7 +911,7 @@ static void object_creation() {
       object_initializer();
     } else if (check(TOKEN_OPENBRACKET)) {
       if (!check_next(TOKEN_COMMA)) {
-        array_sizes();
+        array_sizes("in object creation");
       }
 
       while (check(TOKEN_OPENBRACKET)) {
@@ -901,7 +930,7 @@ static void object_creation() {
     object_initializer();
   } else if (check(TOKEN_OPENBRACKET)) {
     if (!check_next(TOKEN_COMMA)) {
-      array_sizes();
+      array_sizes("in object creation");
     }
 
     while (check(TOKEN_OPENBRACKET)) {
@@ -927,7 +956,7 @@ static void binary() {
   enum TokenType op = parser.current.type;
 
   space();
-  token(op);
+  token(op, "in binary expression");
   line();
 
   const struct ParseRule *rule = get_rule(op);
@@ -935,8 +964,8 @@ static void binary() {
 }
 
 static void member_access() {
-  token(TOKEN_DOT);
-  identifier();
+  token(TOKEN_DOT, "in member access expression");
+  identifier("in member access expression");
   optional_type_argument_list();
 }
 
@@ -957,20 +986,21 @@ static void conditional() {
   const struct ParseRule *rule = get_rule(TOKEN_QUESTION);
 
   if (check_next(TOKEN_DOT)) {
-    token(TOKEN_QUESTION);
-    token(TOKEN_DOT);
-    identifier();
+    token(TOKEN_QUESTION, "in conditional member access expression");
+    token(TOKEN_DOT, "in conditional member access expression");
+    identifier("in conditional member access expression");
     optional_type_argument_list();
   } else if (check_next(TOKEN_OPENBRACKET)) {
-    token(TOKEN_QUESTION);
-    token(TOKEN_OPENBRACKET);
-    argument_list_inner();
-    token(TOKEN_CLOSEBRACKET);
+    token(TOKEN_QUESTION, "in conditional element access expression");
+    token(TOKEN_OPENBRACKET, "in conditional element access expression");
+    argument_list_inner("in conditional element access expression");
+    token(TOKEN_CLOSEBRACKET, "in conditional element access expression");
   } else {
+    token(TOKEN_QUESTION, "in ternary expression");
     line_indent();
     parse_precedence((enum Precedence)(rule->precedence + 1));
     line();
-    token(TOKEN_COLON);
+    token(TOKEN_COLON, "in ternary expression");
     space();
     parse_precedence((enum Precedence)(rule->precedence + 1));
     dedent();
@@ -996,11 +1026,11 @@ static void expression() { parse_precedence(PREC_ASSIGNMENT); }
 static void statement();
 static void embedded_statement(bool embedded);
 
-static void block() {
-  token(TOKEN_OPENBRACE);
+static void block(const char *where) {
+  token(TOKEN_OPENBRACE, where);
   if (check(TOKEN_CLOSEBRACE)) {
     space();
-    token(TOKEN_CLOSEBRACE);
+    token(TOKEN_CLOSEBRACE, "at the end of a block");
     return;
   }
 
@@ -1019,7 +1049,7 @@ static void block() {
     dedent();
   }
   softline();
-  token(TOKEN_CLOSEBRACE);
+  token(TOKEN_CLOSEBRACE, "at the end of a block");
 }
 
 #define DEBUG_TOKEN(x)                                                         \
@@ -1031,14 +1061,14 @@ static void block() {
   token(x)
 
 // I want the type and the first identifier to be grouped.
-static void variable_declarators() {
+static void variable_declarators(const char *where) {
   line();
-  identifier();
+  identifier(where);
   if (check(TOKEN_EQUALS)) {
     end();   // This is the end of the group with my type.
     group(); // Re-group, but just the value.
-    space();
-    token(TOKEN_EQUALS);
+    space(); // No line break for the first variable.
+    token(TOKEN_EQUALS, where);
     {
       line_indent();
       // N.B.: This is technically a "fixed_poiner_initializer", not a real
@@ -1052,16 +1082,15 @@ static void variable_declarators() {
     }
   }
 
-  while (check(TOKEN_COMMA)) {
-    token(TOKEN_COMMA);
+  while (match(TOKEN_COMMA)) {
     end();
     group();
     line();
 
-    identifier();
+    identifier(where);
     if (check(TOKEN_EQUALS)) {
       space();
-      token(TOKEN_EQUALS);
+      token(TOKEN_EQUALS, where);
       {
         line_indent();
         // ("fixed_pointer_initializer", See above.)
@@ -1071,7 +1100,7 @@ static void variable_declarators() {
       }
     }
   }
-  token(TOKEN_SEMICOLON);
+  token(TOKEN_SEMICOLON, where);
 }
 
 static bool check_local_variable_type() {
@@ -1091,27 +1120,27 @@ static bool check_local_variable_declaration() {
 static void local_variable_declaration() {
   group();
   local_variable_type();
-  variable_declarators();
+  variable_declarators("in local variable declaration");
   end();
 }
 
 static void local_const_declaration() {
-  token(TOKEN_KW_CONST);
+  token(TOKEN_KW_CONST, "in constant declaration");
   space();
   local_variable_declaration();
 }
 
 static void if_statement() {
-  token(TOKEN_KW_IF);
+  token(TOKEN_KW_IF, "at the beginning of an if statement");
   space();
   parenthesized_expression();
   embedded_statement(/*embedded*/ true);
   while (check(TOKEN_KW_ELSE)) {
     line();
-    token(TOKEN_KW_ELSE);
+    token(TOKEN_KW_ELSE, "in an if statement");
     if (check(TOKEN_KW_IF)) {
       space();
-      token(TOKEN_KW_IF);
+      token(TOKEN_KW_IF, "in an if statement");
       space();
       parenthesized_expression();
     }
@@ -1128,11 +1157,11 @@ const static enum TokenType switch_section_end_tokens[] = {
 };
 
 static void case_statement() {
-  token(TOKEN_KW_CASE);
+  token(TOKEN_KW_CASE, "at the beginning of a case statement");
   space();
   parenthesized_expression();
   line();
-  token(TOKEN_OPENBRACE);
+  token(TOKEN_OPENBRACE, "at the beginning of the case block");
   line();
   while (check(TOKEN_KW_CASE) || check(TOKEN_KW_DEFAULT)) {
     if (match(TOKEN_KW_CASE)) {
@@ -1143,9 +1172,10 @@ static void case_statement() {
         dedent();
       }
     } else {
-      token(TOKEN_KW_DEFAULT);
+      token(TOKEN_KW_DEFAULT, "or label in the case block");
     }
-    token(TOKEN_COLON);
+    token(TOKEN_COLON,
+          "between the label and statement list in the case block");
     {
       line_indent();
       bool first = true;
@@ -1161,24 +1191,24 @@ static void case_statement() {
     }
     line();
   }
-  token(TOKEN_CLOSEBRACE);
+  token(TOKEN_CLOSEBRACE, "at the end of the case block");
 }
 
 static void while_statement() {
-  token(TOKEN_KW_WHILE);
+  token(TOKEN_KW_WHILE, "at the beginning of a while loop");
   space();
   parenthesized_expression();
   embedded_statement(/*embedded*/ true);
 }
 
 static void do_statement() {
-  token(TOKEN_KW_DO);
+  token(TOKEN_KW_DO, "at the beginning of a do loop");
   embedded_statement(/*embedded*/ true);
   line();
-  token(TOKEN_KW_WHILE);
+  token(TOKEN_KW_WHILE, "after the body of a do loop");
   space();
   parenthesized_expression();
-  token(TOKEN_SEMICOLON);
+  token(TOKEN_SEMICOLON, "at the end of a do loop");
 }
 
 static void statement_expression_list() {
@@ -1200,108 +1230,108 @@ static void for_condition() { expression(); }
 static void for_iterator() { statement_expression_list(); }
 
 static void for_statement() {
-  token(TOKEN_KW_FOR);
+  token(TOKEN_KW_FOR, "at the beginning of a for loop");
   space();
   {
     group();
-    token(TOKEN_OPENPAREN);
+    token(TOKEN_OPENPAREN, "at the beginning of a for loop");
     {
       softline_indent();
       for_initializer();
 
-      token(TOKEN_SEMICOLON);
+      token(TOKEN_SEMICOLON, "between sections of a for loop");
       line();
 
       for_condition();
 
-      token(TOKEN_SEMICOLON);
+      token(TOKEN_SEMICOLON, "between sections of a for loop");
       line();
 
       for_iterator();
       dedent();
     }
     softline();
-    token(TOKEN_CLOSEPAREN);
+    token(TOKEN_CLOSEPAREN, "at the end of the for loop condition");
     end();
   }
   embedded_statement(/*embedded*/ true);
 }
 
 static void foreach_statement() {
-  token(TOKEN_KW_FOREACH);
+  token(TOKEN_KW_FOREACH, "at the beginning of a foreach loop");
   space();
   {
     group();
-    token(TOKEN_OPENPAREN);
+    token(TOKEN_OPENPAREN, "at the beginning of a foreach loop");
     {
       softline_indent();
       local_variable_type();
       space();
-      identifier();
+      identifier("as the variable in a foreach loop");
       space();
-      token(TOKEN_KW_IN);
+      token(TOKEN_KW_IN, "in a foreach loop");
       line();
       expression();
       dedent();
     }
     softline();
-    token(TOKEN_CLOSEPAREN);
+    token(TOKEN_CLOSEPAREN, "at the end of the foreach loop");
     end();
   }
   embedded_statement(/*embedded*/ true);
 }
 
 static void goto_statement() {
-  token(TOKEN_KW_GOTO);
+  token(TOKEN_KW_GOTO, "at the beginning of a goto statement");
   space();
   if (match(TOKEN_KW_CASE)) {
     space();
-    identifier();
+    identifier("in the case label in a goto statement");
   } else if (!match(TOKEN_KW_DEFAULT)) {
-    identifier();
+    identifier("in the label in a goto statement");
   }
-  token(TOKEN_SEMICOLON);
+  token(TOKEN_SEMICOLON, "at the end of a goto statement");
 }
 
 static void return_statement() {
-  token(TOKEN_KW_RETURN);
+  token(TOKEN_KW_RETURN, "at the beginning of a return statement");
   if (!check(TOKEN_SEMICOLON)) {
     space();
     expression();
   }
-  token(TOKEN_SEMICOLON);
+  token(TOKEN_SEMICOLON, "at the end of a return statement");
 }
 
 static void throw_statement() {
-  token(TOKEN_KW_THROW);
+  token(TOKEN_KW_THROW, "at the beginning of a throw statement");
   if (!check(TOKEN_SEMICOLON)) {
     space();
     expression();
   }
-  token(TOKEN_SEMICOLON);
+  token(TOKEN_SEMICOLON, "at the end of a throw statement");
 }
 
 static void try_statement() {
-  token(TOKEN_KW_TRY);
+  token(TOKEN_KW_TRY, "at the beginning of a try block");
   line();
-  block();
+  block("at the beginning of the body of a try block");
   while (check(TOKEN_KW_CATCH)) {
     line();
     {
       group();
-      token(TOKEN_KW_CATCH);
+      token(TOKEN_KW_CATCH, "at the beginning of a catch block");
       space();
-      token(TOKEN_OPENPAREN);
+      token(TOKEN_OPENPAREN, "at the beginning of a catch block");
       type();
       if (check_identifier()) {
         space();
-        identifier();
+        identifier("in the variable declaration in a catch block");
       }
-      token(TOKEN_CLOSEPAREN);
+      token(TOKEN_CLOSEPAREN, "at the end of the declaration in a catch block");
 
       if (check(TOKEN_KW_WHEN)) {
         line_indent();
-        token(TOKEN_KW_WHEN);
+        token(TOKEN_KW_WHEN, "in a catch block");
         space();
         parenthesized_expression();
         dedent();
@@ -1309,40 +1339,40 @@ static void try_statement() {
       end();
     }
     line();
-    block();
+    block("at the beginning of the body of a catch block");
   }
-  if (check(TOKEN_KW_FINALLY)) {
-    token(TOKEN_KW_FINALLY);
+  if (match(TOKEN_KW_FINALLY)) {
     line();
-    block();
+    block("in the body of a finally block");
   }
 }
 
 static void checked_statement() {
-  token(TOKEN_KW_CHECKED);
+  token(TOKEN_KW_CHECKED, "at the beginning of a checked statement");
   line();
-  block();
+  block("in the body of a checked statement");
 }
 
 static void unchecked_statement() {
-  token(TOKEN_KW_UNCHECKED);
+  token(TOKEN_KW_UNCHECKED, "at the beginning of an unchecked statement");
   line();
-  block();
+  block("in the body of an unchecked statement");
 }
 
 static void lock_statement() {
-  token(TOKEN_KW_LOCK);
+  token(TOKEN_KW_LOCK, "at the beginning of a lock statement");
   space();
   parenthesized_expression();
   embedded_statement(/*embedded*/ true);
 }
 
 static void using_statement() {
-  token(TOKEN_KW_USING);
+  token(TOKEN_KW_USING, "at the beginning of a using statement");
   space();
   {
     group();
-    token(TOKEN_OPENPAREN);
+    token(TOKEN_OPENPAREN,
+          "at the beginning of the using statement, expression");
     {
       softline_indent();
       if (check_local_variable_declaration()) {
@@ -1353,7 +1383,7 @@ static void using_statement() {
       dedent();
     }
     softline();
-    token(TOKEN_CLOSEPAREN);
+    token(TOKEN_CLOSEPAREN, "at the end of the using statement expression");
     end();
   }
   embedded_statement(/*embedded*/ true);
@@ -1361,32 +1391,32 @@ static void using_statement() {
 
 static void yield_statement() {
   group();
-  token(TOKEN_KW_YIELD);
+  token(TOKEN_KW_YIELD, "at the beginning of a yield statement");
   space();
   if (!match(TOKEN_KW_BREAK)) {
-    token(TOKEN_KW_RETURN);
+    token(TOKEN_KW_RETURN, "or break in a yield statement");
     {
       line_indent();
       expression();
       dedent();
     }
   }
-  token(TOKEN_SEMICOLON);
+  token(TOKEN_SEMICOLON, "at the end of a yield statement");
   end();
 }
 
 static void unsafe_statement() {
-  token(TOKEN_KW_UNSAFE);
+  token(TOKEN_KW_UNSAFE, "at the beginning of an unsafe block");
   line();
-  block();
+  block("in the body of an unsafe block");
 }
 
 static void fixed_statement() {
-  token(TOKEN_KW_FIXED);
+  token(TOKEN_KW_FIXED, "at the beginning of a fixed block");
   space();
   {
     group();
-    token(TOKEN_OPENPAREN);
+    token(TOKEN_OPENPAREN, "at the beginning of a fixed expression");
     {
       softline_indent();
       // N.B.: According to the spec this must be a pointer type and cannot use
@@ -1395,7 +1425,7 @@ static void fixed_statement() {
       dedent();
     }
     softline();
-    token(TOKEN_CLOSEPAREN);
+    token(TOKEN_CLOSEPAREN, "at the end of a fixed expression");
     end();
   }
   embedded_statement(/*embedded*/ true);
@@ -1410,7 +1440,7 @@ static void embedded_statement(bool embedded) {
     if (embedded) {
       line();
     }
-    block();
+    block("at the beginning of a block");
   } else {
     if (embedded) {
       line_indent();
@@ -1439,7 +1469,7 @@ static void embedded_statement(bool embedded) {
       case TOKEN_KW_BREAK:
       case TOKEN_KW_CONTINUE:
         single_token();
-        token(TOKEN_SEMICOLON);
+        token(TOKEN_SEMICOLON, "at the end of a break or continue");
         break;
 
       case TOKEN_KW_GOTO:
@@ -1488,7 +1518,7 @@ static void embedded_statement(bool embedded) {
 
       default:
         expression();
-        token(TOKEN_SEMICOLON);
+        token(TOKEN_SEMICOLON, "at the end of an expression statement");
         break;
       }
     }
@@ -1503,8 +1533,8 @@ static void statement() {
   // Label.
   if (check_identifier() && check_next(TOKEN_COLON)) {
     dedent();
-    identifier();
-    token(TOKEN_COLON);
+    identifier("in a label identifier");
+    token(TOKEN_COLON, "in a label");
     line_indent();
   }
 
@@ -1525,14 +1555,14 @@ static void statement() {
 static void attribute_name() { type_name(); }
 
 static void attribute_arguments() {
-  token(TOKEN_OPENPAREN);
+  token(TOKEN_OPENPAREN, "at the beginning of attribute arguments");
   {
     softline_indent();
     while (!check(TOKEN_CLOSEPAREN) && !check(TOKEN_EOF)) {
       group();
       bool indented = false;
       if (check_name_equals()) {
-        name_equals();
+        name_equals("in attribute arguments");
 
         line_indent();
         indented = true;
@@ -1548,7 +1578,7 @@ static void attribute_arguments() {
     dedent();
   }
   softline();
-  token(TOKEN_CLOSEPAREN);
+  token(TOKEN_CLOSEPAREN, "at the end of attribute arguments");
 }
 
 static void attribute() {
@@ -1568,12 +1598,12 @@ static void attribute_list() {
 
 static void attribute_section() {
   group();
-  token(TOKEN_OPENBRACKET);
+  token(TOKEN_OPENBRACKET, "at the beginning of an attribute section");
   {
     softline_indent();
     if (check(TOKEN_IDENTIFIER) && check_next(TOKEN_COLON)) {
-      identifier();
-      token(TOKEN_COLON);
+      identifier("in an attribute target");
+      token(TOKEN_COLON, "after an attribute target");
       line();
     }
 
@@ -1581,7 +1611,7 @@ static void attribute_section() {
     dedent();
   }
   softline();
-  token(TOKEN_CLOSEBRACKET);
+  token(TOKEN_CLOSEBRACKET, "at the end of an attribute section");
   end();
 }
 
@@ -1647,7 +1677,7 @@ static void const_declaration() {
   {
     group();
 
-    token(TOKEN_KW_CONST);
+    token(TOKEN_KW_CONST, "at the beginning of a const declaration");
     space();
     type();
     {
@@ -1655,14 +1685,14 @@ static void const_declaration() {
       bool first = true;
       while (check_identifier() || check(TOKEN_COMMA)) {
         if (!first) {
-          token(TOKEN_COMMA);
+          token(TOKEN_COMMA, "between const member declarations");
           line();
         }
 
         group();
-        identifier();
+        identifier("in a const member declaration");
         space();
-        token(TOKEN_EQUALS);
+        token(TOKEN_EQUALS, "in the value of a const member declaration");
         {
           line_indent();
           expression();
@@ -1684,7 +1714,7 @@ static void field_declaration() {
   {
     group();
     type();
-    variable_declarators();
+    variable_declarators("in a field declaration");
     end();
   }
 }
@@ -1706,15 +1736,15 @@ static bool check_formal_parameter() {
          check_type() || check(TOKEN_COMMA);
 }
 
-static void formal_parameter_list() {
+static void formal_parameter_list(const char *where) {
   group();
-  token(TOKEN_OPENPAREN);
+  token(TOKEN_OPENPAREN, where);
   {
     softline_indent();
     bool first = true;
     while (check_formal_parameter()) {
       if (!first) {
-        token(TOKEN_COMMA);
+        token(TOKEN_COMMA, "between parameters");
         line();
       }
       first = false;
@@ -1728,13 +1758,12 @@ static void formal_parameter_list() {
         }
         type();
         space();
-        identifier();
+        identifier("in a parameter name");
         if (check(TOKEN_EQUALS)) {
           space();
-          token(TOKEN_EQUALS);
+          token(TOKEN_EQUALS, "in a parameter default value");
           {
-            indent();
-            line();
+            line_indent();
             expression();
             dedent();
           }
@@ -1745,16 +1774,16 @@ static void formal_parameter_list() {
 
     dedent();
   }
-  token(TOKEN_CLOSEPAREN);
+  token(TOKEN_CLOSEPAREN, "at the end of a parameter list");
   end();
 }
 
 static void type_constraint() {
   if (match(TOKEN_KW_NEW)) {
-    token(TOKEN_OPENPAREN);
-    token(TOKEN_CLOSEPAREN);
+    token(TOKEN_OPENPAREN, "in constructor type constraint");
+    token(TOKEN_CLOSEPAREN, "in constructor type constraint");
   } else {
-    identifier();
+    identifier("in type constraint");
   }
 }
 
@@ -1767,30 +1796,30 @@ static void optional_type_parameter_list() {
       if (match(TOKEN_KW_IN) || match(TOKEN_KW_OUT)) {
         space();
       }
-      identifier();
+      identifier("in a type parameter list");
       while (match(TOKEN_COMMA)) {
         line();
         attributes();
         if (match(TOKEN_KW_IN) || match(TOKEN_KW_OUT)) {
           space();
         }
-        identifier();
+        identifier("in a type parameter list");
       }
 
       dedent();
     }
     softline();
-    token(TOKEN_GREATERTHAN);
+    token(TOKEN_GREATERTHAN, "at the end of a type parameter list");
   }
   end();
 }
 
 static void type_parameter_constraint() {
   group();
-  token(TOKEN_KW_WHERE);
+  token(TOKEN_KW_WHERE, "at the beginning of a type parameter constraint");
   space();
-  identifier();
-  token(TOKEN_COLON);
+  identifier("in the name of a type parameter in a constraint");
+  token(TOKEN_COLON, "after the name of a type parameter in a constraint");
   {
     line_indent();
     type_constraint();
@@ -1848,7 +1877,7 @@ static void method_declaration() {
       end();
     }
 
-    formal_parameter_list();
+    formal_parameter_list("in a method declaration");
 
     if (check(TOKEN_KW_WHERE)) {
       line_indent();
@@ -1861,17 +1890,17 @@ static void method_declaration() {
   if (!match(TOKEN_SEMICOLON)) {
     if (check(TOKEN_EQUALS_GREATERTHAN)) {
       line_indent();
-      token(TOKEN_EQUALS_GREATERTHAN);
+      token(TOKEN_EQUALS_GREATERTHAN, "in the expression body of a method");
       {
         line_indent();
         expression();
-        token(TOKEN_SEMICOLON);
+        token(TOKEN_SEMICOLON, "at the end of the expression body of a method");
         dedent();
       }
       dedent();
     } else {
       line();
-      block();
+      block("at the beginning of the body of a method");
     }
   }
 }
@@ -1902,16 +1931,18 @@ static void property_declaration() {
   if (check(TOKEN_EQUALS_GREATERTHAN)) {
     // Simple "getter" property.
     space();
-    token(TOKEN_EQUALS_GREATERTHAN);
+    token(TOKEN_EQUALS_GREATERTHAN,
+          "at the beginning of the expression body of a property");
     {
       line_indent();
       expression();
-      token(TOKEN_SEMICOLON);
+      token(TOKEN_SEMICOLON, "at the end of the expression body of a property");
       dedent();
     }
   } else {
     line();
-    token(TOKEN_OPENBRACE);
+    token(TOKEN_OPENBRACE,
+          "at the beginning of the accessor declarations of a property");
     {
       line_indent();
 
@@ -1924,10 +1955,12 @@ static void property_declaration() {
           space();
         }
 
-        match(TOKEN_KW_GET);
-        match(TOKEN_KW_SET);
+        if (!match(TOKEN_KW_GET)) {
+          token(TOKEN_KW_SET, "or get at the beginning of a property accessor");
+        }
         if (!match(TOKEN_SEMICOLON)) {
-          block();
+          block("or semicolon at the beginning of the body of a property "
+                "accessor");
         }
         end();
 
@@ -1935,18 +1968,21 @@ static void property_declaration() {
       }
       dedent();
     }
-    token(TOKEN_CLOSEBRACE);
+    token(TOKEN_CLOSEBRACE,
+          "at the end of the accessor declarations of a property");
 
     // property_initializer?
     if (check(TOKEN_EQUALS)) {
       group();
 
       space();
-      token(TOKEN_EQUALS);
+      token(TOKEN_EQUALS,
+            "at the beginning of a property initializer expression");
       {
         line_indent();
         expression();
-        token(TOKEN_SEMICOLON);
+        token(TOKEN_SEMICOLON,
+              "at the end of a property initializer expression");
         dedent();
       }
       end();
@@ -1962,16 +1998,16 @@ static void event_declaration() {
 
   {
     group();
-    token(TOKEN_KW_EVENT);
+    token(TOKEN_KW_EVENT, "at the beginning of an event declaration");
     space();
     type();
 
     if (check_next(TOKEN_OPENBRACE)) {
       space();
-      identifier();
+      identifier("in the name of an event declaration");
 
       line();
-      token(TOKEN_OPENBRACE);
+      token(TOKEN_OPENBRACE, "at the beginning of an event declaration");
       {
         line_indent();
         while (check(TOKEN_KW_ADD) || check(TOKEN_KW_REMOVE) ||
@@ -1979,10 +2015,12 @@ static void event_declaration() {
           attributes();
 
           group();
-          match(TOKEN_KW_ADD);
-          match(TOKEN_KW_REMOVE);
+          if (!match(TOKEN_KW_ADD)) {
+            token(TOKEN_KW_REMOVE,
+                  "or add before an event accessor declaration");
+          }
           line();
-          block();
+          block("as the body of an event accessor");
           end();
 
           line();
@@ -1991,9 +2029,9 @@ static void event_declaration() {
 
         dedent();
       }
-      token(TOKEN_CLOSEBRACE);
+      token(TOKEN_CLOSEBRACE, "at the end of an event declaration");
     } else {
-      variable_declarators();
+      variable_declarators("in an event declaration");
     }
 
     end();
@@ -2167,7 +2205,7 @@ static void member_declarations() {
 // ============================================================================
 static void base_types() {
   group();
-  token(TOKEN_COLON);
+  token(TOKEN_COLON, "before the list of base types");
   space();
   type_name();
   {
@@ -2182,9 +2220,9 @@ static void base_types() {
 }
 
 static void class_declaration() {
-  token(TOKEN_KW_CLASS);
+  token(TOKEN_KW_CLASS, "at the beginning of a class declaration");
   space();
-  identifier();
+  identifier("in the name a class declaration");
   optional_type_parameter_list();
 
   if (check(TOKEN_COLON)) {
@@ -2200,21 +2238,21 @@ static void class_declaration() {
   }
 
   line();
-  token(TOKEN_OPENBRACE);
+  token(TOKEN_OPENBRACE, "at the beginning of a class declaration");
   {
     line_indent();
     member_declarations();
     dedent();
   }
   line();
-  token(TOKEN_CLOSEBRACE);
+  token(TOKEN_CLOSEBRACE, "at the end of a class declaration");
   match(TOKEN_SEMICOLON);
 }
 
 static void struct_declaration() {
-  token(TOKEN_KW_STRUCT);
+  token(TOKEN_KW_STRUCT, "at the beginning of a struct declaration");
   space();
-  identifier();
+  identifier("in the name of a struct declaration");
   optional_type_parameter_list();
 
   if (check(TOKEN_COLON)) {
@@ -2230,21 +2268,21 @@ static void struct_declaration() {
   }
 
   line();
-  token(TOKEN_OPENBRACE);
+  token(TOKEN_OPENBRACE, "at the beginning of a struct declaration");
   {
     line_indent();
     member_declarations();
     dedent();
   }
   line();
-  token(TOKEN_CLOSEBRACE);
+  token(TOKEN_CLOSEBRACE, "at the end of a struct declaration");
   match(TOKEN_SEMICOLON);
 }
 
 static void interface_declaration() {
-  token(TOKEN_KW_INTERFACE);
+  token(TOKEN_KW_INTERFACE, "at the beginning of an interface declaration");
   space();
-  identifier();
+  identifier("in the name of an interface declaration");
   optional_type_parameter_list();
 
   if (check(TOKEN_COLON)) {
@@ -2260,21 +2298,21 @@ static void interface_declaration() {
   }
 
   line();
-  token(TOKEN_OPENBRACE);
+  token(TOKEN_OPENBRACE, "at the beginning of an interface declaration");
   {
     line_indent();
     member_declarations();
     dedent();
   }
   line();
-  token(TOKEN_CLOSEBRACE);
+  token(TOKEN_CLOSEBRACE, "at the end of an interface declaration");
   match(TOKEN_SEMICOLON);
 }
 
 static void enum_declaration() {
-  token(TOKEN_KW_ENUM);
+  token(TOKEN_KW_ENUM, "at the beginning of an enum declaration");
   space();
-  identifier();
+  identifier("in the name of an enum declaration");
 
   if (match(TOKEN_COLON)) {
     line_indent();
@@ -2283,7 +2321,7 @@ static void enum_declaration() {
   }
 
   line();
-  token(TOKEN_OPENBRACE);
+  token(TOKEN_OPENBRACE, "at the beginning of an enum declaration");
   {
     line_indent();
 
@@ -2291,16 +2329,16 @@ static void enum_declaration() {
     while (check(TOKEN_OPENBRACKET) || check_identifier() ||
            check(TOKEN_COMMA)) {
       if (!first) {
-        token(TOKEN_COMMA);
+        token(TOKEN_COMMA, "between enum members");
         line();
       }
       first = false;
 
       // TODO: Attributes here??
-      identifier();
+      identifier("in the name of an enum member");
       if (check(TOKEN_EQUALS)) {
         space();
-        token(TOKEN_EQUALS);
+        token(TOKEN_EQUALS, "between the name and the value of an enum member");
         {
           line_indent();
           expression();
@@ -2311,21 +2349,21 @@ static void enum_declaration() {
 
     dedent();
   }
-  token(TOKEN_CLOSEBRACE);
+  token(TOKEN_CLOSEBRACE, "at the end of an enum declaration");
 
   match(TOKEN_SEMICOLON);
 }
 
 static void delegate_declaration() {
   group();
-  token(TOKEN_KW_DELEGATE);
+  token(TOKEN_KW_DELEGATE, "at the beginning of a delegate declaration");
   space();
   return_type();
   line();
-  identifier();
+  identifier("in the name of a delegate declaration");
   optional_type_parameter_list();
 
-  formal_parameter_list();
+  formal_parameter_list("in a delegate declaration");
 
   if (check(TOKEN_KW_WHERE)) {
     line_indent();
@@ -2393,12 +2431,12 @@ static void type_declaration() {
 // ============================================================================
 
 static void extern_alias() {
-  token(TOKEN_KW_EXTERN);
+  token(TOKEN_KW_EXTERN, "at the beginning of an extern alias");
   space();
-  token(TOKEN_KW_ALIAS);
+  token(TOKEN_KW_ALIAS, "at the beginning of an extern alias");
   space();
-  identifier();
-  token(TOKEN_SEMICOLON);
+  identifier("in the name of an extern alias");
+  token(TOKEN_SEMICOLON, "at the end of an extern alias");
 }
 
 static void extern_alias_directives() {
@@ -2413,7 +2451,7 @@ static void extern_alias_directives() {
 
 static void using_directive() {
   group();
-  token(TOKEN_KW_USING);
+  token(TOKEN_KW_USING, "at the beginning of a using directive");
   space();
 
   if (match(TOKEN_KW_STATIC)) {
@@ -2422,14 +2460,14 @@ static void using_directive() {
 
   bool indented = false;
   if (check_name_equals()) {
-    name_equals();
+    name_equals("in a using directive");
 
     indented = true;
     line_indent();
   }
 
-  namespace_or_type_name();
-  token(TOKEN_SEMICOLON);
+  namespace_or_type_name("in the name of a using directive");
+  token(TOKEN_SEMICOLON, "at the end of a using directive");
 
   if (indented) {
     dedent();
@@ -2481,19 +2519,19 @@ static void namespace_body() {
   namespace_members();
 }
 
-static void qualified_identifier() {
-  identifier();
+static void qualified_identifier(const char *where) {
+  identifier(where);
   while (match(TOKEN_DOT)) {
-    identifier();
+    identifier(where);
   }
 }
 
 static void namespace_declaration() {
-  token(TOKEN_KW_NAMESPACE);
+  token(TOKEN_KW_NAMESPACE, "at the beginning of a namespace declaration");
   space();
-  qualified_identifier();
+  qualified_identifier("in the name of a namespace declaration");
   line();
-  token(TOKEN_OPENBRACE);
+  token(TOKEN_OPENBRACE, "at the beginning of a namespace declaration");
 
   {
     line_indent();
@@ -2502,7 +2540,7 @@ static void namespace_declaration() {
   }
 
   line();
-  token(TOKEN_CLOSEBRACE);
+  token(TOKEN_CLOSEBRACE, "at the end of a namespace declaration");
   match(TOKEN_SEMICOLON);
 }
 
@@ -2528,7 +2566,7 @@ bool format_csharp(struct DocBuilder *builder, const char *source) {
   compilation_unit();
   line();
 
-  token(TOKEN_EOF);
+  token(TOKEN_EOF, "at the end of the file");
 
   return !parser.had_error;
 }

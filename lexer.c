@@ -504,7 +504,7 @@ static struct Token scan_token() {
   case '|':
     if (match('=')) {
       return make_token(TOKEN_BAR_EQUALS);
-    } else if (match('&')) {
+    } else if (match('|')) {
       return make_token(TOKEN_BAR_BAR);
     } else {
       return make_token(TOKEN_BAR);
