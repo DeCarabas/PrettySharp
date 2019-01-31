@@ -1,1 +1,5 @@
-myItemIs = veryVeryVeryVeryVeryVeryVeryVeryVeryVeryVeryVeryVeryVeryLongLongLongLongLong();
+class Foo {
+    int bar() {
+        myItemIs = veryVeryVeryVeryVeryVeryVeryVeryVeryVeryVeryVeryVeryVeryLongLongLongLongLong();
+    }
+}
