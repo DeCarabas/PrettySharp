@@ -960,6 +960,7 @@ static void query_expression() {
 }
 
 static void binary() {
+  group();
   enum TokenType op = parser.current.type;
 
   space();
@@ -993,6 +994,7 @@ static void binary() {
   if (indented) {
     dedent();
   }
+  end();
 }
 
 static void member_access() {
