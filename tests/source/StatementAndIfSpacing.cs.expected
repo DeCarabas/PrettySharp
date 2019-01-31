@@ -1,14 +1,17 @@
-int bar()
+class Program
 {
-    int x;
-    if (y)
+    int bar()
     {
-        x = 3;
-        y = false;
-    }
+        int x;
+        if (y)
+        {
+            x = 3;
+            y = false;
+        }
 
-    if (y)
-    {
-        z = 7;
+        if (y)
+        {
+            z = 7;
+        }
     }
 }

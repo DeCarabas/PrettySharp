@@ -1010,6 +1010,9 @@ static void block() {
     softline_indent();
     statement();
     while (!(check(TOKEN_CLOSEBRACE) || check(TOKEN_EOF))) {
+      if (parser.previous.type != TOKEN_SEMICOLON) {
+        line();
+      }
       line();
       statement();
     }
