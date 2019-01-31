@@ -23,7 +23,7 @@ struct Parser parser;
 // ============================================================================
 // Error Reporting
 // ============================================================================
-#define PRINT_DEBUG_ENABLED
+// #define PRINT_DEBUG_ENABLED
 
 #ifdef PRINT_DEBUG_ENABLED
 
@@ -1019,6 +1019,14 @@ static void block() {
   token(TOKEN_CLOSEBRACE);
 }
 
+#define DEBUG_TOKEN(x)                                                         \
+  do {                                                                         \
+    if (!check(x)) {                                                           \
+      fprintf(stderr, "***** %d\n", __LINE__);                                 \
+    }                                                                          \
+  } while (0);                                                                 \
+  token(x)
+
 // I want the type and the first identifier to be grouped.
 static void variable_declarators() {
   line();
@@ -1133,9 +1141,6 @@ static void case_statement() {
       }
     } else {
       token(TOKEN_KW_DEFAULT);
-    }
-    if (!check(TOKEN_COLON)) {
-      fprintf(stderr, "*** ZARG\n");
     }
     token(TOKEN_COLON);
     {
@@ -1986,7 +1991,6 @@ static void event_declaration() {
       token(TOKEN_CLOSEBRACE);
     } else {
       variable_declarators();
-      token(TOKEN_SEMICOLON);
     }
 
     end();
@@ -2269,7 +2273,7 @@ static void enum_declaration() {
   space();
   identifier();
 
-  if (check(TOKEN_COLON)) {
+  if (match(TOKEN_COLON)) {
     line_indent();
     type();
     dedent();
