@@ -122,9 +122,11 @@ static void flush_trivia() {
   for (; parser.trivia_index < parser.index; parser.trivia_index++) {
     struct Token trivia = parser.buffer.tokens[parser.trivia_index];
     if (trivia.type == TOKEN_TRIVIA_BLOCK_COMMENT) {
+      DEBUG(("Handling block comment"));
       doc_text(parser.builder, trivia.start, trivia.length);
       doc_line(parser.builder);
     } else if (trivia.type == TOKEN_TRIVIA_LINE_COMMENT) {
+      DEBUG(("Handling line comment"));
       doc_breakparent(parser.builder);
       doc_text(parser.builder, trivia.start, trivia.length);
       doc_line(parser.builder);
@@ -241,6 +243,7 @@ static void single_token() {
 
 static void token(enum TokenType type, const char *where) {
   if (parser.current.type == type) {
+    DEBUG(("Token %s %s", token_text(type), where));
     single_token();
   } else {
     error("Expected '%s' %s", token_text(type), where);
@@ -303,6 +306,8 @@ static bool check_identifier() {
 
 static void identifier(const char *where) {
   if (check_identifier()) {
+    DEBUG(("Identifier %s (%.*s) %s", token_text(parser.current.type),
+           parser.current.length, parser.current.start, where));
     single_token();
   } else {
     error("Expected an identifier %s", where);
@@ -720,13 +725,13 @@ static void grouping() {
   }
 }
 
-static void argument_list_inner(const char *where) {
-  softline_indent();
-  if (!check(TOKEN_CLOSEPAREN)) {
+static void argument_list_inner(enum TokenType closing_type) {
+  if (!check(closing_type)) {
+    softline_indent();
     group();
     if (check(TOKEN_IDENTIFIER) && check_next(TOKEN_COLON)) {
-      identifier(where);
-      token(TOKEN_COLON, where);
+      identifier("in the name of a named argument");
+      token(TOKEN_COLON, "after the name of a named argument");
       space();
     }
     expression();
@@ -738,23 +743,23 @@ static void argument_list_inner(const char *where) {
 
       group();
       if (check(TOKEN_IDENTIFIER) && check_next(TOKEN_COLON)) {
-        identifier(where);
-        token(TOKEN_COLON, where);
+        identifier("in the name of a named argument");
+        token(TOKEN_COLON, "after the end of a named argument");
         space();
       }
       expression();
     }
     end();
+    dedent();
+    softline();
   }
-  dedent();
-  softline();
 }
 
 static void argument_list() {
   group();
-  token(TOKEN_OPENPAREN, "in argument list");
-  argument_list_inner("in argument list");
-  token(TOKEN_CLOSEPAREN, "in argument list");
+  token(TOKEN_OPENPAREN, "at the beginning of an argument list");
+  argument_list_inner(TOKEN_CLOSEPAREN);
+  token(TOKEN_CLOSEPAREN, "at the end of an argument list");
   end();
 }
 
@@ -812,7 +817,7 @@ static void array_initializer() {
 
 static void object_initializer() {
   group();
-  token(TOKEN_OPENBRACE, "in object initializer");
+  token(TOKEN_OPENBRACE, "at the beginning of an object initializer");
   if (check(TOKEN_CLOSEBRACE)) {
     space();
   } else {
@@ -821,7 +826,7 @@ static void object_initializer() {
     bool first = true;
     while (first || check(TOKEN_COMMA)) {
       if (!first) {
-        token(TOKEN_COMMA, "in object initializer");
+        token(TOKEN_COMMA, "between members in an object initializer");
         if (check(TOKEN_CLOSEBRACE)) {
           break;
         }
@@ -839,8 +844,8 @@ static void object_initializer() {
         collection_initializer();
       } else if (!check(TOKEN_CLOSEBRACE)) {
         if (match(TOKEN_OPENBRACKET)) {
-          argument_list_inner("in object initializer");
-          token(TOKEN_CLOSEBRACKET, "in object initializer");
+          argument_list_inner(TOKEN_CLOSEBRACKET);
+          token(TOKEN_CLOSEBRACKET, "at the end of an object initializer");
         } else {
           // In an object initializer this is technically only allowed to be an
           // identifier. But in a collection this can be anything. And in an
@@ -854,7 +859,9 @@ static void object_initializer() {
         }
         if (check(TOKEN_EQUALS)) {
           space();
-          token(TOKEN_EQUALS, "in object initializer");
+          token(
+              TOKEN_EQUALS,
+              "between the member and the expression in an object initializer");
           line_indent();
           expression();
           dedent();
@@ -865,7 +872,7 @@ static void object_initializer() {
     dedent();
   }
   softline();
-  token(TOKEN_CLOSEBRACE, "in object initializer");
+  token(TOKEN_CLOSEBRACE, "at the end of an object initializer");
   end();
 }
 
@@ -957,10 +964,35 @@ static void binary() {
 
   space();
   token(op, "in binary expression");
-  line();
+
+  bool indented;
+  switch (op) {
+  case TOKEN_EQUALS:
+  case TOKEN_ASTERISK_EQUALS:
+  case TOKEN_PLUS_EQUALS:
+  case TOKEN_BAR_EQUALS:
+  case TOKEN_AMPERSAND_EQUALS:
+  case TOKEN_EXCLAMATION_EQUALS:
+  case TOKEN_MINUS_EQUALS:
+  case TOKEN_PERCENT_EQUALS:
+  case TOKEN_QUESTION_QUESTION_EQUALS:
+  case TOKEN_SLASH_EQUALS:
+    line_indent();
+    indented = true;
+    break;
+
+  default:
+    line();
+    indented = false;
+    break;
+  }
 
   const struct ParseRule *rule = get_rule(op);
   parse_precedence((enum Precedence)(rule->precedence + 1));
+
+  if (indented) {
+    dedent();
+  }
 }
 
 static void member_access() {
@@ -991,12 +1023,15 @@ static void conditional() {
     identifier("in conditional member access expression");
     optional_type_argument_list();
   } else if (check_next(TOKEN_OPENBRACKET)) {
-    token(TOKEN_QUESTION, "in conditional element access expression");
-    token(TOKEN_OPENBRACKET, "in conditional element access expression");
-    argument_list_inner("in conditional element access expression");
-    token(TOKEN_CLOSEBRACKET, "in conditional element access expression");
+    token(TOKEN_QUESTION,
+          "at the beginning of a conditional element access expression");
+    token(TOKEN_OPENBRACKET,
+          "at the beginning of a conditional element access expression");
+    argument_list_inner(TOKEN_CLOSEBRACKET);
+    token(TOKEN_CLOSEBRACKET,
+          "at the end of a conditional element access expression");
   } else {
-    token(TOKEN_QUESTION, "in ternary expression");
+    token(TOKEN_QUESTION, "at the beginning of a ternary expression");
     line_indent();
     parse_precedence((enum Precedence)(rule->precedence + 1));
     line();
