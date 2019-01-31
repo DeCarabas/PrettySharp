@@ -1,4 +1,7 @@
-int bar()
+class Program
 {
-    int x;
+    int bar()
+    {
+        int x;
+    }
 }
