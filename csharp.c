@@ -737,6 +737,12 @@ static void argument_list_inner(enum TokenType closing_type) {
       token(TOKEN_COLON, "after the name of a named argument");
       space();
     }
+
+    if (!match(TOKEN_KW_IN)) {
+      if (!match(TOKEN_KW_OUT)) {
+        match(TOKEN_KW_REF);
+      }
+    }
     expression("as the value of an argument");
 
     while (match(TOKEN_COMMA)) {
@@ -749,6 +755,12 @@ static void argument_list_inner(enum TokenType closing_type) {
         identifier("in the name of a named argument");
         token(TOKEN_COLON, "after the end of a named argument");
         space();
+      }
+
+      if (!match(TOKEN_KW_IN)) {
+        if (!match(TOKEN_KW_OUT)) {
+          match(TOKEN_KW_REF);
+        }
       }
       expression("as the value of an argument");
     }
@@ -1168,10 +1180,6 @@ static bool check_is_local_variable_type(enum TokenType type) {
   return (type == TOKEN_KW_VAR) || check_is_type(type);
 }
 
-static bool check_local_variable_type() {
-  return check_is_local_variable_type(parser.current.type);
-}
-
 static void local_variable_type() {
   if (!match(TOKEN_KW_VAR)) {
     type();
@@ -1209,6 +1217,19 @@ static bool check_local_variable_declaration() {
       case TOKEN_QUESTION:
       case TOKEN_ASTERISK:
         break;
+
+      case TOKEN_OPENBRACKET: {
+        token = next_significant_token(&index);
+        while (token.type == TOKEN_COMMA) {
+          token = next_significant_token(&index);
+        }
+        if (token.type != TOKEN_CLOSEBRACKET) {
+          DEBUG(("Check local variable declaration: false (mismatched "
+                 "brackets: %s)",
+                 token_text(token.type)));
+          return false;
+        }
+      } break;
 
       default:
         if (depth == 0) {
