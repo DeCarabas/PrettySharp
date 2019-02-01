@@ -1981,7 +1981,7 @@ static void member_name(const char *where) {
 static void method_declaration() {
   // method header
   attributes();
-
+  group();
   {
     group();
     {
@@ -2020,7 +2020,7 @@ static void method_declaration() {
 
   if (!match(TOKEN_SEMICOLON)) {
     if (check(TOKEN_EQUALS_GREATERTHAN)) {
-      line_indent();
+      space();
       token(TOKEN_EQUALS_GREATERTHAN, "in the expression body of a method");
       {
         line_indent();
@@ -2028,12 +2028,12 @@ static void method_declaration() {
         token(TOKEN_SEMICOLON, "at the end of the expression body of a method");
         dedent();
       }
-      dedent();
     } else {
       line();
       block("at the beginning of the body of a method");
     }
   }
+  end();
 }
 
 const static enum TokenType accessor_modifiers[] = {

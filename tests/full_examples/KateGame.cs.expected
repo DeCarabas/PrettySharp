@@ -8,24 +8,17 @@ namespace Garden
 {
     static class RandomExtensions
     {
-        public static float NextFloat(this Random random)
-            =>
-                (float)random.NextDouble();
+        public static float NextFloat(this Random random) =>
+            (float)random.NextDouble();
     }
 
     static class MathF
     {
-        public static float Sin(float angle)
-            =>
-                (float)Math.Sin(angle);
+        public static float Sin(float angle) => (float)Math.Sin(angle);
 
-        public static float Cos(float angle)
-            =>
-                (float)Math.Cos(angle);
+        public static float Cos(float angle) => (float)Math.Cos(angle);
 
-        public static float Unit(float value)
-            =>
-                MathHelper.Clamp(value, 0, 1);
+        public static float Unit(float value) => MathHelper.Clamp(value, 0, 1);
     }
 
     class DrawingContext
