@@ -364,13 +364,72 @@ const static enum TokenType builtin_type_tokens[] = {
     TOKEN_KW_BOOL,  TOKEN_KW_OBJECT, TOKEN_KW_DYNAMIC, TOKEN_KW_STRING,
 };
 
-static bool check_is_type(enum TokenType token) {
-  return check_is_any(token, builtin_type_tokens,
-                      ARRAY_SIZE(builtin_type_tokens)) ||
-         is_identifier_token(token);
+static bool check_is_type(int *index, struct Token *token, bool array) {
+  if (!check_is_any(token->type, builtin_type_tokens,
+                    ARRAY_SIZE(builtin_type_tokens)) &&
+      !is_identifier_token(token->type)) {
+    return false;
+  }
+
+  for (;;) {
+    int depth = 0;
+    *token = next_significant_token(index);
+    switch (token->type) {
+    case TOKEN_LESSTHAN:
+      depth += 1;
+      break;
+
+    case TOKEN_GREATERTHAN:
+      depth -= 1;
+      if (depth < 0) {
+        return false;
+      }
+      break;
+
+    case TOKEN_COMMA:
+      if (depth == 0) {
+        return false;
+      }
+      break;
+
+    case TOKEN_QUESTION:
+    case TOKEN_ASTERISK:
+      break;
+
+    case TOKEN_OPENBRACKET: {
+      if (depth == 0 && !array) {
+        // Skip out here, if we're balanced we've got a type.
+        return true;
+      }
+
+      *token = next_significant_token(index);
+      while (token->type == TOKEN_COMMA) {
+        *token = next_significant_token(index);
+      }
+      if (token->type != TOKEN_CLOSEBRACKET) {
+        DEBUG(("Check is type: false (mismatched brackets: %s)",
+               token_text(token->type)));
+        return false;
+      }
+    } break;
+
+    default:
+      return (depth == 0);
+    }
+  }
 }
 
-static bool check_type() { return check_is_type(parser.current.type); }
+static bool check_type() {
+  int index = parser.index;
+  struct Token token = parser.current;
+  return check_is_type(&index, &token, /*array*/ true);
+}
+
+static bool check_non_array_type() {
+  int index = parser.index;
+  struct Token token = parser.current;
+  return check_is_type(&index, &token, /*array*/ false);
+}
 
 static void non_array_type() {
   if (!match_any(builtin_type_tokens, ARRAY_SIZE(builtin_type_tokens))) {
@@ -714,65 +773,39 @@ static bool check_cast() {
   // This allows a lot of nonsense but if it makes sense we should provide the
   // right answer.
   if (parser.current.type != TOKEN_OPENPAREN) {
+    DEBUG(("Check cast: false (not open paren)"));
     return false;
   }
 
-  int balance = 0;
   int index = parser.index;
-  struct Token token;
-  for (token = next_significant_token(&index); token.type != TOKEN_EOF;
-       token = next_significant_token(&index)) {
+  struct Token token = next_significant_token(&index);
+  if (!check_is_type(&index, &token, /*array*/ true)) {
+    DEBUG(("Check cast: false (not is type)"));
+    return false;
+  }
 
-    if (check_is_any(token.type, builtin_type_tokens,
-                     ARRAY_SIZE(builtin_type_tokens))) {
-      continue;
-    }
-
-    if (is_identifier_token(token.type)) {
-      continue;
-    }
-
-    if (token.type == TOKEN_DOT) {
-      continue;
-    }
-
-    if (token.type == TOKEN_GREATERTHAN) {
-      balance -= 1;
-      if (balance < 0) {
-        return false;
-      }
-      continue;
-    }
-
-    if (token.type == TOKEN_LESSTHAN) {
-      balance += 1;
-      continue;
-    }
-
-    if (token.type == TOKEN_COMMA) {
-      if (balance == 0) {
-        return false;
-      }
-      continue;
-    }
-
-    if (token.type == TOKEN_CLOSEPAREN) {
-      break;
-    }
-
+  if (token.type != TOKEN_CLOSEPAREN) {
+    DEBUG(("Check cast: false (not close paren)"));
     return false;
   }
 
   token = next_significant_token(&index);
   if (check_is_any(token.type, cannot_follow_cast_tokens,
                    ARRAY_SIZE(cannot_follow_cast_tokens))) {
+    DEBUG(("Check cast: false (token cannot follow)"));
     return false;
   }
 
+  DEBUG(("Check cast: true"));
   return true;
 }
 
-static void cast() { notimplemented("Not Implemented: cast"); }
+static void cast() {
+  token(TOKEN_OPENPAREN, "at the beginning of a type cast");
+  type();
+  token(TOKEN_CLOSEPAREN, "after the type in a type cast");
+  parse_precedence(PREC_UNARY, "after a type cast");
+}
 
 static void grouping() {
   if (check_parenthesized_implicitly_typed_lambda()) {
@@ -800,6 +833,8 @@ static void unary_prefix() {
   single_token();
   expression("to the right of a unary operator");
 }
+
+static void unary_postfix() { single_token(); }
 
 // TODO: UNARY!
 static void array_initializer_inner(const char *where) {
@@ -908,7 +943,7 @@ static void object_initializer() {
 
 static void array_sizes(const char *where) {
   token(TOKEN_OPENBRACKET, where);
-  {
+  if (!check(TOKEN_CLOSEBRACKET)) {
     softline_indent();
     group();
     expression("in the list of sizes of an array");
@@ -930,7 +965,7 @@ static void object_creation() {
   token(TOKEN_KW_NEW, "in object creation");
 
   bool had_type = false;
-  if (check_type()) {
+  if (check_non_array_type()) {
     space();
     non_array_type();
     had_type = true;
@@ -1176,10 +1211,6 @@ static void variable_declarators(const char *where) {
   token(TOKEN_SEMICOLON, where);
 }
 
-static bool check_is_local_variable_type(enum TokenType type) {
-  return (type == TOKEN_KW_VAR) || check_is_type(type);
-}
-
 static void local_variable_type() {
   if (!match(TOKEN_KW_VAR)) {
     type();
@@ -1187,69 +1218,23 @@ static void local_variable_type() {
 }
 
 static bool check_local_variable_declaration() {
-  // The problem here is that types have all these trailing things, and we
-  // need to account for them.
   int index = parser.index;
   struct Token token = parser.current;
-  if (check_is_local_variable_type(token.type)) {
-    bool parsing_type_junk = true;
-    while (parsing_type_junk) {
-      int depth = 0;
-      token = next_significant_token(&index);
-      switch (token.type) {
-      case TOKEN_LESSTHAN:
-        depth += 1;
-        break;
-
-      case TOKEN_GREATERTHAN:
-        depth -= 1;
-        if (depth < 0) {
-          parsing_type_junk = false;
-        }
-        break;
-
-      case TOKEN_COMMA:
-        if (depth == 0) {
-          parsing_type_junk = false;
-        }
-        break;
-
-      case TOKEN_QUESTION:
-      case TOKEN_ASTERISK:
-        break;
-
-      case TOKEN_OPENBRACKET: {
-        token = next_significant_token(&index);
-        while (token.type == TOKEN_COMMA) {
-          token = next_significant_token(&index);
-        }
-        if (token.type != TOKEN_CLOSEBRACKET) {
-          DEBUG(("Check local variable declaration: false (mismatched "
-                 "brackets: %s)",
-                 token_text(token.type)));
-          return false;
-        }
-      } break;
-
-      default:
-        if (depth == 0) {
-          parsing_type_junk = false;
-        } else if (!is_identifier_token(token.type)) {
-          parsing_type_junk = false;
-        }
-        break;
-      }
-    }
-
-    if (is_identifier_token(token.type)) {
-      DEBUG(("Check local variable declaration: true"));
-      return true;
-    }
+  if (token.type == TOKEN_KW_VAR) {
+    token = next_significant_token(&index);
+  } else if (!check_is_type(&index, &token, /*array*/ true)) {
+    // This leaves index and token on the next token after the end of the type.
+    DEBUG(("Check local variable declaration: not a type"));
+    return false;
   }
 
-  DEBUG(
-      ("Check local variable declaration: false (%s)", token_text(token.type)));
-  return false;
+  if (is_identifier_token(token.type)) {
+    DEBUG(("Check local variable declaration: true (type and identifier)"));
+    return true;
+  } else {
+    DEBUG(("Check local variable declaration: false"));
+    return false;
+  }
 }
 
 static void local_variable_declaration() {
@@ -1359,6 +1344,7 @@ static void for_initializer() {
     local_variable_declaration();
   } else {
     statement_expression_list("in the initializer of a for loop");
+    token(TOKEN_SEMICOLON, "at the end of the initializer of a for loop");
   }
 }
 static void for_condition() { expression("in the condition of a for loop"); }
@@ -1376,7 +1362,6 @@ static void for_statement() {
       softline_indent();
       for_initializer();
 
-      token(TOKEN_SEMICOLON, "between sections of a for loop");
       line();
 
       for_condition();
@@ -1844,6 +1829,7 @@ static void const_declaration() {
     }
     end();
   }
+  token(TOKEN_SEMICOLON, "at the end of a const member declaration");
 }
 
 static void field_declaration() {
@@ -1984,12 +1970,12 @@ static void type_parameter_constraint_clauses() {
   }
 }
 
-static void member_name() {
+static void member_name(const char *where) {
   // This might seem weird, but since members can be qualified by interface
   // type (e.g., a.b<t,y>.c.interface.foo) they're basically indistinguishable
   // from a type name without an analysis pass, or without deciding to split
   // off the last segment, and none of that matters for what we're doing.
-  type_name();
+  namespace_or_type_name(where);
 }
 
 static void method_declaration() {
@@ -2008,8 +1994,13 @@ static void method_declaration() {
       {
         group();
         return_type();
-        line();
-        member_name();
+        // Note: this can be a constructor, in which case the return_type *was*
+        // the method name. If we were being serious here we would double check
+        // the type was the same as the enclosing type, but nah.
+        if (check_identifier()) {
+          line();
+          member_name("in the name of a method");
+        }
         end();
       }
 
@@ -2065,7 +2056,7 @@ static void property_declaration() {
 
   type();
   space();
-  member_name();
+  member_name("in the name of a property");
 
   // property_body
   if (check(TOKEN_EQUALS_GREATERTHAN)) {
