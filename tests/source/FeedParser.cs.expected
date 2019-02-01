@@ -6,96 +6,106 @@ namespace OnceAndFuture.Syndication
     using System.Security.Cryptography;
     using System.Text;
     using System.Xml.Linq;
-    public enum FeedFormat {Unknown, RSS2, Atom, RDF}
+
+    public enum FeedFormat
+    {
+        Unknown,
+        RSS2,
+        Atom,
+        RDF
+    }
+
     public class FeedParser
     {
         static readonly
-        Dictionary<XName, Func<FeedSegment, XElement, FeedSegment>>
-            FeedElements =
-        new Dictionary<XName, Func<FeedSegment, XElement, FeedSegment>>
-        {
+        Dictionary<XName, Func<FeedSegment, XElement, FeedSegment>> FeedElements =
+            new Dictionary<XName, Func<FeedSegment, XElement, FeedSegment>>
             {
-                XNames.RSS.Title,
-                (rf, xe) => rf.With(feedTitle: SyndicationUtil.ParseBody(xe))
-            },
-            {
-                XNames.RSS10.Title,
-                (rf, xe) => rf.With(feedTitle: SyndicationUtil.ParseBody(xe))
-            },
-            {
-                XNames.Atom.Title,
-                (rf, xe) => rf.With(feedTitle: SyndicationUtil.ParseBody(xe))
-            },
-            {XNames.RSS.Link, (rf, xe) => rf.With(websiteUrl: xe.Value)},
-            {XNames.RSS10.Link, (rf, xe) => rf.With(websiteUrl: xe.Value)},
-            {XNames.Atom.Link, (rf, xe) => HandleAtomLink(rf, xe)},
-            {
-                XNames.RSS.Description,
-                (rf, xe) =>
-                    rf.With(feedDescription: SyndicationUtil.ParseBody(xe))
-            },
-            {
-                XNames.RSS10.Description,
-                (rf, xe) =>
-                    rf.With(feedDescription: SyndicationUtil.ParseBody(xe))
-            },
-            {
-                XNames.RSS.Item,
-                (rf, xe) => rf.With(items: rf.Items.Add(LoadItem(xe)))
-            },
-            {
-                XNames.RSS10.Item,
-                (rf, xe) => rf.With(items: rf.Items.Add(LoadItem(xe)))
-            },
-            {
-                XNames.Atom.Entry,
-                (rf, xe) => rf.With(items: rf.Items.Add(LoadItem(xe)))
-            },
-        };
+                {
+                    XNames.RSS.Title,
+                    (rf, xe) =>
+                        rf.With(feedTitle: SyndicationUtil.ParseBody(xe))
+                },
+                {
+                    XNames.RSS10.Title,
+                    (rf, xe) =>
+                        rf.With(feedTitle: SyndicationUtil.ParseBody(xe))
+                },
+                {
+                    XNames.Atom.Title,
+                    (rf, xe) =>
+                        rf.With(feedTitle: SyndicationUtil.ParseBody(xe))
+                },
+                {XNames.RSS.Link, (rf, xe) => rf.With(websiteUrl: xe.Value)},
+                {XNames.RSS10.Link, (rf, xe) => rf.With(websiteUrl: xe.Value)},
+                {XNames.Atom.Link, (rf, xe) => HandleAtomLink(rf, xe)},
+                {
+                    XNames.RSS.Description,
+                    (rf, xe) =>
+                        rf.With(feedDescription: SyndicationUtil.ParseBody(xe))
+                },
+                {
+                    XNames.RSS10.Description,
+                    (rf, xe) =>
+                        rf.With(feedDescription: SyndicationUtil.ParseBody(xe))
+                },
+                {
+                    XNames.RSS.Item,
+                    (rf, xe) => rf.With(items: rf.Items.Add(LoadItem(xe)))
+                },
+                {
+                    XNames.RSS10.Item,
+                    (rf, xe) => rf.With(items: rf.Items.Add(LoadItem(xe)))
+                },
+                {
+                    XNames.Atom.Entry,
+                    (rf, xe) => rf.With(items: rf.Items.Add(LoadItem(xe)))
+                },
+            };
         static readonly
         Dictionary<XName, Func<Item, XElement, Item>> ItemElements =
-        new Dictionary<XName, Func<Item, XElement, Item>>
-        {
+            new Dictionary<XName, Func<Item, XElement, Item>>
             {
-                XNames.RSS.Title,
-                (ri, xe) => ri.With(title: SyndicationUtil.ParseBody(xe))
-            },
-            {
-                XNames.RSS.Link,
-                (ri, xe) =>
-                    ri.With(link: SyndicationUtil.ParseLink(xe.Value, xe))
-            },
-            {XNames.RSS.Description, (ri, xe) => ri.With(description: xe)},
-            {XNames.RSS.Comments, (ri, xe) => ri.With(comments: xe.Value)},
-            {XNames.RSS.PubDate, (ri, xe) => HandlePubDate(ri, xe)},
-            {XNames.RSS.Guid, (ri, xe) => HandleGuid(ri, xe)},
-            {XNames.RSS.Enclosure, (ri, xe) => HandleEnclosure(ri, xe)},
-            {
-                XNames.RSS10.Title,
-                (ri, xe) => ri.With(title: SyndicationUtil.ParseBody(xe))
-            },
-            {
-                XNames.RSS10.Link,
-                (ri, xe) =>
-                    ri.With(link: SyndicationUtil.ParseLink(xe.Value, xe))
-            },
-            {XNames.RSS10.Description, (ri, xe) => ri.With(description: xe)},
-            {XNames.RSS10.Comments, (ri, xe) => ri.With(comments: xe.Value)},
-            {XNames.RSS10.PubDate, (ri, xe) => HandlePubDate(ri, xe)},
-            {XNames.RSS10.Guid, (ri, xe) => HandleGuid(ri, xe)},
-            {XNames.Content.Encoded, (ri, xe) => ri.With(content: xe)},
-            {
-                XNames.Atom.Title,
-                (ri, xe) => ri.With(title: SyndicationUtil.ParseBody(xe))
-            },
-            {XNames.Atom.Content, (ri, xe) => ri.With(content: xe)},
-            {XNames.Atom.Summary, (ri, xe) => ri.With(summary: xe)},
-            {XNames.Atom.Link, (ri, xe) => HandleAtomLink(ri, xe)},
-            {XNames.Atom.Id, (ri, xe) => ri.With(id: xe.Value)},
-            {XNames.Atom.Published, (ri, xe) => HandlePubDate(ri, xe)},
-            {XNames.Atom.Updated, (ri, xe) => HandlePubDate(ri, xe)},
-            {XNames.Media.Content, (ri, xe) => HandleThumbnail(ri, xe)},
-        };
+                {
+                    XNames.RSS.Title,
+                    (ri, xe) => ri.With(title: SyndicationUtil.ParseBody(xe))
+                },
+                {
+                    XNames.RSS.Link,
+                    (ri, xe) =>
+                        ri.With(link: SyndicationUtil.ParseLink(xe.Value, xe))
+                },
+                {XNames.RSS.Description, (ri, xe) => ri.With(description: xe)},
+                {XNames.RSS.Comments, (ri, xe) => ri.With(comments: xe.Value)},
+                {XNames.RSS.PubDate, (ri, xe) => HandlePubDate(ri, xe)},
+                {XNames.RSS.Guid, (ri, xe) => HandleGuid(ri, xe)},
+                {XNames.RSS.Enclosure, (ri, xe) => HandleEnclosure(ri, xe)},
+                {
+                    XNames.RSS10.Title,
+                    (ri, xe) => ri.With(title: SyndicationUtil.ParseBody(xe))
+                },
+                {
+                    XNames.RSS10.Link,
+                    (ri, xe) =>
+                        ri.With(link: SyndicationUtil.ParseLink(xe.Value, xe))
+                },
+                {XNames.RSS10.Description, (ri, xe) => ri.With(description: xe)},
+                {XNames.RSS10.Comments, (ri, xe) => ri.With(comments: xe.Value)},
+                {XNames.RSS10.PubDate, (ri, xe) => HandlePubDate(ri, xe)},
+                {XNames.RSS10.Guid, (ri, xe) => HandleGuid(ri, xe)},
+                {XNames.Content.Encoded, (ri, xe) => ri.With(content: xe)},
+                {
+                    XNames.Atom.Title,
+                    (ri, xe) => ri.With(title: SyndicationUtil.ParseBody(xe))
+                },
+                {XNames.Atom.Content, (ri, xe) => ri.With(content: xe)},
+                {XNames.Atom.Summary, (ri, xe) => ri.With(summary: xe)},
+                {XNames.Atom.Link, (ri, xe) => HandleAtomLink(ri, xe)},
+                {XNames.Atom.Id, (ri, xe) => ri.With(id: xe.Value)},
+                {XNames.Atom.Published, (ri, xe) => HandlePubDate(ri, xe)},
+                {XNames.Atom.Updated, (ri, xe) => HandlePubDate(ri, xe)},
+                {XNames.Media.Content, (ri, xe) => HandleThumbnail(ri, xe)},
+            };
 
         public static FeedSegment ParseFeed(
             Uri feedUrl,
@@ -115,13 +125,15 @@ namespace OnceAndFuture.Syndication
             else if (element.Name == XNames.RDF.Rdf)
             {
                 format = FeedFormat.RDF;
-                var result = LoadFeed(
-                    feedUrl,
-                    element.Element(XNames.RSS10.Channel));
+                var result =
+                    LoadFeed(feedUrl, element.Element(XNames.RSS10.Channel));
                 return result.With(
                     items: result.Items.AddRange(
                         element.Elements(XNames.RSS10.Item).Select(
-                            xe => LoadItem(xe))));
+                            xe => LoadItem(xe)
+                        )
+                    )
+                );
             }
             else
             {
@@ -133,20 +145,22 @@ namespace OnceAndFuture.Syndication
         static FeedSegment HandleAtomLink(FeedSegment feed, XElement link)
         {
             string rel = link.Attribute(XNames.Atom.Rel)?.Value ?? "alternate";
-            string type = link.Attribute(XNames.Atom.Type)?.Value ??
-            "text/html";
+            string type =
+                link.Attribute(XNames.Atom.Type)?.Value ?? "text/html";
             string href = link.Attribute(XNames.Atom.Href)?.Value;
             if (
                 String.Equals(
                     rel,
                     "alternate",
-                    StringComparison.OrdinalIgnoreCase) &&
+                    StringComparison.OrdinalIgnoreCase
+                ) &&
                 type.StartsWith("text/html", StringComparison.OrdinalIgnoreCase)
             )
             {
                 feed =
                     feed.With(
-                        websiteUrl: link.Attribute(XNames.Atom.Href)?.Value);
+                        websiteUrl: link.Attribute(XNames.Atom.Href)?.Value
+                    );
             }
 
             return feed;
@@ -155,14 +169,15 @@ namespace OnceAndFuture.Syndication
         static Item HandleAtomLink(Item item, XElement link)
         {
             string rel = link.Attribute(XNames.Atom.Rel)?.Value ?? "alternate";
-            string type = link.Attribute(XNames.Atom.Type)?.Value ??
-            "text/html";
+            string type =
+                link.Attribute(XNames.Atom.Type)?.Value ?? "text/html";
             string href = link.Attribute(XNames.Atom.Href)?.Value;
             if (
                 String.Equals(
                     rel,
                     "alternate",
-                    StringComparison.OrdinalIgnoreCase) &&
+                    StringComparison.OrdinalIgnoreCase
+                ) &&
                 type.StartsWith("text/html", StringComparison.OrdinalIgnoreCase)
             )
             {
@@ -170,10 +185,7 @@ namespace OnceAndFuture.Syndication
             }
 
             if (
-                String.Equals(
-                    rel,
-                    "self",
-                    StringComparison.OrdinalIgnoreCase) &&
+                String.Equals(rel, "self", StringComparison.OrdinalIgnoreCase) &&
                 type.StartsWith("text/html", StringComparison.OrdinalIgnoreCase)
             )
             {
@@ -187,10 +199,12 @@ namespace OnceAndFuture.Syndication
                     item.With(
                         enclosures: item.Enclosures.Add(
                             new Enclosure(
-                                length: link.Attribute(XNames.Atom.Length)
-                                    ?.Value,
+                                length: link.Attribute(XNames.Atom.Length)?.Value,
                                 type: type,
-                                url: SyndicationUtil.ParseLink(href, link))));
+                                url: SyndicationUtil.ParseLink(href, link)
+                            )
+                        )
+                    );
             }
 
             return item;
@@ -205,7 +219,11 @@ namespace OnceAndFuture.Syndication
                         type: element.Attribute(XNames.RSS.Type)?.Value,
                         url: SyndicationUtil.ParseLink(
                             element.Attribute(XNames.RSS.Url)?.Value,
-                            element))));
+                            element
+                        )
+                    )
+                )
+            );
         }
 
         static Item HandleGuid(Item item, XElement element)
@@ -214,15 +232,18 @@ namespace OnceAndFuture.Syndication
             if (
                 item.Id.StartsWith(
                     "http://",
-                    StringComparison.OrdinalIgnoreCase) ||
+                    StringComparison.OrdinalIgnoreCase
+                ) ||
                 item.Id.StartsWith(
                     "https://",
-                    StringComparison.OrdinalIgnoreCase)
+                    StringComparison.OrdinalIgnoreCase
+                )
             )
             {
                 item =
                     item.With(
-                        permaLink: SyndicationUtil.ParseLink(item.Id, element));
+                        permaLink: SyndicationUtil.ParseLink(item.Id, element)
+                    );
             }
 
             return item;
@@ -246,19 +267,23 @@ namespace OnceAndFuture.Syndication
                 element.Attribute(XNames.Media.Medium)?.Value == "image"
             )
             {
-                Uri url = SyndicationUtil.TryParseUrl(
-                    element.Attribute(XNames.Media.Url)?.Value,
-                    null,
-                    element);
+                Uri url =
+                    SyndicationUtil.TryParseUrl(
+                        element.Attribute(XNames.Media.Url)?.Value,
+                        null,
+                        element
+                    );
                 int width, height;
                 if (
                     url != null &&
                     Int32.TryParse(
                         element.Attribute(XNames.Media.Width)?.Value,
-                        out width) &&
+                        out width
+                    ) &&
                     Int32.TryParse(
                         element.Attribute(XNames.Media.Height)?.Value,
-                        out height)
+                        out height
+                    )
                 )
                 {
                     item =
@@ -385,8 +410,8 @@ namespace OnceAndFuture.Syndication
 
             if (guid.Length > 0)
             {
-                byte[] hash = SHA1.Create().ComputeHash(
-                    Encoding.UTF8.GetBytes(guid));
+                byte[] hash =
+                    SHA1.Create().ComputeHash(Encoding.UTF8.GetBytes(guid));
                 guid = Convert.ToBase64String(hash);
             }
 

@@ -455,7 +455,11 @@ static struct Token scan_token() {
     return make_token(TOKEN_CLOSEBRACKET);
 
   case '?':
-    if (match('?')) {
+    if (match('.')) {
+      return make_token(TOKEN_QUESTION_DOT);
+    } else if (match('[')) {
+      return make_token(TOKEN_QUESTION_OPENBRACKET);
+    } else if (match('?')) {
       return make_token(match('=') ? TOKEN_QUESTION_QUESTION_EQUALS
                                    : TOKEN_QUESTION_QUESTION);
     } else {

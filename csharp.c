@@ -514,6 +514,64 @@ static void parenthesized_expression() {
   end();
 }
 
+static void null_member_access() {
+  token(TOKEN_QUESTION_DOT, "in null conditional member access expression");
+  identifier("in null conditional member access expression");
+  optional_type_argument_list();
+}
+
+static void argument_list_inner(enum TokenType closing_type) {
+  if (!check(closing_type)) {
+    softline_indent();
+    group();
+    if (check(TOKEN_IDENTIFIER) && check_next(TOKEN_COLON)) {
+      identifier("in the name of a named argument");
+      token(TOKEN_COLON, "after the name of a named argument");
+      space();
+    }
+
+    if (match(TOKEN_KW_IN) || match(TOKEN_KW_OUT) || match(TOKEN_KW_REF)) {
+      space();
+    }
+    expression("as the value of an argument");
+
+    while (match(TOKEN_COMMA)) {
+      end();
+
+      line();
+
+      group();
+      if (check(TOKEN_IDENTIFIER) && check_next(TOKEN_COLON)) {
+        identifier("in the name of a named argument");
+        token(TOKEN_COLON, "after the end of a named argument");
+        space();
+      }
+
+      if (match(TOKEN_KW_IN) || match(TOKEN_KW_OUT) || match(TOKEN_KW_REF)) {
+        space();
+      }
+      expression("as the value of an argument");
+    }
+    end();
+    dedent();
+    softline();
+  }
+}
+
+static void null_element_access() {
+  token(TOKEN_QUESTION_OPENBRACKET,
+        "in null conditional element access expression");
+  argument_list_inner(TOKEN_CLOSEBRACKET);
+  token(TOKEN_CLOSEBRACKET,
+        "at the end of a null conditional element access expression");
+}
+
+static void element_access() {
+  token(TOKEN_OPENBRACKET, "in an element access expression");
+  argument_list_inner(TOKEN_CLOSEBRACKET);
+  token(TOKEN_CLOSEBRACKET, "at the end of an element access expression");
+}
+
 static bool check_parenthesized_implicitly_typed_lambda() {
   // Case 1: ( x ,
   // Case 2: ( x ) =>
@@ -728,48 +786,6 @@ static void grouping() {
   }
 }
 
-static void argument_list_inner(enum TokenType closing_type) {
-  if (!check(closing_type)) {
-    softline_indent();
-    group();
-    if (check(TOKEN_IDENTIFIER) && check_next(TOKEN_COLON)) {
-      identifier("in the name of a named argument");
-      token(TOKEN_COLON, "after the name of a named argument");
-      space();
-    }
-
-    if (!match(TOKEN_KW_IN)) {
-      if (!match(TOKEN_KW_OUT)) {
-        match(TOKEN_KW_REF);
-      }
-    }
-    expression("as the value of an argument");
-
-    while (match(TOKEN_COMMA)) {
-      end();
-
-      line();
-
-      group();
-      if (check(TOKEN_IDENTIFIER) && check_next(TOKEN_COLON)) {
-        identifier("in the name of a named argument");
-        token(TOKEN_COLON, "after the end of a named argument");
-        space();
-      }
-
-      if (!match(TOKEN_KW_IN)) {
-        if (!match(TOKEN_KW_OUT)) {
-          match(TOKEN_KW_REF);
-        }
-      }
-      expression("as the value of an argument");
-    }
-    end();
-    dedent();
-    softline();
-  }
-}
-
 static void argument_list() {
   group();
   token(TOKEN_OPENPAREN, "at the beginning of an argument list");
@@ -854,29 +870,28 @@ static void object_initializer() {
       first = false;
 
       if (check(TOKEN_OPENBRACE)) {
-        // I'm in a collection initializer and this is an element; it's going to
-        // be an expression list just like in an array initializer.
+        // I'm in a collection initializer and this is an element; it's going
+        // to be an expression list just like in an array initializer.
         collection_initializer();
       } else if (!check(TOKEN_CLOSEBRACE)) {
         if (match(TOKEN_OPENBRACKET)) {
           argument_list_inner(TOKEN_CLOSEBRACKET);
           token(TOKEN_CLOSEBRACKET, "at the end of an object initializer");
         } else {
-          // In an object initializer this is technically only allowed to be an
-          // identifier. But in a collection this can be anything. And in an
-          // anonymous object expression this can be 'this.' or 'base.' or
+          // In an object initializer this is technically only allowed to be
+          // an identifier. But in a collection this can be anything. And in
+          // an anonymous object expression this can be 'this.' or 'base.' or
           // several other interesting forms. And I don't feel like building
           // parsers for all those distinct forms right now, mainly because
-          // they're very difficult to distinguish from each other, and I can't
-          // be bothered. So. This allows more forms than it technically should,
-          // but I'm not worried.
+          // they're very difficult to distinguish from each other, and I
+          // can't be bothered. So. This allows more forms than it technically
+          // should, but I'm not worried.
           expression("in the member name of an object initializer");
         }
         if (check(TOKEN_EQUALS)) {
           space();
-          token(
-              TOKEN_EQUALS,
-              "between the member and the expression in an object initializer");
+          token(TOKEN_EQUALS, "between the member and the expression in an "
+                              "object initializer");
           line_indent();
           expression("in the member value of an object initializer");
           dedent();
@@ -1020,8 +1035,8 @@ static void member_access() {
 }
 
 static void greater_than() {
-  // This one is weird because it *might* be a shift operator, but might also be
-  // a less than operator. Good thing our lexer doesn't discard whitespace,
+  // This one is weird because it *might* be a shift operator, but might also
+  // be a less than operator. Good thing our lexer doesn't discard whitespace,
   // right?
   group();
 
@@ -1050,10 +1065,12 @@ static void is_as() {
 
 static void conditional() {
   if (check_next(TOKEN_DOT)) {
+    softline_indent();
     token(TOKEN_QUESTION, "in conditional member access expression");
     token(TOKEN_DOT, "in conditional member access expression");
     identifier("in conditional member access expression");
     optional_type_argument_list();
+    dedent();
   } else if (check_next(TOKEN_OPENBRACKET)) {
     token(TOKEN_QUESTION,
           "at the beginning of a conditional element access expression");
@@ -1145,8 +1162,8 @@ static void variable_declarators(const char *where) {
     {
       line_indent();
       // N.B.: This is technically a "fixed_poiner_initializer", not a real
-      // initializer, but we fold it in because it's pretty harmless (this code
-      // is way more lenient by design than the real C# parser) and the
+      // initializer, but we fold it in because it's pretty harmless (this
+      // code is way more lenient by design than the real C# parser) and the
       // indentation & formatting logic is complex and needs to be kept the
       // same.
       match(TOKEN_AMPERSAND);
@@ -1187,8 +1204,8 @@ static void local_variable_type() {
 }
 
 static bool check_local_variable_declaration() {
-  // The problem here is that types have all these trailing things, and we need
-  // to account for them.
+  // The problem here is that types have all these trailing things, and we
+  // need to account for them.
   int index = parser.index;
   struct Token token = parser.current;
   if (check_is_local_variable_type(token.type)) {
@@ -1556,8 +1573,8 @@ static void fixed_statement() {
     token(TOKEN_OPENPAREN, "at the beginning of a fixed expression");
     {
       softline_indent();
-      // N.B.: According to the spec this must be a pointer type and cannot use
-      // 'var', but meh.
+      // N.B.: According to the spec this must be a pointer type and cannot
+      // use 'var', but meh.
       local_variable_declaration();
       dedent();
     }
@@ -1769,8 +1786,9 @@ static void global_attributes() {
   }
 }
 
-// These are shared through lots of different declarations; we allow all of them
-// everywhere, even though it doesn't make sense to have e.g. `async struct`.
+// These are shared through lots of different declarations; we allow all of
+// them everywhere, even though it doesn't make sense to have e.g. `async
+// struct`.
 const static enum TokenType modifier_tokens[] = {
     TOKEN_KW_NEW,     TOKEN_KW_PUBLIC,   TOKEN_KW_PROTECTED, TOKEN_KW_INTERNAL,
     TOKEN_KW_PRIVATE, TOKEN_KW_ABSTRACT, TOKEN_KW_SEALED,    TOKEN_KW_STATIC,
@@ -1984,10 +2002,10 @@ static void type_parameter_constraint_clauses() {
 }
 
 static void member_name() {
-  // This might seem weird, but since members can be qualified by interface type
-  // (e.g., a.b<t,y>.c.interface.foo) they're basically indistinguishable from a
-  // type name without an analysis pass, or without deciding to split off the
-  // last segment, and none of that matters for what we're doing.
+  // This might seem weird, but since members can be qualified by interface
+  // type (e.g., a.b<t,y>.c.interface.foo) they're basically indistinguishable
+  // from a type name without an analysis pass, or without deciding to split
+  // off the last segment, and none of that matters for what we're doing.
   type_name();
 }
 
@@ -2206,9 +2224,9 @@ enum MemberKind {
 };
 
 static enum MemberKind check_member() {
-  // OK this one sucks because we need to scan forward through tokens to figure
-  // out what we're actually looking at. If we don't appear to be looking at a
-  // member, then we return MEMBERKIND_NONE.
+  // OK this one sucks because we need to scan forward through tokens to
+  // figure out what we're actually looking at. If we don't appear to be
+  // looking at a member, then we return MEMBERKIND_NONE.
   int index = parser.index - 1;
   while (index < parser.buffer.count) {
     enum TokenType token = parser.buffer.tokens[index].type;
@@ -2488,8 +2506,8 @@ static void enum_declaration() {
 
     dedent();
   }
+  line();
   token(TOKEN_CLOSEBRACE, "at the end of an enum declaration");
-
   match(TOKEN_SEMICOLON);
 }
 
