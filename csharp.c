@@ -1064,35 +1064,18 @@ static void is_as() {
 }
 
 static void conditional() {
-  if (check_next(TOKEN_DOT)) {
-    softline_indent();
-    token(TOKEN_QUESTION, "in conditional member access expression");
-    token(TOKEN_DOT, "in conditional member access expression");
-    identifier("in conditional member access expression");
-    optional_type_argument_list();
-    dedent();
-  } else if (check_next(TOKEN_OPENBRACKET)) {
-    token(TOKEN_QUESTION,
-          "at the beginning of a conditional element access expression");
-    token(TOKEN_OPENBRACKET,
-          "at the beginning of a conditional element access expression");
-    argument_list_inner(TOKEN_CLOSEBRACKET);
-    token(TOKEN_CLOSEBRACKET,
-          "at the end of a conditional element access expression");
-  } else {
-    const struct ParseRule *rule = get_rule(TOKEN_QUESTION);
+  const struct ParseRule *rule = get_rule(TOKEN_QUESTION);
 
-    token(TOKEN_QUESTION, "at the beginning of a ternary expression");
-    line_indent();
-    parse_precedence((enum Precedence)(rule->precedence + 1),
-                     "after the question mark in a ternary expression");
-    line();
-    token(TOKEN_COLON, "in ternary expression");
-    space();
-    parse_precedence((enum Precedence)(rule->precedence + 1),
-                     "after the colon in a ternary expression");
-    dedent();
-  }
+  token(TOKEN_QUESTION, "at the beginning of a ternary expression");
+  line_indent();
+  parse_precedence((enum Precedence)(rule->precedence + 1),
+                   "after the question mark in a ternary expression");
+  line();
+  token(TOKEN_COLON, "in ternary expression");
+  space();
+  parse_precedence((enum Precedence)(rule->precedence + 1),
+                   "after the colon in a ternary expression");
+  dedent();
 }
 
 const static struct ParseRule rules[] = {
