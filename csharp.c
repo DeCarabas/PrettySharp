@@ -306,8 +306,8 @@ static bool check_identifier() {
 
 static void identifier(const char *where) {
   if (check_identifier()) {
-    DEBUG(("Identifier %s (%.*s) %s", token_text(parser.current.type),
-           parser.current.length, parser.current.start, where));
+    DEBUG(("Identifier '%.*s' %s", parser.current.length, parser.current.start,
+           where));
     single_token();
   } else {
     error("Expected an identifier %s", where);
