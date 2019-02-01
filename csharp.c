@@ -364,10 +364,13 @@ const static enum TokenType builtin_type_tokens[] = {
     TOKEN_KW_BOOL,  TOKEN_KW_OBJECT, TOKEN_KW_DYNAMIC, TOKEN_KW_STRING,
 };
 
-static bool check_type() {
-  return check_any(builtin_type_tokens, ARRAY_SIZE(builtin_type_tokens)) ||
-         check_identifier();
+static bool check_is_type(enum TokenType token) {
+  return check_is_any(token, builtin_type_tokens,
+                      ARRAY_SIZE(builtin_type_tokens)) ||
+         is_identifier_token(token);
 }
+
+static bool check_type() { return check_is_type(parser.current.type); }
 
 static void non_array_type() {
   if (!match_any(builtin_type_tokens, ARRAY_SIZE(builtin_type_tokens))) {
@@ -414,7 +417,7 @@ static void type() {
 // ============================================================================
 // Expressions
 // ============================================================================
-static void expression();
+static void expression(const char *where);
 
 static const struct ParseRule *get_rule(enum TokenType type);
 
@@ -451,11 +454,11 @@ struct ParseRule {
 
 static const struct ParseRule *get_rule(enum TokenType type);
 
-static void parse_precedence(enum Precedence precedence) {
+static void parse_precedence(enum Precedence precedence, const char *where) {
   group();
   ParseFn prefix_rule = get_rule(parser.current.type)->prefix;
   if (prefix_rule == NULL) {
-    error("Expect expression.");
+    error("Expect expression %s.", where);
     return;
   }
 
@@ -481,7 +484,7 @@ static void implicitly_typed_lambda() {
   } else {
     line_indent();
     group();
-    expression();
+    expression("in the body of a lambda");
     end();
     dedent();
   }
@@ -503,7 +506,7 @@ static void parenthesized_expression() {
   token(TOKEN_OPENPAREN, "in parenthesized expression");
   {
     softline_indent();
-    expression();
+    expression("between parentheses in a parenthesized expression");
     dedent();
   }
   softline();
@@ -571,7 +574,7 @@ static void parenthesized_implicitly_typed_lambda() {
   } else {
     line_indent();
     group();
-    expression();
+    expression("in the body of a lambda");
     end();
     dedent();
   }
@@ -734,7 +737,7 @@ static void argument_list_inner(enum TokenType closing_type) {
       token(TOKEN_COLON, "after the name of a named argument");
       space();
     }
-    expression();
+    expression("as the value of an argument");
 
     while (match(TOKEN_COMMA)) {
       end();
@@ -747,7 +750,7 @@ static void argument_list_inner(enum TokenType closing_type) {
         token(TOKEN_COLON, "after the end of a named argument");
         space();
       }
-      expression();
+      expression("as the value of an argument");
     }
     end();
     dedent();
@@ -767,7 +770,7 @@ static void invocation() { argument_list(); }
 
 static void unary_prefix() {
   single_token();
-  expression();
+  expression("to the right of a unary operator");
 }
 
 // TODO: UNARY!
@@ -795,7 +798,7 @@ static void array_initializer_inner(const char *where) {
       if (check(TOKEN_OPENBRACE)) {
         array_initializer_inner(where);
       } else if (!check(TOKEN_CLOSEBRACE)) {
-        expression();
+        expression("in an element of an array or collection");
       }
     }
 
@@ -855,7 +858,7 @@ static void object_initializer() {
           // they're very difficult to distinguish from each other, and I can't
           // be bothered. So. This allows more forms than it technically should,
           // but I'm not worried.
-          expression();
+          expression("in the member name of an object initializer");
         }
         if (check(TOKEN_EQUALS)) {
           space();
@@ -863,7 +866,7 @@ static void object_initializer() {
               TOKEN_EQUALS,
               "between the member and the expression in an object initializer");
           line_indent();
-          expression();
+          expression("in the member value of an object initializer");
           dedent();
         }
       }
@@ -881,14 +884,14 @@ static void array_sizes(const char *where) {
   {
     softline_indent();
     group();
-    expression();
+    expression("in the list of sizes of an array");
     while (match(TOKEN_COMMA)) {
       end();
 
       line();
 
       group();
-      expression();
+      expression("in the list of sizes of an array");
     }
     end();
     dedent();
@@ -989,7 +992,8 @@ static void binary() {
   }
 
   const struct ParseRule *rule = get_rule(op);
-  parse_precedence((enum Precedence)(rule->precedence + 1));
+  parse_precedence((enum Precedence)(rule->precedence + 1),
+                   "to the right of a binary expression");
 
   if (indented) {
     dedent();
@@ -1007,8 +1011,24 @@ static void greater_than() {
   // This one is weird because it *might* be a shift operator, but might also be
   // a less than operator. Good thing our lexer doesn't discard whitespace,
   // right?
-  notimplemented("Not Implemented: greater than");
-  advance();
+  group();
+
+  enum Precedence prec = PREC_GREATERTHAN;
+  if (parser.index < parser.buffer.count) {
+    if (parser.buffer.tokens[parser.index + 1].type == TOKEN_GREATERTHAN) {
+      prec = PREC_SHIFT;
+    }
+  }
+
+  space();
+  token(TOKEN_GREATERTHAN, "in binary expression");
+  if (prec == PREC_SHIFT) {
+    token(TOKEN_GREATERTHAN, "in left shift expression");
+  }
+  line();
+
+  parse_precedence(prec + 1, "to the right of a binary expression");
+  end();
 }
 
 static void is_as() {
@@ -1017,8 +1037,6 @@ static void is_as() {
 }
 
 static void conditional() {
-  const struct ParseRule *rule = get_rule(TOKEN_QUESTION);
-
   if (check_next(TOKEN_DOT)) {
     token(TOKEN_QUESTION, "in conditional member access expression");
     token(TOKEN_DOT, "in conditional member access expression");
@@ -1033,13 +1051,17 @@ static void conditional() {
     token(TOKEN_CLOSEBRACKET,
           "at the end of a conditional element access expression");
   } else {
+    const struct ParseRule *rule = get_rule(TOKEN_QUESTION);
+
     token(TOKEN_QUESTION, "at the beginning of a ternary expression");
     line_indent();
-    parse_precedence((enum Precedence)(rule->precedence + 1));
+    parse_precedence((enum Precedence)(rule->precedence + 1),
+                     "after the question mark in a ternary expression");
     line();
     token(TOKEN_COLON, "in ternary expression");
     space();
-    parse_precedence((enum Precedence)(rule->precedence + 1));
+    parse_precedence((enum Precedence)(rule->precedence + 1),
+                     "after the colon in a ternary expression");
     dedent();
   }
 }
@@ -1054,7 +1076,9 @@ static const struct ParseRule *get_rule(enum TokenType type) {
   return &rules[type];
 }
 
-static void expression() { parse_precedence(PREC_ASSIGNMENT); }
+static void expression(const char *where) {
+  parse_precedence(PREC_ASSIGNMENT, where);
+}
 
 // ============================================================================
 // Statements
@@ -1114,7 +1138,7 @@ static void variable_declarators(const char *where) {
       // indentation & formatting logic is complex and needs to be kept the
       // same.
       match(TOKEN_AMPERSAND);
-      expression();
+      expression("in the initial value of a variable");
       dedent();
     }
   }
@@ -1132,7 +1156,7 @@ static void variable_declarators(const char *where) {
         line_indent();
         // ("fixed_pointer_initializer", See above.)
         match(TOKEN_AMPERSAND);
-        expression();
+        expression("in the initial value of a variable");
         dedent();
       }
     }
@@ -1140,8 +1164,12 @@ static void variable_declarators(const char *where) {
   token(TOKEN_SEMICOLON, where);
 }
 
+static bool check_is_local_variable_type(enum TokenType type) {
+  return (type == TOKEN_KW_VAR) || check_is_type(type);
+}
+
 static bool check_local_variable_type() {
-  return check_type() || check(TOKEN_KW_VAR);
+  return check_is_local_variable_type(parser.current.type);
 }
 
 static void local_variable_type() {
@@ -1151,7 +1179,56 @@ static void local_variable_type() {
 }
 
 static bool check_local_variable_declaration() {
-  return check_local_variable_type() && check_next_identifier();
+  // The problem here is that types have all these trailing things, and we need
+  // to account for them.
+  int index = parser.index;
+  struct Token token = parser.current;
+  if (check_is_local_variable_type(token.type)) {
+    bool parsing_type_junk = true;
+    while (parsing_type_junk) {
+      int depth = 0;
+      token = next_significant_token(&index);
+      switch (token.type) {
+      case TOKEN_LESSTHAN:
+        depth += 1;
+        break;
+
+      case TOKEN_GREATERTHAN:
+        depth -= 1;
+        if (depth < 0) {
+          parsing_type_junk = false;
+        }
+        break;
+
+      case TOKEN_COMMA:
+        if (depth == 0) {
+          parsing_type_junk = false;
+        }
+        break;
+
+      case TOKEN_QUESTION:
+      case TOKEN_ASTERISK:
+        break;
+
+      default:
+        if (depth == 0) {
+          parsing_type_junk = false;
+        } else if (!is_identifier_token(token.type)) {
+          parsing_type_junk = false;
+        }
+        break;
+      }
+    }
+
+    if (is_identifier_token(token.type)) {
+      DEBUG(("Check local variable declaration: true"));
+      return true;
+    }
+  }
+
+  DEBUG(
+      ("Check local variable declaration: false (%s)", token_text(token.type)));
+  return false;
 }
 
 static void local_variable_declaration() {
@@ -1205,7 +1282,7 @@ static void case_statement() {
       space();
       {
         indent();
-        expression();
+        expression("in the label of a switch case");
         dedent();
       }
     } else {
@@ -1248,11 +1325,11 @@ static void do_statement() {
   token(TOKEN_SEMICOLON, "at the end of a do loop");
 }
 
-static void statement_expression_list() {
-  expression();
+static void statement_expression_list(const char *where) {
+  expression(where);
   while (match(TOKEN_COMMA)) {
     line();
-    expression();
+    expression(where);
   }
 }
 
@@ -1260,11 +1337,13 @@ static void for_initializer() {
   if (check_local_variable_declaration()) {
     local_variable_declaration();
   } else {
-    statement_expression_list();
+    statement_expression_list("in the initializer of a for loop");
   }
 }
-static void for_condition() { expression(); }
-static void for_iterator() { statement_expression_list(); }
+static void for_condition() { expression("in the condition of a for loop"); }
+static void for_iterator() {
+  statement_expression_list("in the iterator of a for loop");
+}
 
 static void for_statement() {
   token(TOKEN_KW_FOR, "at the beginning of a for loop");
@@ -1308,7 +1387,7 @@ static void foreach_statement() {
       space();
       token(TOKEN_KW_IN, "in a foreach loop");
       line();
-      expression();
+      expression("in the collection part of a foreach loop");
       dedent();
     }
     softline();
@@ -1334,7 +1413,7 @@ static void return_statement() {
   token(TOKEN_KW_RETURN, "at the beginning of a return statement");
   if (!check(TOKEN_SEMICOLON)) {
     space();
-    expression();
+    expression("in the value of a return statement");
   }
   token(TOKEN_SEMICOLON, "at the end of a return statement");
 }
@@ -1343,7 +1422,7 @@ static void throw_statement() {
   token(TOKEN_KW_THROW, "at the beginning of a throw statement");
   if (!check(TOKEN_SEMICOLON)) {
     space();
-    expression();
+    expression("in the value of a throw statement");
   }
   token(TOKEN_SEMICOLON, "at the end of a throw statement");
 }
@@ -1415,7 +1494,7 @@ static void using_statement() {
       if (check_local_variable_declaration()) {
         local_variable_declaration();
       } else {
-        expression();
+        expression("in the value of the resource in a using statement");
       }
       dedent();
     }
@@ -1434,7 +1513,7 @@ static void yield_statement() {
     token(TOKEN_KW_RETURN, "or break in a yield statement");
     {
       line_indent();
-      expression();
+      expression("in the value of a yield return statement");
       dedent();
     }
   }
@@ -1554,7 +1633,7 @@ static void embedded_statement(bool embedded) {
         break;
 
       default:
-        expression();
+        expression("or some other statement");
         token(TOKEN_SEMICOLON, "at the end of an expression statement");
         break;
       }
@@ -1605,7 +1684,7 @@ static void attribute_arguments() {
         indented = true;
       }
 
-      expression();
+      expression("in the argument of an attribute initializer");
 
       if (indented) {
         dedent();
@@ -1729,10 +1808,11 @@ static void const_declaration() {
         group();
         identifier("in a const member declaration");
         space();
-        token(TOKEN_EQUALS, "in the value of a const member declaration");
+        token(TOKEN_EQUALS,
+              "between the name and value of a const member declaration");
         {
           line_indent();
-          expression();
+          expression("in the value of a const member declaration");
           dedent();
         }
         end();
@@ -1798,10 +1878,11 @@ static void formal_parameter_list(const char *where) {
         identifier("in a parameter name");
         if (check(TOKEN_EQUALS)) {
           space();
-          token(TOKEN_EQUALS, "in a parameter default value");
+          token(TOKEN_EQUALS,
+                "between the name and default value of a parameter");
           {
             line_indent();
-            expression();
+            expression("in the default value of a parameter");
             dedent();
           }
         }
@@ -1930,7 +2011,7 @@ static void method_declaration() {
       token(TOKEN_EQUALS_GREATERTHAN, "in the expression body of a method");
       {
         line_indent();
-        expression();
+        expression("in the expression body of a method");
         token(TOKEN_SEMICOLON, "at the end of the expression body of a method");
         dedent();
       }
@@ -1972,7 +2053,7 @@ static void property_declaration() {
           "at the beginning of the expression body of a property");
     {
       line_indent();
-      expression();
+      expression("in the expression body of a property");
       token(TOKEN_SEMICOLON, "at the end of the expression body of a property");
       dedent();
     }
@@ -2017,7 +2098,7 @@ static void property_declaration() {
             "at the beginning of a property initializer expression");
       {
         line_indent();
-        expression();
+        expression("in a property initializer");
         token(TOKEN_SEMICOLON,
               "at the end of a property initializer expression");
         dedent();
@@ -2378,7 +2459,7 @@ static void enum_declaration() {
         token(TOKEN_EQUALS, "between the name and the value of an enum member");
         {
           line_indent();
-          expression();
+          expression("in the value of an enum member");
           dedent();
         }
       }
