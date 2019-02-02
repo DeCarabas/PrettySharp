@@ -1810,11 +1810,10 @@ static void declaration_modifiers() {
 
 static void const_declaration() {
   attributes();
-  declaration_modifiers();
 
   {
     group();
-
+    declaration_modifiers();
     token(TOKEN_KW_CONST, "at the beginning of a const declaration");
     space();
     type();
@@ -1849,12 +1848,16 @@ static void const_declaration() {
 
 static void field_declaration() {
   attributes();
-  declaration_modifiers();
 
   {
     group();
-    type();
-    variable_declarators("in a field declaration");
+    declaration_modifiers();
+    {
+      group();
+      type();
+      variable_declarators("in a field declaration");
+      end();
+    }
     end();
   }
 }
@@ -2148,10 +2151,10 @@ static void property_declaration() {
 
 static void event_declaration() {
   attributes();
-  declaration_modifiers();
 
   {
     group();
+    declaration_modifiers();
     token(TOKEN_KW_EVENT, "at the beginning of an event declaration");
     space();
     type();

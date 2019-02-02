@@ -71,20 +71,13 @@ namespace Garden
             this.squareTechnique = this.shapesEffect.Techniques["DrawSquares"];
         }
 
-        readonly
-        GraphicsDevice device;
-        readonly
-        Effect shapesEffect;
-        readonly
-        EffectParameter worldMatrix;
-        readonly
-        EffectParameter viewMatrix;
-        readonly
-        EffectParameter projectionMatrix;
-        readonly
-        EffectTechnique circleTechnique;
-        readonly
-        EffectTechnique squareTechnique;
+        readonly GraphicsDevice device;
+        readonly Effect shapesEffect;
+        readonly EffectParameter worldMatrix;
+        readonly EffectParameter viewMatrix;
+        readonly EffectParameter projectionMatrix;
+        readonly EffectTechnique circleTechnique;
+        readonly EffectTechnique squareTechnique;
 
         public Matrix View
         {
@@ -206,8 +199,7 @@ namespace Garden
     // (@GalaxyKate), at http://www.galaxykate.com/apps/Prototypes/LTrees/
     class Node
     {
-        public static
-        Random random = new Random();
+        public static Random random = new Random();
 
         const int ANGLE_SKEW = 0;
         const int BUSHINESS = 1;
@@ -225,26 +217,16 @@ namespace Garden
         const int FLOWER_SATURATION = 13;
         const int PETAL_ASPECT = 14;
 
-        static
-        int NextID = 0;
-        readonly
-        List<Node> children = new List<Node>();
-        readonly
-        float radius;
-        readonly
-        int depth;
-        readonly
-        float[] dna;
-        readonly
-        float baseAngle;
-        readonly
-        float branchLength;
-        readonly
-        HSBColor idColor;
-        readonly
-        Node parent;
-        readonly
-        int id;
+        static int NextID = 0;
+        readonly List<Node> children = new List<Node>();
+        readonly float radius;
+        readonly int depth;
+        readonly float[] dna;
+        readonly float baseAngle;
+        readonly float branchLength;
+        readonly HSBColor idColor;
+        readonly Node parent;
+        readonly int id;
         float angle;
         Vector3 position;
 
