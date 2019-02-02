@@ -168,6 +168,7 @@ TKN(TRIVIA_BLOCK_COMMENT, "block comment", false, NULL, NULL, PREC_NONE)
 TKN(TRIVIA_EOL, "end of line", false, NULL, NULL, PREC_NONE)
 TKN(TRIVIA_LINE_COMMENT, "line comment", false, NULL, NULL, PREC_NONE)
 TKN(TRIVIA_WHITESPACE, "whitespace", false, NULL, NULL, PREC_NONE)
+TKN(TRIVIA_DIRECTIVE, "directive", false, NULL, NULL, PREC_NONE)
 
 TKN(ERROR, "error", false, NULL, NULL, PREC_NONE)
 TKN(EOF, "end of file", false, NULL, NULL, PREC_NONE)

@@ -130,6 +130,12 @@ static void flush_trivia() {
       doc_breakparent(parser.builder);
       doc_text(parser.builder, trivia.start, trivia.length);
       doc_line(parser.builder);
+    } else if (trivia.type == TOKEN_TRIVIA_DIRECTIVE) {
+      DEBUG(("Handling directive"));
+      doc_breakparent(parser.builder);
+      doc_line(parser.builder); // TODO: Maintain indent?
+      doc_text(parser.builder, trivia.start, trivia.length);
+      doc_line(parser.builder);
     } else {
       // TODO: Consecutive newlines?
     }
@@ -181,7 +187,8 @@ static void advance() {
     parser.index += 1;
 
     if (parser.current.type == TOKEN_TRIVIA_BLOCK_COMMENT ||
-        parser.current.type == TOKEN_TRIVIA_LINE_COMMENT) {
+        parser.current.type == TOKEN_TRIVIA_LINE_COMMENT ||
+        parser.current.type == TOKEN_TRIVIA_DIRECTIVE) {
       parser.has_trivia = true;
       continue;
     } else if (parser.current.type == TOKEN_TRIVIA_WHITESPACE ||
@@ -212,7 +219,8 @@ static struct Token next_significant_token(int *index) {
     if (token.type == TOKEN_TRIVIA_BLOCK_COMMENT ||
         token.type == TOKEN_TRIVIA_EOL ||
         token.type == TOKEN_TRIVIA_LINE_COMMENT ||
-        token.type == TOKEN_TRIVIA_WHITESPACE) {
+        token.type == TOKEN_TRIVIA_WHITESPACE ||
+        token.type == TOKEN_TRIVIA_DIRECTIVE) {
       continue;
     }
 

@@ -318,6 +318,18 @@ struct Token scan_line_comment() {
   }
 }
 
+struct Token scan_directive() {
+  for (;;) {
+    switch (peek()) {
+    case '\r':
+    case '\n':
+      return make_token(TOKEN_TRIVIA_DIRECTIVE);
+    default:
+      advance();
+    }
+  }
+}
+
 struct Token scan_block_comment() {
   int end_line = lexer.line;
   for (;;) {
@@ -385,6 +397,9 @@ static struct Token scan_token() {
       return scan_block_comment();
     }
     return make_token(match('=') ? TOKEN_SLASH_EQUALS : TOKEN_SLASH);
+
+  case '#':
+    return scan_directive();
 
   case '.':
     if (scan_numeric_literal(c)) {
