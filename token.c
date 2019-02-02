@@ -208,7 +208,7 @@ enum TokenType keyword_type(const char *start, int len) {
           case 'p':
             return check_kw(start, len, 3, 5, "licit", TOKEN_KW_EXPLICIT);
           case 't':
-            return check_kw(start, len, 3, 4, "ern", TOKEN_KW_EXTERN);
+            return check_kw(start, len, 3, 3, "ern", TOKEN_KW_EXTERN);
           }
         }
       }
