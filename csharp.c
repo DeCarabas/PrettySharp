@@ -530,7 +530,7 @@ static void parse_precedence(enum Precedence precedence, const char *where) {
   end();
 }
 
-static void block(const char *where);
+static void inline_block(const char *where);
 
 static void implicitly_typed_lambda() {
   group();
@@ -539,7 +539,7 @@ static void implicitly_typed_lambda() {
   token(TOKEN_EQUALS_GREATERTHAN, "in implicitly typed lambda");
   if (check(TOKEN_OPENBRACE)) {
     space();
-    block("at the beginning of the body of a lambda");
+    inline_block("at the beginning of the body of a lambda");
   } else {
     line_indent();
     group();
@@ -687,7 +687,7 @@ static void parenthesized_implicitly_typed_lambda() {
   token(TOKEN_EQUALS_GREATERTHAN, "in parenthesized lambda");
   if (check(TOKEN_OPENBRACE)) {
     space();
-    block("at the beginning of the body of a lambda");
+    inline_block("at the beginning of the body of a lambda");
   } else {
     line_indent();
     group();
@@ -1134,7 +1134,7 @@ static void expression(const char *where) {
 static void statement();
 static void embedded_statement(bool embedded);
 
-static void block(const char *where) {
+static void block_impl(bool force_break, const char *where) {
   token(TOKEN_OPENBRACE, where);
   if (check(TOKEN_CLOSEBRACE)) {
     space();
@@ -1143,11 +1143,19 @@ static void block(const char *where) {
   }
 
   // There *is* a body of some kind.
-  breakparent();
+  bool broken = false;
+  if (force_break) {
+    breakparent();
+    broken = true;
+  }
   {
-    softline_indent();
+    line_indent();
     statement();
     while (!(check(TOKEN_CLOSEBRACE) || check(TOKEN_EOF))) {
+      if (!broken) {
+        breakparent();
+        broken = true;
+      }
       if (parser.previous.type != TOKEN_SEMICOLON) {
         line();
       }
@@ -1156,9 +1164,15 @@ static void block(const char *where) {
     }
     dedent();
   }
-  softline();
+  line();
   token(TOKEN_CLOSEBRACE, "at the end of a block");
 }
+
+static void inline_block(const char *where) {
+  block_impl(/*break*/ false, where);
+}
+
+static void block(const char *where) { block_impl(/*break*/ true, where); }
 
 #define DEBUG_TOKEN(x)                                                         \
   do {                                                                         \
@@ -1223,7 +1237,8 @@ static bool check_local_variable_declaration() {
   if (token.type == TOKEN_KW_VAR) {
     token = next_significant_token(&index);
   } else if (!check_is_type(&index, &token, /*array*/ true)) {
-    // This leaves index and token on the next token after the end of the type.
+    // This leaves index and token on the next token after the end of the
+    // type.
     DEBUG(("Check local variable declaration: not a type"));
     return false;
   }
@@ -1994,9 +2009,9 @@ static void method_declaration() {
       {
         group();
         return_type();
-        // Note: this can be a constructor, in which case the return_type *was*
-        // the method name. If we were being serious here we would double check
-        // the type was the same as the enclosing type, but nah.
+        // Note: this can be a constructor, in which case the return_type
+        // *was* the method name. If we were being serious here we would
+        // double check the type was the same as the enclosing type, but nah.
         if (check_identifier()) {
           line();
           member_name("in the name of a method");
@@ -2050,14 +2065,16 @@ static bool check_accessor() {
 
 static void property_declaration() {
   attributes();
-  declaration_modifiers();
 
   group();
-
-  type();
-  space();
-  member_name("in the name of a property");
-
+  {
+    group();
+    declaration_modifiers();
+    type();
+    space();
+    member_name("in the name of a property");
+    end();
+  }
   // property_body
   if (check(TOKEN_EQUALS_GREATERTHAN)) {
     // Simple "getter" property.
@@ -2078,7 +2095,12 @@ static void property_declaration() {
       line_indent();
 
       // accessor_declarations
+      bool first = true;
       while (check_accessor()) {
+        if (!first) {
+          line();
+        }
+        first = false;
         attributes();
 
         group();
@@ -2090,15 +2112,16 @@ static void property_declaration() {
           token(TOKEN_KW_SET, "or get at the beginning of a property accessor");
         }
         if (!match(TOKEN_SEMICOLON)) {
-          block("or semicolon at the beginning of the body of a property "
-                "accessor");
+          line();
+          inline_block(
+              "or semicolon at the beginning of the body of a property "
+              "accessor");
         }
         end();
-
-        line();
       }
       dedent();
     }
+    line();
     token(TOKEN_CLOSEBRACE,
           "at the end of the accessor declarations of a property");
 

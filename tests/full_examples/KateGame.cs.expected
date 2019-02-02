@@ -86,27 +86,17 @@ namespace Garden
         readonly
         EffectTechnique squareTechnique;
 
-        public
-        Matrix View
+        public Matrix View
         {
-            get{
-                return this.viewMatrix.GetValueMatrix();
-            }
-            set{
-                this.viewMatrix.SetValue(value);
-            }
-            }
+            get { return this.viewMatrix.GetValueMatrix(); }
+            set { this.viewMatrix.SetValue(value); }
+        }
 
-        public
-        Matrix Projection
+        public Matrix Projection
         {
-            get{
-                return this.projectionMatrix.GetValueMatrix();
-            }
-            set{
-                this.projectionMatrix.SetValue(value);
-            }
-            }
+            get { return this.projectionMatrix.GetValueMatrix(); }
+            set { this.projectionMatrix.SetValue(value); }
+        }
 
         public void DrawCircle(HSBColor idColor, Vector3 position, float radius)
         {
