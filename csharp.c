@@ -1699,26 +1699,31 @@ static void statement() {
 
 static void attribute_name() { type_name(); }
 
+static void attribute_argument() {
+  group();
+  bool indented = false;
+  if (check_name_equals()) {
+    name_equals("in attribute arguments");
+
+    line_indent();
+    indented = true;
+  }
+
+  expression("in the argument of an attribute initializer");
+
+  if (indented) {
+    dedent();
+  }
+  end();
+}
+
 static void attribute_arguments() {
   token(TOKEN_OPENPAREN, "at the beginning of attribute arguments");
-  {
+  if (!check(TOKEN_CLOSEPAREN)) {
     softline_indent();
-    while (!check(TOKEN_CLOSEPAREN) && !check(TOKEN_EOF)) {
-      group();
-      bool indented = false;
-      if (check_name_equals()) {
-        name_equals("in attribute arguments");
-
-        line_indent();
-        indented = true;
-      }
-
-      expression("in the argument of an attribute initializer");
-
-      if (indented) {
-        dedent();
-      }
-      end();
+    attribute_argument();
+    while (match(TOKEN_COMMA)) {
+      attribute_argument();
     }
     dedent();
   }
