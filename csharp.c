@@ -1935,7 +1935,11 @@ static void type_constraint() {
     token(TOKEN_OPENPAREN, "in constructor type constraint");
     token(TOKEN_CLOSEPAREN, "in constructor type constraint");
   } else {
-    identifier("in type constraint");
+    if (!match(TOKEN_KW_CLASS)) {
+      if (!match(TOKEN_KW_STRUCT)) {
+        identifier("or 'class' or 'struct' in type constraint");
+      }
+    }
   }
 }
 
@@ -2535,7 +2539,7 @@ static void delegate_declaration() {
     type_parameter_constraint_clauses();
     dedent();
   }
-
+  token(TOKEN_SEMICOLON, "at the end of a delegate declaration");
   end();
 }
 
