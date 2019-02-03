@@ -327,17 +327,17 @@ static void name_equals(const char *where) {
   token(TOKEN_EQUALS, where);
 }
 
-static void type_name();
+static void type();
 
 static void optional_type_argument_list() {
   group();
   if (match(TOKEN_LESSTHAN)) {
     {
       softline_indent();
-      type_name();
+      type();
       while (match(TOKEN_COMMA)) {
         line();
-        type_name();
+        type();
       }
       dedent();
     }

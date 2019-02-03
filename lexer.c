@@ -249,8 +249,11 @@ struct Token scan_verbatim_string_literal() {
       // "" is allowed, and doesn't break the string.
     } else if (is_at_end()) {
       return error_token("Unterminated verbatim string constant.");
+    } else if (match('\n')) {
+      lexer.line++;
+    } else {
+      advance();
     }
-    advance();
   }
 
   return make_token(TOKEN_STRING_LITERAL);
