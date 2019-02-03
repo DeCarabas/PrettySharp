@@ -1072,7 +1072,9 @@ static void binary() {
 }
 
 static void member_access() {
-  token(TOKEN_DOT, "in member access expression");
+  if (!match(TOKEN_DOT)) {
+    token(TOKEN_MINUS_GREATERTHAN, "or '.' in member access expression");
+  }
   identifier("in member access expression");
   optional_type_argument_list();
 }
