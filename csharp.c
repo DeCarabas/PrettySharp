@@ -1103,9 +1103,24 @@ static void greater_than() {
   end();
 }
 
-static void is_as() {
-  notimplemented("Not Implemented: is or as");
-  advance();
+static void is() {
+  group();
+  token(TOKEN_KW_IS, "in relational expression (is)");
+  space();
+  type();
+  if (check_identifier()) {
+    space();
+    identifier("in the pattern matching part of an 'is' expression");
+  }
+  end();
+}
+
+static void as() {
+  group();
+  token(TOKEN_KW_AS, "in relational expression (as)");
+  space();
+  type();
+  end();
 }
 
 static void conditional() {
