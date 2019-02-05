@@ -289,6 +289,7 @@ struct Token scan_interpolated_string_literal(bool verbatim) {
       if (!match('{')) {
         // This is the interpolation hole, spin it around...
         for (;;) {
+          lexer.interpolation.depth = 1;
           struct Token nested = scan_token();
           if (nested.type == TOKEN_ERROR) {
             return nested;
