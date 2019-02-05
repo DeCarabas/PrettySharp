@@ -1734,24 +1734,25 @@ static void attribute_argument() {
   end();
 }
 
-static void attribute_arguments() {
-  token(TOKEN_OPENPAREN, "at the beginning of attribute arguments");
-  if (!check(TOKEN_CLOSEPAREN)) {
-    softline_indent();
-    attribute_argument();
-    while (match(TOKEN_COMMA)) {
+static void opt_attribute_arguments() {
+  if (match(TOKEN_OPENPAREN)) {
+    if (!check(TOKEN_CLOSEPAREN)) {
+      softline_indent();
       attribute_argument();
+      while (match(TOKEN_COMMA)) {
+        attribute_argument();
+      }
+      dedent();
     }
-    dedent();
+    softline();
+    token(TOKEN_CLOSEPAREN, "at the end of attribute arguments");
   }
-  softline();
-  token(TOKEN_CLOSEPAREN, "at the end of attribute arguments");
 }
 
 static void attribute() {
   group();
   attribute_name();
-  attribute_arguments();
+  opt_attribute_arguments();
   end();
 }
 
@@ -2035,6 +2036,7 @@ static void method_declaration() {
   attributes();
   group();
   {
+    bool is_constructor = true;
     group();
     {
       group();
@@ -2050,22 +2052,37 @@ static void method_declaration() {
         // *was* the method name. If we were being serious here we would
         // double check the type was the same as the enclosing type, but nah.
         if (check_identifier()) {
+          is_constructor = false;
           line();
           member_name("in the name of a method");
         }
         end();
       }
 
-      optional_type_parameter_list();
+      if (!is_constructor) {
+        optional_type_parameter_list();
+      }
       end();
     }
 
     formal_parameter_list("in a method declaration");
 
-    if (check(TOKEN_KW_WHERE)) {
-      line_indent();
-      type_parameter_constraint_clauses();
-      dedent();
+    if (is_constructor) {
+      if (check(TOKEN_COLON)) {
+        line_indent();
+        token(TOKEN_COLON, "in a constructor initializer");
+        space();
+        if (!match(TOKEN_KW_THIS)) {
+          token(TOKEN_KW_BASE, "in a constructor initializer");
+        }
+        argument_list();
+      }
+    } else {
+      if (check(TOKEN_KW_WHERE)) {
+        line_indent();
+        type_parameter_constraint_clauses();
+        dedent();
+      }
     }
     end();
   }
