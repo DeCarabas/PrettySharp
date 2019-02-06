@@ -525,7 +525,7 @@ static void parse_precedence(enum Precedence precedence, const char *where) {
   group();
   ParseFn prefix_rule = get_rule(parser.current.type)->prefix;
   if (prefix_rule == NULL) {
-    error("Expect expression %s.", where);
+    error("Expect expression %s", where);
     return;
   }
 
@@ -1056,13 +1056,243 @@ static void object_creation() {
     }
   } else {
     error("Expected a type name, array size, or anonymous object "
-          "initialization.");
+          "initialization");
   }
 }
 
+static void from_clause() {
+  group();
+  token(TOKEN_KW_FROM, "at the beginning of a from clause");
+  {
+    line_indent();
+    {
+      group();
+      if (!(check_identifier() && check_next(TOKEN_KW_IN))) {
+        type();
+        line();
+      }
+      identifier("in the variable of a from clause");
+      end();
+    }
+    line();
+    {
+      group();
+      token(TOKEN_KW_IN,
+            "between the variable and the expression in a from clause");
+      line();
+      expression("at the end of a from clause");
+      end();
+    }
+    dedent();
+  }
+  end();
+}
+
+static void let_clause() {
+  group();
+  {
+    group();
+    token(TOKEN_KW_LET, "at the beginning of a let clause");
+    line();
+    {
+      group();
+      identifier("in the variable of a let clause");
+      line();
+      token(TOKEN_EQUALS,
+            "between the variable and the expression of a let clause");
+      end();
+    }
+    end();
+  }
+  {
+    line_indent();
+    {
+      group();
+      expression("as the value of a let clause");
+      end();
+    }
+    dedent();
+  }
+  end();
+}
+
+static void where_clause() {
+  group();
+  token(TOKEN_KW_WHERE, "at the beginning of a where clause");
+  {
+    line_indent();
+    {
+      group();
+      expression("in the predicate of a where clause");
+      end();
+    }
+    dedent();
+  }
+  end();
+}
+
+static void join_clause() {
+  group();
+  token(TOKEN_KW_JOIN, "at the beginning of a join clause");
+  line_indent();
+  {
+    group();
+    {
+      group();
+      if (!(check_identifier() && check_next(TOKEN_KW_IN))) {
+        type();
+        line();
+      }
+      identifier("in the variable of a join clause");
+      end();
+    }
+    line();
+    token(TOKEN_KW_IN, "between the variable and collection in a join clause");
+    line();
+    expression("in the collection of a join clause");
+    end();
+  }
+
+  line();
+
+  {
+    group();
+    token(TOKEN_KW_ON,
+          "between the collection and the condition in a join clause");
+    {
+      group();
+      expression("on the left of the equality in a join clause");
+      line();
+      token(TOKEN_KW_EQUALS, "between the two sides of a join condition");
+      line();
+      expression("on the right of the equality in a join clause");
+      end();
+    }
+    end();
+  }
+
+  line();
+
+  if (check(TOKEN_KW_INTO)) {
+    group();
+    token(TOKEN_KW_INTO, "after the condition in a join into clause");
+    space();
+    identifier("in the target variable of a join into clause");
+    end();
+  }
+  dedent();
+  end();
+}
+
+static void orderby_clause() {
+  group();
+  token(TOKEN_KW_ORDERBY, "at the beginning of an orderby clause");
+  {
+    line_indent();
+    bool first = true;
+    while (first || match(TOKEN_COMMA)) {
+      if (!first) {
+        end();
+      }
+      first = false;
+      group();
+      expression("in the value of an ordering");
+      line();
+      if (!match(TOKEN_KW_ASCENDING)) {
+        match(TOKEN_KW_DESCENDING);
+      }
+    }
+    end();
+    dedent();
+  }
+  end();
+}
+
+static void select_clause() {
+  group();
+  token(TOKEN_KW_SELECT, "at the beginning of a select clause");
+  {
+    line_indent();
+    expression("in the value of a select clause");
+    dedent();
+  }
+  end();
+}
+
+static void group_clause() {
+  group();
+  token(TOKEN_KW_GROUP, "at the beginning of a group clause");
+  {
+    line_indent();
+    {
+      group();
+      expression("in the value to group in a group clause");
+      line();
+      token(TOKEN_KW_BY,
+            "between the value to group and the value to group by");
+      line();
+      expression("in the value to group by in a group clause");
+      end();
+    }
+    dedent();
+  }
+  end();
+}
+
+static void select_or_group_clause() {
+  if (check(TOKEN_KW_SELECT)) {
+    select_clause();
+  } else if (check(TOKEN_KW_GROUP)) {
+    group_clause();
+  } else {
+    error("Expected select or group clause");
+  }
+}
+
+static void query_body() {
+  bool more_query;
+  do {
+    more_query = false;
+    for (;;) {
+      if (check(TOKEN_KW_FROM)) {
+        from_clause();
+        line();
+      } else if (check(TOKEN_KW_LET)) {
+        let_clause();
+        line();
+      } else if (check(TOKEN_KW_WHERE)) {
+        where_clause();
+        line();
+      } else if (check(TOKEN_KW_JOIN)) {
+        join_clause();
+        line();
+      } else if (check(TOKEN_KW_ORDERBY)) {
+        orderby_clause();
+        line();
+      } else {
+        break;
+      }
+    }
+    group();
+    select_or_group_clause();
+    if (check(TOKEN_KW_INTO)) {
+      line();
+      token(TOKEN_KW_INTO, "in a query continuation");
+      line();
+      identifier("in the variable after 'into'");
+      more_query = true;
+    }
+    end();
+  } while (more_query);
+}
+
 static void query_expression() {
-  notimplemented("Not Implemented: query_expression ('from')");
-  advance();
+  breakparent();
+  // TODO: Set the indent right here, somehow!
+  from_clause();
+  line();
+  query_body();
+  // TODO: Reset the indent right here!
 }
 
 static void binary() {
@@ -2733,7 +2963,7 @@ static void type_declaration() {
   } else if (check(TOKEN_KW_DELEGATE)) {
     delegate_declaration();
   } else {
-    error("Expected some kind of type keyword.");
+    error("Expected some kind of type keyword");
   }
 }
 
