@@ -865,6 +865,11 @@ static void argument_list() {
 
 static void invocation() { argument_list(); }
 
+static void pointer_indirection() {
+  token(TOKEN_ASTERISK, "to dereference a pointer");
+  parse_precedence(PREC_UNARY, "to the right of pointer indirection");
+}
+
 static void unary_prefix() {
   single_token();
   expression("to the right of a unary operator");
@@ -1563,15 +1568,17 @@ static void try_statement() {
     {
       group();
       token(TOKEN_KW_CATCH, "at the beginning of a catch block");
-      space();
-      token(TOKEN_OPENPAREN, "at the beginning of a catch block");
-      type();
-      if (check_identifier()) {
+      if (check(TOKEN_OPENPAREN)) {
         space();
-        identifier("in the variable declaration in a catch block");
+        token(TOKEN_OPENPAREN, "at the beginning of a catch block");
+        type();
+        if (check_identifier()) {
+          space();
+          identifier("in the variable declaration in a catch block");
+        }
+        token(TOKEN_CLOSEPAREN,
+              "at the end of the declaration in a catch block");
       }
-      token(TOKEN_CLOSEPAREN, "at the end of the declaration in a catch block");
-
       if (check(TOKEN_KW_WHEN)) {
         line_indent();
         token(TOKEN_KW_WHEN, "in a catch block");
