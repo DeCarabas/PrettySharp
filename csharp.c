@@ -581,6 +581,34 @@ static void parenthesized_expression() {
   end();
 }
 
+static void checked_expression() {
+  group();
+  token(TOKEN_KW_CHECKED, "at the beginning of a checked expression");
+  token(TOKEN_OPENPAREN, "after 'checked' in a checked expression");
+  {
+    softline_indent();
+    expression("between the parentheses of a checked expression");
+    dedent();
+  }
+  softline();
+  token(TOKEN_CLOSEPAREN, "at the end of a checked expression");
+  end();
+}
+
+static void unchecked_expression() {
+  group();
+  token(TOKEN_KW_UNCHECKED, "at the beginning of a checked expression");
+  token(TOKEN_OPENPAREN, "after 'checked' in a checked expression");
+  {
+    softline_indent();
+    expression("between the parentheses of a checked expression");
+    dedent();
+  }
+  softline();
+  token(TOKEN_CLOSEPAREN, "at the end of a checked expression");
+  end();
+}
+
 static void null_member_access() {
   token(TOKEN_QUESTION_DOT, "in null conditional member access expression");
   identifier("in null conditional member access expression");
@@ -1255,7 +1283,6 @@ static void variable_declarators(const char *where) {
       }
     }
   }
-  token(TOKEN_SEMICOLON, where);
 }
 
 static void local_variable_type() {
@@ -1296,6 +1323,7 @@ static void local_const_declaration() {
   token(TOKEN_KW_CONST, "in constant declaration");
   space();
   local_variable_declaration();
+  token(TOKEN_SEMICOLON, "at the end of a local const declaration");
 }
 
 static void if_statement() {
@@ -1409,8 +1437,8 @@ static void for_initializer() {
       local_variable_declaration();
     } else {
       statement_expression_list("in the initializer of a for loop");
-      token(TOKEN_SEMICOLON, "at the end of the initializer of a for loop");
     }
+    token(TOKEN_SEMICOLON, "at the end of the initializer of a for loop");
   }
 }
 static void for_condition() {
@@ -1542,15 +1570,27 @@ static void try_statement() {
 }
 
 static void checked_statement() {
-  token(TOKEN_KW_CHECKED, "at the beginning of a checked statement");
-  line();
-  block("in the body of a checked statement");
+  if (check_next(TOKEN_OPENPAREN)) {
+    checked_expression();
+    token(TOKEN_SEMICOLON,
+          "at the end of a checked expression posing as a statement");
+  } else {
+    token(TOKEN_KW_CHECKED, "at the beginning of a checked statement");
+    line();
+    block("in the body of a checked statement");
+  }
 }
 
 static void unchecked_statement() {
-  token(TOKEN_KW_UNCHECKED, "at the beginning of an unchecked statement");
-  line();
-  block("in the body of an unchecked statement");
+  if (check_next(TOKEN_OPENPAREN)) {
+    unchecked_expression();
+    token(TOKEN_SEMICOLON,
+          "at the end of an unchecked expression posing as a statement");
+  } else {
+    token(TOKEN_KW_UNCHECKED, "at the beginning of an unchecked statement");
+    line();
+    block("in the body of an unchecked statement");
+  }
 }
 
 static void lock_statement() {
@@ -1735,6 +1775,7 @@ static void statement() {
   // Declaration?
   if (check_local_variable_declaration()) {
     local_variable_declaration();
+    token(TOKEN_SEMICOLON, "at the end of a local variable declaration");
   } else if (check(TOKEN_KW_CONST)) {
     local_const_declaration();
   } else {
@@ -1919,6 +1960,7 @@ static void field_declaration() {
       group();
       type();
       variable_declarators("in a field declaration");
+      token(TOKEN_SEMICOLON, "at the end of a field declaration");
       end();
     }
     end();
@@ -2272,6 +2314,7 @@ static void event_declaration() {
       token(TOKEN_CLOSEBRACE, "at the end of an event declaration");
     } else {
       variable_declarators("in an event declaration");
+      token(TOKEN_SEMICOLON, "at the end of an event declaration");
     }
 
     end();
