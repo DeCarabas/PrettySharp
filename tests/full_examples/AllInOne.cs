@@ -157,7 +157,7 @@ namespace My.Moy
             var remove = 0;
             var select = 0;
             var set = 0;
-			var var = 0;
+            var var = 0;
             var when = 0;
             var where = 0;
             var yield = 0;
@@ -799,7 +799,7 @@ namespace Comments.XmlComments.UndocumentedKeywords
             s = $@"\{p.Name}
                                    ""\";
             s = $"Color [ R={func(b: 3):#0.##}, G={G:#0.##}, B={B:#0.##}, A={A:#0.##} ]";
-            
+
             // nameof expressions
             if (x == null)
                 throw new ArgumentNullException(nameof(x));

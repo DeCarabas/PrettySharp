@@ -1218,13 +1218,17 @@ static void variable_declarators(const char *where) {
     token(TOKEN_EQUALS, where);
     {
       line_indent();
-      // N.B.: This is technically a "fixed_poiner_initializer", not a real
-      // initializer, but we fold it in because it's pretty harmless (this
-      // code is way more lenient by design than the real C# parser) and the
-      // indentation & formatting logic is complex and needs to be kept the
-      // same.
-      match(TOKEN_AMPERSAND);
-      expression("in the initial value of a variable");
+      if (check(TOKEN_OPENBRACE)) {
+        array_initializer();
+      } else {
+        // N.B.: This is technically a "fixed_poiner_initializer", not a real
+        // initializer, but we fold it in because it's pretty harmless (this
+        // code is way more lenient by design than the real C# parser) and the
+        // indentation & formatting logic is complex and needs to be kept the
+        // same.
+        match(TOKEN_AMPERSAND);
+        expression(" or array initializer in the initial value of a variable");
+      }
       dedent();
     }
   }
@@ -1240,10 +1244,14 @@ static void variable_declarators(const char *where) {
       token(TOKEN_EQUALS, where);
       {
         line_indent();
-        // ("fixed_pointer_initializer", See above.)
-        match(TOKEN_AMPERSAND);
-        expression("in the initial value of a variable");
-        dedent();
+        if (check(TOKEN_OPENBRACE)) {
+          array_initializer();
+        } else {
+          // ("fixed_pointer_initializer", See above.)
+          match(TOKEN_AMPERSAND);
+          expression("in the initial value of a variable");
+          dedent();
+        }
       }
     }
   }
@@ -1316,8 +1324,8 @@ const static enum TokenType switch_section_end_tokens[] = {
     TOKEN_EOF,
 };
 
-static void case_statement() {
-  token(TOKEN_KW_CASE, "at the beginning of a case statement");
+static void switch_statement() {
+  token(TOKEN_KW_SWITCH, "at the beginning of a switch statement");
   space();
   parenthesized_expression();
   line();
@@ -1328,7 +1336,23 @@ static void case_statement() {
       space();
       {
         indent();
-        expression("in the label of a switch case");
+        if (check_type()) {
+          group();
+          type();
+          line();
+          identifier("after the type in a case pattern");
+          if (check(TOKEN_KW_WHEN)) {
+            line_indent();
+            group();
+            token(TOKEN_KW_WHEN, "after the identifier in a case pattern");
+            space();
+            expression("after 'when' in a pattern case pattern");
+            end();
+          }
+          end();
+        } else {
+          expression("in the label of a switch case");
+        }
         dedent();
       }
     } else {
@@ -1380,16 +1404,25 @@ static void statement_expression_list(const char *where) {
 }
 
 static void for_initializer() {
-  if (check_local_variable_declaration()) {
-    local_variable_declaration();
-  } else {
-    statement_expression_list("in the initializer of a for loop");
-    token(TOKEN_SEMICOLON, "at the end of the initializer of a for loop");
+  if (!match(TOKEN_SEMICOLON)) {
+    if (check_local_variable_declaration()) {
+      local_variable_declaration();
+    } else {
+      statement_expression_list("in the initializer of a for loop");
+      token(TOKEN_SEMICOLON, "at the end of the initializer of a for loop");
+    }
   }
 }
-static void for_condition() { expression("in the condition of a for loop"); }
+static void for_condition() {
+  if (!match(TOKEN_SEMICOLON)) {
+    expression("in the condition of a for loop");
+    token(TOKEN_SEMICOLON, "between sections of a for loop");
+  }
+}
 static void for_iterator() {
-  statement_expression_list("in the iterator of a for loop");
+  if (!check(TOKEN_CLOSEPAREN)) {
+    statement_expression_list("in the iterator of a for loop");
+  }
 }
 
 static void for_statement() {
@@ -1406,7 +1439,6 @@ static void for_statement() {
 
       for_condition();
 
-      token(TOKEN_SEMICOLON, "between sections of a for loop");
       line();
 
       for_iterator();
@@ -1448,7 +1480,7 @@ static void goto_statement() {
   space();
   if (match(TOKEN_KW_CASE)) {
     space();
-    identifier("in the case label in a goto statement");
+    expression("in the case label in a goto statement");
   } else if (!match(TOKEN_KW_DEFAULT)) {
     identifier("in the label in a goto statement");
   }
@@ -1612,8 +1644,8 @@ static void embedded_statement(bool embedded) {
       case TOKEN_KW_IF:
         if_statement();
         break;
-      case TOKEN_KW_CASE:
-        case_statement();
+      case TOKEN_KW_SWITCH:
+        switch_statement();
         break;
       case TOKEN_KW_WHILE:
         while_statement();
