@@ -1248,6 +1248,16 @@ static void variable_declarators(const char *where) {
       line_indent();
       if (check(TOKEN_OPENBRACE)) {
         array_initializer();
+      } else if (match(TOKEN_KW_STACKALLOC)) {
+        // Technically we can only do this in variable initializers, but...?
+        line_indent();
+        non_array_type();
+        if (match(TOKEN_OPENBRACKET)) {
+          expression("between the brackets in a stackalloc array initializer");
+          token(TOKEN_CLOSEBRACKET,
+                "at the end of a stackalloc array initializer");
+        }
+        dedent();
       } else {
         // N.B.: This is technically a "fixed_poiner_initializer", not a real
         // initializer, but we fold it in because it's pretty harmless (this
@@ -1274,6 +1284,17 @@ static void variable_declarators(const char *where) {
         line_indent();
         if (check(TOKEN_OPENBRACE)) {
           array_initializer();
+        } else if (match(TOKEN_KW_STACKALLOC)) {
+          // Technically we can only do this in variable initializers, but...?
+          line_indent();
+          non_array_type();
+          if (match(TOKEN_OPENBRACKET)) {
+            expression(
+                "between the brackets in a stackalloc array initializer");
+            token(TOKEN_CLOSEBRACKET,
+                  "at the end of a stackalloc array initializer");
+          }
+          dedent();
         } else {
           // ("fixed_pointer_initializer", See above.)
           match(TOKEN_AMPERSAND);
