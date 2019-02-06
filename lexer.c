@@ -1,5 +1,6 @@
 #include "lexer.h"
 #include "common.h"
+#include "unicode.h"
 
 struct LexerInterpolationState {
   bool enabled;
@@ -231,7 +232,15 @@ struct Token scan_identifier_or_keyword() {
     }
 
     if (!is_id_char(peek())) {
-      break;
+      // Try decoding unicode. (Ugh.)
+      uint32_t rune;
+      const char *tmp = lexer.current;
+      if (decode_utf8(&tmp, &rune) && is_identifier_part_rune(rune)) {
+        lexer.current = tmp;
+        continue;
+      } else {
+        break;
+      }
     }
 
     advance();
@@ -579,7 +588,7 @@ static struct Token scan_token() {
       break; // Error case.
     }
 
-  case '\\':
+  case '\\': // Oh stupid unicode escape.
     return scan_identifier_or_keyword();
 
   case '_':
@@ -594,6 +603,14 @@ static struct Token scan_token() {
       if (scan_numeric_literal(c)) {
         return make_token(TOKEN_NUMERIC_LITERAL);
       }
+    }
+
+    uint32_t rune;
+    // We've already consumed the first byte, so we need to back up one.
+    const char *tmp = lexer.current - 1;
+    if (decode_utf8(&tmp, &rune) && is_identifier_start_rune(rune)) {
+      lexer.current = tmp;
+      return scan_identifier_or_keyword();
     }
   }
 
