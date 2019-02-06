@@ -145,8 +145,7 @@ namespace OnceAndFuture.Syndication
         static FeedSegment HandleAtomLink(FeedSegment feed, XElement link)
         {
             string rel = link.Attribute(XNames.Atom.Rel)?.Value ?? "alternate";
-            string type =
-                link.Attribute(XNames.Atom.Type)?.Value ?? "text/html";
+            string type = link.Attribute(XNames.Atom.Type)?.Value ?? "text/html";
             string href = link.Attribute(XNames.Atom.Href)?.Value;
             if (
                 String.Equals(
@@ -169,8 +168,7 @@ namespace OnceAndFuture.Syndication
         static Item HandleAtomLink(Item item, XElement link)
         {
             string rel = link.Attribute(XNames.Atom.Rel)?.Value ?? "alternate";
-            string type =
-                link.Attribute(XNames.Atom.Type)?.Value ?? "text/html";
+            string type = link.Attribute(XNames.Atom.Type)?.Value ?? "text/html";
             string href = link.Attribute(XNames.Atom.Href)?.Value;
             if (
                 String.Equals(
