@@ -2095,13 +2095,30 @@ static void attribute_list() {
   }
 }
 
+static enum TokenType attribute_target_tokens[] = {
+    TOKEN_KW_RETURN,
+    TOKEN_KW_GLOBAL,
+};
+
+static bool check_attribute_target() {
+  return check_identifier() || check_any(attribute_target_tokens,
+                                         ARRAY_SIZE(attribute_target_tokens));
+}
+
+static void attribute_target() {
+  if (!match_any(attribute_target_tokens,
+                 ARRAY_SIZE(attribute_target_tokens))) {
+    identifier("in an attribute target");
+  }
+}
+
 static void attribute_section() {
   group();
   token(TOKEN_OPENBRACKET, "at the beginning of an attribute section");
   {
     softline_indent();
-    if (check(TOKEN_IDENTIFIER) && check_next(TOKEN_COLON)) {
-      identifier("in an attribute target");
+    if (check_attribute_target() && check_next(TOKEN_COLON)) {
+      attribute_target();
       token(TOKEN_COLON, "after an attribute target");
       line();
     }
@@ -2135,11 +2152,15 @@ static void global_attributes() {
 // them everywhere, even though it doesn't make sense to have e.g. `async
 // struct`.
 const static enum TokenType modifier_tokens[] = {
-    TOKEN_KW_NEW,     TOKEN_KW_PUBLIC,   TOKEN_KW_PROTECTED, TOKEN_KW_INTERNAL,
-    TOKEN_KW_PRIVATE, TOKEN_KW_ABSTRACT, TOKEN_KW_SEALED,    TOKEN_KW_STATIC,
-    TOKEN_KW_UNSAFE,  TOKEN_KW_VIRTUAL,  TOKEN_KW_OVERRIDE,  TOKEN_KW_EXTERN,
-    TOKEN_KW_ASYNC,   TOKEN_KW_READONLY,
+    TOKEN_KW_ABSTRACT, TOKEN_KW_ASYNC,    TOKEN_KW_EXTERN,   TOKEN_KW_INTERNAL,
+    TOKEN_KW_NEW,      TOKEN_KW_OVERRIDE, TOKEN_KW_PRIVATE,  TOKEN_KW_PROTECTED,
+    TOKEN_KW_PUBLIC,   TOKEN_KW_READONLY, TOKEN_KW_SEALED,   TOKEN_KW_STATIC,
+    TOKEN_KW_UNSAFE,   TOKEN_KW_VIRTUAL,  TOKEN_KW_VOLATILE,
 };
+
+static bool check_is_modifier(enum TokenType token) {
+  return check_is_any(token, modifier_tokens, ARRAY_SIZE(modifier_tokens));
+}
 
 static bool check_modifier() {
   return check_any(modifier_tokens, ARRAY_SIZE(modifier_tokens));
@@ -2589,9 +2610,27 @@ static void operator_declaration() {
   advance();
 }
 
+static enum TokenType destructor_mod_tokens[] = {
+    TOKEN_KW_EXTERN,
+    TOKEN_KW_UNSAFE,
+};
+
 static void destructor_declaration() {
-  notimplemented("Not Implemented: Destructor");
-  advance();
+  // method header
+  attributes();
+  group();
+  while (match_any(destructor_mod_tokens, ARRAY_SIZE(destructor_mod_tokens))) {
+    line();
+  }
+  token(TOKEN_TILDE, "at the beginning of a destructor declaration");
+  identifier("in the name of a destructor");
+  token(TOKEN_OPENPAREN, "after the name of a destructor");
+  token(TOKEN_CLOSEPAREN, "in the empty argument list of a destructor");
+  if (!match(TOKEN_SEMICOLON)) {
+    line();
+    block("in the body of a destructor");
+  }
+  end();
 }
 
 enum MemberKind {
@@ -2611,66 +2650,105 @@ static enum MemberKind check_member() {
   // OK this one sucks because we need to scan forward through tokens to
   // figure out what we're actually looking at. If we don't appear to be
   // looking at a member, then we return MEMBERKIND_NONE.
-  int index = parser.index - 1;
-  while (index < parser.buffer.count) {
-    enum TokenType token = parser.buffer.tokens[index].type;
-    index += 1;
+  DEBUG(("Check member..."));
+  int index = parser.index;
+  struct Token token = parser.current;
 
-    // Maybe this token has the clue about what we are...
-    if (token == TOKEN_KW_CONST) {
-      return MEMBERKIND_CONST;
-    }
-    if (token == TOKEN_KW_THIS) {
-      return MEMBERKIND_INDEXER;
-    }
-    if (token == TOKEN_KW_EVENT) {
-      return MEMBERKIND_EVENT;
-    }
-    if (token == TOKEN_KW_OPERATOR) {
-      return MEMBERKIND_OPERATOR;
-    }
-    if (token == TOKEN_TILDE) {
-      return MEMBERKIND_DESTRUCTOR; // Destructors are like methods.
-    }
-    if (token == TOKEN_KW_ASYNC) {
-      return MEMBERKIND_METHOD; // Only methods can be async.
-    }
-    if (token == TOKEN_KW_PARTIAL) {
-      return MEMBERKIND_METHOD; // Only methods can be partial.
-    }
+  // Attributes.
+  while (token.type == TOKEN_OPENBRACKET) {
+    DEBUG(("Scanning attributes"));
+    int depth = 1;
+    bool scanning_attributes = true;
+    while (scanning_attributes) {
+      token = next_significant_token(&index);
+      switch (token.type) {
+      case TOKEN_OPENBRACKET:
+        depth++;
+        break;
 
-    if (is_type_keyword(token)) {
-      return MEMBERKIND_TYPE;
-    }
+      case TOKEN_CLOSEBRACKET:
+        depth--;
+        if (depth == 0) {
+          scanning_attributes = false;
+        }
+        break;
 
-    if (token == TOKEN_EQUALS) {
-      // Well.... if I have got this far and I see an '=' it must be a field.
-      // (Otherwise it would have been a const.)
-      return MEMBERKIND_FIELD;
+      case TOKEN_EOF:
+        DEBUG(("EOF while scanning attributes"));
+        return MEMBERKIND_NONE;
+
+      default:
+        break;
+      }
     }
-    if (token == TOKEN_OPENPAREN) {
-      // ...must be the arg list of a method.
-      return MEMBERKIND_METHOD;
-    }
-    if (token == TOKEN_OPENBRACE) {
-      // If we see an open brace before a paren then it's a property.
-      return MEMBERKIND_PROPERTY;
-    }
-    if (token == TOKEN_EQUALS_GREATERTHAN) {
-      // If we see one of those arrow thingies it's definitely a property.
-      return MEMBERKIND_PROPERTY;
-    }
-    if (token == TOKEN_SEMICOLON) {
-      // No brace, no arrow, no special keyword, must be a field.
-      return MEMBERKIND_FIELD;
-    }
-    if (token == TOKEN_CLOSEBRACE) {
-      // Welp, I don't know, we missed all the clues somehow!
+    token = next_significant_token(&index);
+  }
+
+  while (check_is_modifier(token.type)) {
+    token = next_significant_token(&index);
+  }
+
+  if (token.type == TOKEN_TILDE) {
+    DEBUG(("~ -> MEMBERKIND_DESTRUCTOR"));
+    return MEMBERKIND_DESTRUCTOR;
+  }
+  if (token.type == TOKEN_KW_EVENT) {
+    DEBUG(("event -> MEMBERKIND_EVENT"));
+    return MEMBERKIND_EVENT;
+  }
+  if (token.type == TOKEN_KW_CONST) {
+    DEBUG(("const -> MEMBERKIND_CONST"));
+    return MEMBERKIND_CONST;
+  }
+  if (is_type_keyword(token.type)) {
+    DEBUG(("type keyword -> MEMBERKIND_TYPE"));
+    return MEMBERKIND_TYPE;
+  }
+
+  if (!check_is_type(&index, &token, /*array*/ true)) {
+    if (token.type == TOKEN_KW_VOID) {
+      token = next_significant_token(&index);
+    } else {
+      DEBUG(("No type while determining member"));
       return MEMBERKIND_NONE;
     }
   }
 
-  return MEMBERKIND_NONE;
+  // From here on out it's easy; just scan.
+  for (;;) {
+    switch (token.type) {
+    case TOKEN_EOF:
+      DEBUG(("EOF before member type determination"));
+      return MEMBERKIND_NONE;
+    case TOKEN_KW_OPERATOR:
+      DEBUG(("operator -> MEMBERKIND_OPERATOR"));
+      return MEMBERKIND_OPERATOR;
+    case TOKEN_OPENBRACKET:
+      DEBUG(("[ -> MEMBERKIND_INDEXER"));
+      return MEMBERKIND_INDEXER;
+    case TOKEN_OPENPAREN:
+      DEBUG(("( -> MEMBERKIND_METHOD"));
+      return MEMBERKIND_METHOD;
+    case TOKEN_EQUALS:
+      // N.B.: Explicitly look for this because it helps us find a field with an
+      // initial value of a lambda, which would otherwise look like a property
+      // with an expression body.
+      DEBUG(("= -> MEMBERKIND_FIELD"));
+      return MEMBERKIND_FIELD;
+    case TOKEN_SEMICOLON:
+      DEBUG(("; -> MEMBERKIND_FIELD"));
+      return MEMBERKIND_FIELD;
+    case TOKEN_EQUALS_GREATERTHAN:
+      DEBUG(("=> -> MEMBERKIND_PROPERTY"));
+      return MEMBERKIND_PROPERTY;
+    case TOKEN_OPENBRACE:
+      DEBUG(("{ -> MEMBERKIND_PROPERTY"));
+      return MEMBERKIND_PROPERTY;
+    default:
+      break;
+    }
+    token = next_significant_token(&index);
+  }
 }
 
 static void member_declarations() {
