@@ -76,9 +76,6 @@ static void verror_at(struct Token *token, const char *format, va_list args) {
   fprintf(stderr, ": ");
   vfprintf(stderr, format, args);
   fprintf(stderr, "\n");
-
-  // TODO: Fix all the bugs where we get stuck on parse errors.
-  exit(27);
 }
 
 static void verror(const char *format, va_list args) {
