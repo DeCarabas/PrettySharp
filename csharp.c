@@ -2187,6 +2187,7 @@ static void attribute_list() {
 static enum TokenType attribute_target_tokens[] = {
     TOKEN_KW_RETURN,
     TOKEN_KW_GLOBAL,
+    TOKEN_KW_EVENT,
 };
 
 static bool check_attribute_target() {
@@ -2352,43 +2353,46 @@ static bool check_formal_parameter() {
          check_type() || check(TOKEN_COMMA);
 }
 
+static void formal_parameter_list_inner() {
+  bool first = true;
+  while (check_formal_parameter()) {
+    if (!first) {
+      token(TOKEN_COMMA, "between parameters");
+      line();
+    }
+    first = false;
+
+    {
+      group();
+      attributes();
+      if (match_any(parameter_modifier_tokens,
+                    ARRAY_SIZE(parameter_modifier_tokens))) {
+        space();
+      }
+      type();
+      space();
+      identifier("in a parameter name");
+      if (check(TOKEN_EQUALS)) {
+        space();
+        token(TOKEN_EQUALS,
+              "between the name and default value of a parameter");
+        {
+          line_indent();
+          expression("in the default value of a parameter");
+          dedent();
+        }
+      }
+      end();
+    }
+  }
+}
+
 static void formal_parameter_list(const char *where) {
   group();
   token(TOKEN_OPENPAREN, where);
   {
     softline_indent();
-    bool first = true;
-    while (check_formal_parameter()) {
-      if (!first) {
-        token(TOKEN_COMMA, "between parameters");
-        line();
-      }
-      first = false;
-
-      {
-        group();
-        attributes();
-        if (match_any(parameter_modifier_tokens,
-                      ARRAY_SIZE(parameter_modifier_tokens))) {
-          space();
-        }
-        type();
-        space();
-        identifier("in a parameter name");
-        if (check(TOKEN_EQUALS)) {
-          space();
-          token(TOKEN_EQUALS,
-                "between the name and default value of a parameter");
-          {
-            line_indent();
-            expression("in the default value of a parameter");
-            dedent();
-          }
-        }
-        end();
-      }
-    }
-
+    formal_parameter_list_inner();
     dedent();
   }
   token(TOKEN_CLOSEPAREN, "at the end of a parameter list");
@@ -2559,6 +2563,33 @@ static bool check_accessor() {
          check(TOKEN_KW_GET) || check(TOKEN_KW_SET);
 }
 
+static void accessor_declarations() {
+  // accessor_declarations
+  bool first = true;
+  while (check_accessor()) {
+    if (!first) {
+      line();
+    }
+    first = false;
+    attributes();
+
+    group();
+    while (match_any(accessor_modifiers, ARRAY_SIZE(accessor_modifiers))) {
+      space();
+    }
+
+    if (!match(TOKEN_KW_GET)) {
+      token(TOKEN_KW_SET, "or get at the beginning of a property accessor");
+    }
+    if (!match(TOKEN_SEMICOLON)) {
+      line();
+      inline_block("or semicolon at the beginning of the body of a property "
+                   "accessor");
+    }
+    end();
+  }
+}
+
 static void property_declaration() {
   attributes();
 
@@ -2590,31 +2621,8 @@ static void property_declaration() {
     {
       line_indent();
 
-      // accessor_declarations
-      bool first = true;
-      while (check_accessor()) {
-        if (!first) {
-          line();
-        }
-        first = false;
-        attributes();
+      accessor_declarations();
 
-        group();
-        while (match_any(accessor_modifiers, ARRAY_SIZE(accessor_modifiers))) {
-          space();
-        }
-
-        if (!match(TOKEN_KW_GET)) {
-          token(TOKEN_KW_SET, "or get at the beginning of a property accessor");
-        }
-        if (!match(TOKEN_SEMICOLON)) {
-          line();
-          inline_block(
-              "or semicolon at the beginning of the body of a property "
-              "accessor");
-        }
-        end();
-      }
       dedent();
     }
     line();
@@ -2690,8 +2698,60 @@ static void event_declaration() {
 }
 
 static void indexer_declaration() {
-  notimplemented("Not Implemented: Indexer");
-  advance();
+  attributes();
+
+  group();
+  {
+    group();
+    declaration_modifiers();
+    type();
+    space();
+    if (check_identifier()) {
+      member_name("in the interface name of an indexer");
+      token(TOKEN_DOT, "between the interface name of the indexer and 'this'");
+    }
+    token(TOKEN_KW_THIS, "in an indexer");
+    end();
+  }
+  {
+    group();
+    token(TOKEN_OPENBRACKET, "after 'this' in an indexer");
+    softline_indent();
+    formal_parameter_list_inner();
+    dedent();
+    token(TOKEN_CLOSEBRACKET, "after the parameter list of an indexer");
+    end();
+  }
+
+  // property_body
+  if (check(TOKEN_EQUALS_GREATERTHAN)) {
+    // Simple "getter" property.
+    space();
+    token(TOKEN_EQUALS_GREATERTHAN,
+          "at the beginning of the expression body of an indexer");
+    {
+      line_indent();
+      expression("in the expression body of a property");
+      token(TOKEN_SEMICOLON, "at the end of the expression body of an indexer");
+      dedent();
+    }
+  } else {
+    line();
+    token(TOKEN_OPENBRACE,
+          "at the beginning of the accessor declarations of an indexer");
+    {
+      line_indent();
+
+      accessor_declarations();
+
+      dedent();
+    }
+    line();
+    token(TOKEN_CLOSEBRACE,
+          "at the end of the accessor declarations of an indexer");
+  }
+
+  end();
 }
 
 static void operator_declaration() {
