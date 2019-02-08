@@ -261,8 +261,8 @@ static bool check_(enum TokenType type, int line) {
   parser.loop_count++;
   if (parser.loop_count == 100) {
     fprintf(stderr,
-            "%4d We're stuck!! Looking for %s at %s at source line %d\n", line,
-            token_text(type), token_text(parser.current.type),
+            "%4d We're stuck!! Looking for '%s' at '%s' on source line %d\n",
+            line, token_text(type), token_text(parser.current.type),
             parser.current.line);
     abort();
   }
@@ -409,8 +409,30 @@ const static enum TokenType builtin_type_tokens[] = {
     TOKEN_KW_BOOL,  TOKEN_KW_OBJECT, TOKEN_KW_DYNAMIC, TOKEN_KW_STRING,
 };
 
+static void tuple_element_type() {
+  group();
+  type();
+  if (check_identifier()) {
+    line_indent();
+    identifier("as the name in a tuple type");
+    dedent();
+  }
+  end();
+}
+
 static void non_array_type() {
-  if (!match_any(builtin_type_tokens, ARRAY_SIZE(builtin_type_tokens))) {
+  if (match(TOKEN_OPENPAREN)) {
+    softline_indent();
+    tuple_element_type();
+    do {
+      token(TOKEN_COMMA, "between elements of a tuple type");
+      line();
+      tuple_element_type();
+    } while (check(TOKEN_COMMA));
+
+    dedent();
+    token(TOKEN_CLOSEPAREN, "at the end of a tuple type");
+  } else if (!match_any(builtin_type_tokens, ARRAY_SIZE(builtin_type_tokens))) {
     type_name();
   }
 
