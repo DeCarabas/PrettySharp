@@ -610,7 +610,43 @@ static void parenthesized_expression() {
   token(TOKEN_OPENPAREN, "in parenthesized expression");
   {
     softline_indent();
-    expression("between parentheses in a parenthesized expression");
+
+    group();
+    bool indented = false;
+    if (check_identifier() && check_next(TOKEN_COLON)) {
+      identifier("in the name of a named tuple element");
+      token(TOKEN_COLON,
+            "between the name and the expression in a named tuple element");
+      line_indent();
+      indented = true;
+    }
+
+    expression("between parentheses in a tuple or parenthesized expression");
+    if (indented) {
+      dedent();
+      indented = false;
+    }
+
+    while (match(TOKEN_COMMA)) {
+      end();
+      line();
+      group();
+
+      if (check_identifier() && check_next(TOKEN_COLON)) {
+        identifier("in the name of a named tuple element");
+        token(TOKEN_COLON,
+              "between the name and the expression in a named tuple element");
+        line_indent();
+        indented = true;
+      }
+
+      expression("in a tuple element");
+      if (indented) {
+        dedent();
+      }
+    }
+
+    end();
     dedent();
   }
   softline();
@@ -717,7 +753,20 @@ static bool check_parenthesized_implicitly_typed_lambda() {
   if (is_identifier_token(token.type)) {
     token = next_significant_token(&index);
     if (token.type == TOKEN_COMMA) {
-      return true; // 1
+      // This scan is to disambiguate between a lambda and a tuple.
+      token = next_significant_token(&index);
+      while (token.type == TOKEN_COMMA || is_identifier_token(token.type) ||
+             check_is_any(token.type, builtin_type_tokens,
+                          ARRAY_SIZE(builtin_type_tokens))) {
+        token = next_significant_token(&index);
+      }
+
+      // ) =>
+      if (token.type != TOKEN_CLOSEPAREN) {
+        return false;
+      }
+      token = next_significant_token(&index);
+      return token.type == TOKEN_EQUALS_GREATERTHAN; // 1
     } else if (token.type == TOKEN_CLOSEPAREN) {
       token = next_significant_token(&index);
       if (token.type == TOKEN_EQUALS_GREATERTHAN) {
