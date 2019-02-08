@@ -17,6 +17,7 @@ struct Parser {
 
   bool had_error;
   bool panic_mode;
+  bool suppress_errors;
 };
 
 struct Parser parser;
@@ -59,7 +60,12 @@ static void DEBUG_(const char *format, ...) {
 
 static void verror_at(struct Token *token, const char *format, va_list args) {
   parser.had_error = true;
-  if (parser.panic_mode) {
+  if (parser.panic_mode || parser.suppress_errors) {
+#ifdef PRINT_DEBUG_ENABLED
+    DEBUG_("vv SUPPRESSED ERROR vv");
+    vDEBUG(format, args);
+    DEBUG_("^^ SUPPRESSED ERROR ^^");
+#endif
     return;
   }
   parser.panic_mode = true;
@@ -316,7 +322,7 @@ static bool check_expensive(void (*parse_func)(), struct Token *token,
                             int *index) {
   struct Parser saved_parser = parser;
   parser.had_error = false;
-  parser.panic_mode = true;
+  parser.suppress_errors = true;
   parser.index = *index;
   parser.current = *token;
 
@@ -336,6 +342,26 @@ static bool check_expensive(void (*parse_func)(), struct Token *token,
   parser.builder->group_depth = saved_builder.group_depth;
 
   return success;
+}
+
+static void resync() {
+  if (parser.panic_mode) {
+    for (;;) {
+      if (check(TOKEN_EOF)) {
+        break;
+      }
+      if (check(TOKEN_CLOSEBRACE)) {
+        break;
+      }
+      if (check(TOKEN_SEMICOLON)) {
+        advance();
+        break;
+      }
+      advance();
+    }
+
+    parser.panic_mode = false;
+  }
 }
 
 // ============================================================================
@@ -2027,6 +2053,8 @@ static void embedded_statement(bool embedded) {
       }
     }
 
+    resync();
+
     if (embedded) {
       dedent();
     }
@@ -2742,9 +2770,9 @@ static enum MemberKind check_member() {
       DEBUG(("( -> MEMBERKIND_METHOD"));
       return MEMBERKIND_METHOD;
     case TOKEN_EQUALS:
-      // N.B.: Explicitly look for this because it helps us find a field with an
-      // initial value of a lambda, which would otherwise look like a property
-      // with an expression body.
+      // N.B.: Explicitly look for this because it helps us find a field with
+      // an initial value of a lambda, which would otherwise look like a
+      // property with an expression body.
       DEBUG(("= -> MEMBERKIND_FIELD"));
       return MEMBERKIND_FIELD;
     case TOKEN_SEMICOLON:
@@ -3186,6 +3214,7 @@ bool format_csharp(struct DocBuilder *builder, const char *source) {
   parser.builder = builder;
   parser.had_error = false;
   parser.panic_mode = false;
+  parser.suppress_errors = false;
 
   parser.buffer = scan_tokens(source);
   parser.index = 0;
