@@ -14,10 +14,11 @@ struct Doc {
 
 struct DocBuilder {
   int count;
-  int capacity;
   int margin;
   int indent;
   int group_depth;
+
+  int capacity;
   struct Doc *contents;
 };
 

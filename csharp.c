@@ -7,6 +7,7 @@ struct Parser {
   struct DocBuilder *builder;
   struct TokenBuffer buffer;
   int index;
+  int loop_count;
 
   struct Token current;
   struct Token previous;
@@ -57,11 +58,11 @@ static void DEBUG_(const char *format, ...) {
 #endif
 
 static void verror_at(struct Token *token, const char *format, va_list args) {
+  parser.had_error = true;
   if (parser.panic_mode) {
     return;
   }
   parser.panic_mode = true;
-  parser.had_error = true;
 
   fprintf(stderr, "[line %d] Error", token->line);
 
@@ -174,6 +175,7 @@ static void space() { doc_text(parser.builder, " ", 1); }
 // ============================================================================
 
 static void advance() {
+  parser.loop_count = 0;
   parser.previous = parser.current;
   parser.trivia_index = parser.index;
   for (;;) {
@@ -256,6 +258,15 @@ static void token(enum TokenType type, const char *where) {
 }
 
 static bool check_(enum TokenType type, int line) {
+  parser.loop_count++;
+  if (parser.loop_count == 100) {
+    fprintf(stderr,
+            "%4d We're stuck!! Looking for %s at %s at source line %d\n", line,
+            token_text(type), token_text(parser.current.type),
+            parser.current.line);
+    abort();
+  }
+
   bool result = parser.current.type == type;
   DEBUG(("%4d Check %s == %s -> %s", line, token_text(type),
          token_text(parser.current.type), result ? "true" : "false"));
@@ -301,12 +312,41 @@ static bool match_any(const enum TokenType *types, int count) {
   return false;
 }
 
+static bool check_expensive(void (*parse_func)(), struct Token *token,
+                            int *index) {
+  struct Parser saved_parser = parser;
+  parser.had_error = false;
+  parser.panic_mode = true;
+  parser.index = *index;
+  parser.current = *token;
+
+  // TODO: Probably core should give me a way to save and restore builders.
+  struct DocBuilder saved_builder = *parser.builder;
+
+  parse_func();
+
+  bool success = !parser.had_error;
+  *token = parser.current;
+  *index = parser.index;
+
+  parser = saved_parser;
+  parser.builder->count = saved_builder.count;
+  parser.builder->margin = saved_builder.margin;
+  parser.builder->indent = saved_builder.indent;
+  parser.builder->group_depth = saved_builder.group_depth;
+
+  return success;
+}
+
 // ============================================================================
 // Names
 // ============================================================================
 
 static bool check_identifier() {
-  return is_identifier_token(parser.current.type);
+  bool result = is_identifier_token(parser.current.type);
+  DEBUG(("Check identifier %s == %s", token_text(parser.current.type),
+         result ? "true" : "false"));
+  return result;
 }
 
 static void identifier(const char *where) {
@@ -369,73 +409,6 @@ const static enum TokenType builtin_type_tokens[] = {
     TOKEN_KW_BOOL,  TOKEN_KW_OBJECT, TOKEN_KW_DYNAMIC, TOKEN_KW_STRING,
 };
 
-static bool check_is_type(int *index, struct Token *token, bool array) {
-  if (!check_is_any(token->type, builtin_type_tokens,
-                    ARRAY_SIZE(builtin_type_tokens)) &&
-      !is_identifier_token(token->type)) {
-    return false;
-  }
-
-  for (;;) {
-    int depth = 0;
-    *token = next_significant_token(index);
-    switch (token->type) {
-    case TOKEN_LESSTHAN:
-      depth += 1;
-      break;
-
-    case TOKEN_GREATERTHAN:
-      depth -= 1;
-      if (depth < 0) {
-        return false;
-      }
-      break;
-
-    case TOKEN_COMMA:
-      if (depth == 0) {
-        return false;
-      }
-      break;
-
-    case TOKEN_QUESTION:
-    case TOKEN_ASTERISK:
-      break;
-
-    case TOKEN_OPENBRACKET: {
-      if (depth == 0 && !array) {
-        // Skip out here, if we're balanced we've got a type.
-        return true;
-      }
-
-      *token = next_significant_token(index);
-      while (token->type == TOKEN_COMMA) {
-        *token = next_significant_token(index);
-      }
-      if (token->type != TOKEN_CLOSEBRACKET) {
-        DEBUG(("Check is type: false (mismatched brackets: %s)",
-               token_text(token->type)));
-        return false;
-      }
-    } break;
-
-    default:
-      return (depth == 0);
-    }
-  }
-}
-
-static bool check_type() {
-  int index = parser.index;
-  struct Token token = parser.current;
-  return check_is_type(&index, &token, /*array*/ true);
-}
-
-static bool check_non_array_type() {
-  int index = parser.index;
-  struct Token token = parser.current;
-  return check_is_type(&index, &token, /*array*/ false);
-}
-
 static void non_array_type() {
   if (!match_any(builtin_type_tokens, ARRAY_SIZE(builtin_type_tokens))) {
     type_name();
@@ -476,6 +449,25 @@ static void type() {
     // Pointer.
     match(TOKEN_ASTERISK);
   }
+}
+
+static bool check_is_type(int *index, struct Token *token, bool array) {
+  DEBUG(("Checking For Type...."));
+  bool result = check_expensive(array ? type : non_array_type, token, index);
+  DEBUG(("      ... check for type: %s", result ? "true" : "false"));
+  return result;
+}
+
+static bool check_type() {
+  int index = parser.index;
+  struct Token token = parser.current;
+  return check_is_type(&index, &token, /*array*/ true);
+}
+
+static bool check_non_array_type() {
+  int index = parser.index;
+  struct Token token = parser.current;
+  return check_is_type(&index, &token, /*array*/ false);
 }
 
 // ============================================================================
@@ -1560,7 +1552,8 @@ static bool check_local_variable_declaration() {
     DEBUG(("Check local variable declaration: true (type and identifier)"));
     return true;
   } else {
-    DEBUG(("Check local variable declaration: false"));
+    DEBUG(("Check local variable declaration: %s not identifier",
+           token_text(token.type)));
     return false;
   }
 }
