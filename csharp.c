@@ -457,6 +457,7 @@ static void non_array_type() {
     } while (check(TOKEN_COMMA));
 
     dedent();
+    softline();
     token(TOKEN_CLOSEPAREN, "at the end of a tuple type");
   } else if (!match_any(builtin_type_tokens, ARRAY_SIZE(builtin_type_tokens))) {
     type_name();
@@ -2144,6 +2145,13 @@ static void attribute_argument() {
 
     line_indent();
     indented = true;
+  } else if (check_identifier() && check_next(TOKEN_COLON)) {
+    identifier("in the name of a named attribute argument");
+    token(TOKEN_COLON,
+          "between the name and the value of a named attribute argument");
+
+    line_indent();
+    indented = true;
   }
 
   expression("in the argument of an attribute initializer");
@@ -2719,6 +2727,7 @@ static void indexer_declaration() {
     softline_indent();
     formal_parameter_list_inner();
     dedent();
+    softline();
     token(TOKEN_CLOSEBRACKET, "after the parameter list of an indexer");
     end();
   }
@@ -2754,9 +2763,93 @@ static void indexer_declaration() {
   end();
 }
 
+static enum TokenType overloadable_operator_tokens[] = {
+    TOKEN_AMPERSAND,
+    TOKEN_ASTERISK,
+    TOKEN_BAR,
+    TOKEN_CARET,
+    TOKEN_EQUALS_EQUALS,
+    TOKEN_EXCLAMATION,
+    TOKEN_EXCLAMATION_EQUALS,
+    TOKEN_GREATERTHAN,
+    TOKEN_GREATERTHAN_EQUALS,
+    TOKEN_KW_FALSE,
+    TOKEN_KW_TRUE,
+    TOKEN_LESSTHAN,
+    TOKEN_LESSTHAN_EQUALS,
+    TOKEN_LESSTHAN_LESSTHAN,
+    TOKEN_MINUS,
+    TOKEN_MINUS_MINUS,
+    TOKEN_PERCENT,
+    TOKEN_PLUS,
+    TOKEN_PLUS_PLUS,
+    TOKEN_SLASH,
+    TOKEN_TILDE,
+};
+
 static void operator_declaration() {
-  notimplemented("Not Implemented: Operator");
-  advance();
+  // method header
+  attributes();
+  group();
+  declaration_modifiers();
+  line();
+  if (match(TOKEN_KW_EXPLICIT) || match(TOKEN_KW_IMPLICIT)) {
+    space();
+    token(TOKEN_KW_OPERATOR, "in conversion operator");
+    line();
+    type();
+    token(TOKEN_OPENPAREN, "before the argument in a conversion operator");
+    {
+      softline_indent();
+      dedent();
+    }
+    softline();
+    token(TOKEN_CLOSEPAREN, "after the argument in a conversion operator");
+  } else {
+    {
+      group();
+      type();
+      line();
+      token(TOKEN_KW_OPERATOR, "after the type in an operator declaration");
+      if ((parser.index < parser.buffer.count - 1) &&
+          (parser.buffer.tokens[parser.index].type == TOKEN_GREATERTHAN) &&
+          (parser.buffer.tokens[parser.index + 1].type == TOKEN_GREATERTHAN)) {
+        // NOTE: This is a bit weird here but we don't tokenize >> as a right
+        // shift because it would make parsing generic types difficult. We rely
+        // on the fact that we can see trivia in our parser to disambiguate
+        // this.
+        token(TOKEN_GREATERTHAN,
+              "in an overloaded right shift declaration (1)");
+        token(TOKEN_GREATERTHAN,
+              "in an overloaded right shift declaration (2)");
+      } else if (!match_any(overloadable_operator_tokens,
+                            ARRAY_SIZE(overloadable_operator_tokens))) {
+        error("Expected an overloadable operator in an operator declaration");
+      }
+      end();
+    }
+    formal_parameter_list("in an operator declaration");
+  }
+
+  if (!match(TOKEN_SEMICOLON)) {
+    if (check(TOKEN_EQUALS_GREATERTHAN)) {
+      space();
+      token(TOKEN_EQUALS_GREATERTHAN,
+            "in the expression body of an operator declaration");
+      {
+        line_indent();
+        expression("in the expression body of a method");
+        token(TOKEN_SEMICOLON,
+              "at the end of the expression body of an operator declaration");
+        dedent();
+      }
+    } else {
+      line();
+      block("at the beginning of the body of an operator declaration");
+    }
+  }
+
+  end();
 }
 
 static enum TokenType destructor_mod_tokens[] = {
@@ -2782,6 +2875,65 @@ static void destructor_declaration() {
   end();
 }
 
+static enum TokenType fixed_size_buffer_modifier_tokens[] = {
+    TOKEN_KW_NEW,      TOKEN_KW_PUBLIC,  TOKEN_KW_PROTECTED,
+    TOKEN_KW_INTERNAL, TOKEN_KW_PRIVATE, TOKEN_KW_UNSAFE,
+};
+
+static void fixed_size_buffer_declaration() {
+  attributes();
+  group();
+  while (match_any(fixed_size_buffer_modifier_tokens,
+                   ARRAY_SIZE(fixed_size_buffer_modifier_tokens))) {
+    line();
+  }
+  {
+    group();
+    token(TOKEN_KW_FIXED, "at the beginning of a fixed buffer declaration");
+    line();
+    type();
+
+    {
+      line_indent();
+      group();
+      identifier("in the field name of a fixed size buffer declaration");
+      token(TOKEN_OPENBRACKET,
+            "after the field name in a fixed size buffer declaration");
+      {
+        softline_indent();
+        expression("in the size of a fixed size buffer declaration");
+        dedent();
+      }
+      softline();
+      token(TOKEN_CLOSEBRACKET,
+            "after the buffer size in a fixed size buffer declaration");
+
+      while (match(TOKEN_COMMA)) {
+        end();
+        line();
+        group();
+
+        identifier("in the field name of a fixed size buffer declaration");
+        token(TOKEN_OPENBRACKET,
+              "after the field name in a fixed size buffer declaration");
+        {
+          softline_indent();
+          expression("in the size of a fixed size buffer declaration");
+          dedent();
+        }
+        softline();
+        token(TOKEN_CLOSEBRACKET,
+              "after the buffer size in a fixed size buffer declaration");
+      }
+      end();
+      dedent();
+    }
+    end();
+  }
+  token(TOKEN_SEMICOLON, "at the end of a fixed-size buffer declaration");
+  end();
+}
+
 enum MemberKind {
   MEMBERKIND_NONE,
   MEMBERKIND_CONST,
@@ -2793,6 +2945,7 @@ enum MemberKind {
   MEMBERKIND_OPERATOR,
   MEMBERKIND_DESTRUCTOR,
   MEMBERKIND_TYPE,
+  MEMBERKIND_FIXED_SIZE_BUFFER,
 };
 
 static enum MemberKind check_member() {
@@ -2837,6 +2990,12 @@ static enum MemberKind check_member() {
     token = next_significant_token(&index);
   }
 
+  if (token.type == TOKEN_KW_FIXED) {
+    // Blah blah, yeah, technically this is special and has all kinds of
+    // restrictions but have you seen the rest of this parser? :D
+    DEBUG(("fixed -> MEMBERKIND_FIXED_SIZE_BUFFER"));
+    return MEMBERKIND_FIXED_SIZE_BUFFER;
+  }
   if (token.type == TOKEN_TILDE) {
     DEBUG(("~ -> MEMBERKIND_DESTRUCTOR"));
     return MEMBERKIND_DESTRUCTOR;
@@ -2956,6 +3115,10 @@ static void member_declarations() {
 
     case MEMBERKIND_TYPE:
       type_declaration();
+      break;
+
+    case MEMBERKIND_FIXED_SIZE_BUFFER:
+      fixed_size_buffer_declaration();
       break;
 
     case MEMBERKIND_NONE:
@@ -3101,6 +3264,10 @@ static void enum_declaration() {
         line();
       }
       first = false;
+
+      if (check(TOKEN_CLOSEBRACE)) {
+        break;
+      }
 
       // TODO: Attributes here??
       identifier("in the name of an enum member");
