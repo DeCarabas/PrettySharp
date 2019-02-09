@@ -49,6 +49,9 @@ static void lexer_init(const char *source) {
   pp_init_table(&lexer.symbol_table);
 }
 
+// ============================================================================
+// Debug Printing
+// ============================================================================
 // #define LEX_PRINT_DEBUG_ENABLED
 
 #ifdef LEX_PRINT_DEBUG_ENABLED
@@ -82,25 +85,19 @@ static void LEX_DEBUG_(const char *format, ...) {
 
 #endif
 
-static struct Token scan_token();
-
-char advance() {
+// ============================================================================
+// Basic character motion and checking
+// ============================================================================
+static char advance() {
   lexer.current++;
   return lexer.current[-1];
 }
 
-bool is_at_end() { return *lexer.current == '\0'; }
+static bool is_at_end() { return *lexer.current == '\0'; }
 
-char peek() { return *lexer.current; }
+static char peek() { return *lexer.current; }
 
-char peek_next() {
-  if (is_at_end()) {
-    return 0;
-  }
-  return lexer.current[1];
-}
-
-bool match(char c) {
+static bool match(char c) {
   if (is_at_end()) {
     return false;
   }
@@ -112,7 +109,10 @@ bool match(char c) {
   return true;
 }
 
-struct Token make_token(enum TokenType type) {
+// ============================================================================
+// Making Tokens
+// ============================================================================
+static struct Token make_token(enum TokenType type) {
   struct Token token;
   token.type = type;
   token.start = lexer.start;
@@ -121,7 +121,7 @@ struct Token make_token(enum TokenType type) {
   return token;
 }
 
-struct Token error_token(const char *message) {
+static struct Token error_token(const char *message) {
   struct Token token;
   token.type = TOKEN_ERROR;
   token.start = message;
@@ -130,23 +130,44 @@ struct Token error_token(const char *message) {
   return token;
 }
 
+// ============================================================================
+// Whitespace
+// ============================================================================
 static void eat_whitespace() {
   while (match(' ') || match('\t') || match('\r')) {
   }
 }
 
-struct Token scan_whitespace() {
+static struct Token scan_whitespace() {
   eat_whitespace();
   return make_token(TOKEN_TRIVIA_WHITESPACE);
 }
 
-struct Token scan_end_of_line() {
+static struct Token scan_end_of_line() {
   struct Token token = make_token(TOKEN_TRIVIA_EOL);
   lexer.line++;
   return token;
 }
 
-struct Token scan_string_literal(char open) {
+static void eat_to_end_of_line() {
+  for (;;) {
+    if (is_at_end()) {
+      return;
+    }
+    switch (peek()) {
+    case '\r':
+    case '\n':
+      return;
+    default:
+      advance();
+    }
+  }
+}
+
+// ============================================================================
+// Strings
+// ============================================================================
+static struct Token scan_string_literal(char open) {
   for (;;) {
     if (match(open)) {
       break;
@@ -169,13 +190,88 @@ struct Token scan_string_literal(char open) {
                                 : TOKEN_CHARACTER_LITERAL);
 }
 
-bool is_digit(char c) { return (c >= '0' && c <= '9'); }
-bool is_binary_digit(char c) { return c == '1' || c == '0'; }
-bool is_hex_digit(char c) {
+static struct Token scan_verbatim_string_literal() {
+  for (;;) {
+    if (match('"')) {
+      if (!match('"')) {
+        break;
+      }
+      // "" is allowed, and doesn't break the string.
+    } else if (is_at_end()) {
+      return error_token("Unterminated verbatim string constant.");
+    } else if (match('\n')) {
+      lexer.line++;
+    } else {
+      advance();
+    }
+  }
+
+  return make_token(TOKEN_STRING_LITERAL);
+}
+
+static struct Token scan_token();
+
+static struct Token scan_interpolated_string_literal(bool verbatim) {
+  // OK we're doing what Roslyn does here, which is treat the entire
+  // interpolated string as a single token, rather than tracking the state
+  // through multiple calls to the lexer. This has advantages and
+  // disadvantages, but an advantage is that I don't have to keep a stack
+  // inside the lexer, so it's ever so slightly simpler.
+  const char *old_start = lexer.start;
+  struct LexerInterpolationState old_interpolation = lexer.interpolation;
+  lexer.interpolation.enabled = true;
+  lexer.interpolation.depth = 0;
+
+  for (;;) {
+    if (is_at_end()) {
+      return error_token("Unterminated interpolated string literal");
+    }
+
+    if (match('"')) {
+      if (verbatim && match('"')) {
+        // This is how you quote a string in a verbatim string literal.
+      } else {
+        break;
+      }
+    } else if (!verbatim && match('\\')) {
+      if (!is_at_end()) {
+        advance();
+      }
+    } else if (match('{')) {
+      if (!match('{')) {
+        // This is the interpolation hole, spin it around...
+        for (;;) {
+          lexer.interpolation.depth = 1;
+          struct Token nested = scan_token();
+          if (nested.type == TOKEN_ERROR) {
+            return nested;
+          }
+          if (nested.type == TOKEN_EOF ||
+              nested.type == TOKEN_INTERPOLATION_END) {
+            break;
+          }
+        }
+      }
+    } else {
+      advance();
+    }
+  }
+
+  lexer.start = old_start;
+  lexer.interpolation = old_interpolation;
+  return make_token(TOKEN_INTERPOLATED_STRING);
+}
+
+// ============================================================================
+// Numbers
+// ============================================================================
+static bool is_digit(char c) { return (c >= '0' && c <= '9'); }
+static bool is_binary_digit(char c) { return c == '1' || c == '0'; }
+static bool is_hex_digit(char c) {
   return is_digit(c) || (c >= 'A' && c <= 'F') || (c >= 'a' && c <= 'f');
 }
 
-bool scan_numeric_literal(char first) {
+static bool scan_numeric_literal(char first) {
   const char *saved_current = lexer.current;
 
   bool decimal = false;
@@ -269,12 +365,15 @@ bool scan_numeric_literal(char first) {
   return false;
 }
 
+// ============================================================================
+// Identifiers
+// ============================================================================
 static bool is_id_char(char c) {
   return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || is_digit(c) ||
          c == '_';
 }
 
-struct Token scan_identifier_or_keyword() {
+static struct Token scan_identifier_or_keyword() {
   for (;;) {
     if (is_at_end()) {
       break;
@@ -302,96 +401,49 @@ struct Token scan_identifier_or_keyword() {
   return make_token(keyword_type(lexer.start, lexer.current - lexer.start));
 }
 
-struct Token scan_verbatim_string_literal() {
-  for (;;) {
-    if (match('"')) {
-      if (!match('"')) {
-        break;
-      }
-      // "" is allowed, and doesn't break the string.
-    } else if (is_at_end()) {
-      return error_token("Unterminated verbatim string constant.");
-    } else if (match('\n')) {
-      lexer.line++;
-    } else {
-      advance();
-    }
-  }
-
-  return make_token(TOKEN_STRING_LITERAL);
+// ============================================================================
+// Comments
+// ============================================================================
+static struct Token scan_line_comment() {
+  eat_to_end_of_line();
+  return make_token(TOKEN_TRIVIA_LINE_COMMENT);
 }
 
-struct Token scan_interpolated_string_literal(bool verbatim) {
-  // OK we're doing what Roslyn does here, which is treat the entire
-  // interpolated string as a single token, rather than tracking the state
-  // through multiple calls to the lexer. This has advantages and
-  // disadvantages, but an advantage is that I don't have to keep a stack
-  // inside the lexer, so it's ever so slightly simpler.
-  const char *old_start = lexer.start;
-  struct LexerInterpolationState old_interpolation = lexer.interpolation;
-  lexer.interpolation.enabled = true;
-  lexer.interpolation.depth = 0;
-
+static struct Token scan_block_comment() {
+  int end_line = lexer.line;
   for (;;) {
     if (is_at_end()) {
-      return error_token("Unterminated interpolated string literal");
-    }
-
-    if (match('"')) {
-      if (verbatim && match('"')) {
-        // This is how you quote a string in a verbatim string literal.
-      } else {
-        break;
-      }
-    } else if (!verbatim && match('\\')) {
-      if (!is_at_end()) {
-        advance();
-      }
-    } else if (match('{')) {
-      if (!match('{')) {
-        // This is the interpolation hole, spin it around...
-        for (;;) {
-          lexer.interpolation.depth = 1;
-          struct Token nested = scan_token();
-          if (nested.type == TOKEN_ERROR) {
-            return nested;
-          }
-          if (nested.type == TOKEN_EOF ||
-              nested.type == TOKEN_INTERPOLATION_END) {
-            break;
-          }
-        }
-      }
-    } else {
-      advance();
-    }
-  }
-
-  lexer.start = old_start;
-  lexer.interpolation = old_interpolation;
-  return make_token(TOKEN_INTERPOLATED_STRING);
-}
-
-static void eat_to_end_of_line() {
-  for (;;) {
-    if (is_at_end()) {
-      return;
+      return error_token("Unterminated block comment");
     }
     switch (peek()) {
     case '\r':
+      advance();
+      match('\n');
+      end_line++;
+      continue;
+
     case '\n':
-      return;
+      advance();
+      end_line++;
+      continue;
+
+    case '*':
+      advance();
+      if (match('/')) {
+        struct Token result = make_token(TOKEN_TRIVIA_BLOCK_COMMENT);
+        lexer.line = end_line;
+        return result;
+      }
+
     default:
       advance();
     }
   }
 }
 
-struct Token scan_line_comment() {
-  eat_to_end_of_line();
-  return make_token(TOKEN_TRIVIA_LINE_COMMENT);
-}
-
+// ============================================================================
+// Pre-processor
+// ============================================================================
 #define CHECK_STR(str) (memcmp(lexer.current, str, ARRAY_SIZE(str) - 1) == 0)
 
 const char *pp_expression_error = NULL;
@@ -547,7 +599,7 @@ static bool scan_and_eval_pp_expression() {
   return result;
 }
 
-struct Token scan_disabled_text() {
+static struct Token scan_disabled_text() {
   // We're in a disabled part of the text here because we failed a preprocessor
   // conditional. We need to scan and deal with nesting and stuff until we find
   // the next #elif or #else or #something. We'll count everything here as
@@ -579,7 +631,7 @@ struct Token scan_disabled_text() {
   return make_token(TOKEN_TRIVIA_DIRECTIVE);
 }
 
-struct Token scan_directive() {
+static struct Token scan_directive() {
   // This is its own dorky little language with its own state table.
   // We actually want to handle it here because skipped source text is allowed
   // to be *lexically incorrect*. (http://dotyl.ink/l/n5u7nwelyi) So we have no
@@ -666,38 +718,9 @@ struct Token scan_directive() {
 
 #undef CHECK_STR
 
-struct Token scan_block_comment() {
-  int end_line = lexer.line;
-  for (;;) {
-    if (is_at_end()) {
-      return error_token("Unterminated block comment");
-    }
-    switch (peek()) {
-    case '\r':
-      advance();
-      match('\n');
-      end_line++;
-      continue;
-
-    case '\n':
-      advance();
-      end_line++;
-      continue;
-
-    case '*':
-      advance();
-      if (match('/')) {
-        struct Token result = make_token(TOKEN_TRIVIA_BLOCK_COMMENT);
-        lexer.line = end_line;
-        return result;
-      }
-
-    default:
-      advance();
-    }
-  }
-}
-
+// ============================================================================
+// Main
+// ============================================================================
 static struct Token scan_token() {
   lexer.start = lexer.current;
   if (is_at_end()) {
