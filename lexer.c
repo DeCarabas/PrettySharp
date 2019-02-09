@@ -2,11 +2,9 @@
 #include "common.h"
 #include "unicode.h"
 
-struct LexerInterpolationState {
-  bool enabled;
-  int depth;
-};
-
+// ============================================================================
+// Preprocessor symbol table
+// ============================================================================
 #define MAX_PREPROCESSOR_SYMBOLS (1000)
 
 struct PPSymbolTable {
@@ -20,11 +18,68 @@ static void pp_init_table(struct PPSymbolTable *table) {
   }
 }
 
+static bool pp_define_symbol(struct PPSymbolTable *table,
+                             const struct Token *token) {
+  struct Token *target = NULL;
+  for (int i = 0; i < MAX_PREPROCESSOR_SYMBOLS; i++) {
+    struct Token *tok = &(table->symbols[i]);
+    if (tok->type == TOKEN_IDENTIFIER && tok->length == token->length &&
+        memcmp(tok->start, token->start, token->length) == 0) {
+      return true;
+    }
+
+    if (target == NULL && tok->type == TOKEN_NONE) {
+      target = tok;
+    }
+  }
+
+  if (target == NULL) {
+    return false;
+  }
+
+  *target = *token;
+  return true;
+}
+
+static void pp_undefine_symbol(struct PPSymbolTable *table,
+                               const struct Token *token) {
+  for (int i = 0; i < MAX_PREPROCESSOR_SYMBOLS; i++) {
+    struct Token *tok = &(table->symbols[i]);
+    if (tok->type == TOKEN_IDENTIFIER && tok->length == token->length &&
+        memcmp(tok->start, token->start, token->length) == 0) {
+      tok->type = TOKEN_NONE;
+      tok->length = 0;
+      break;
+    }
+  }
+}
+
+static bool pp_is_symbol_defined(struct PPSymbolTable *table,
+                                 const struct Token *token) {
+  for (int i = 0; i < MAX_PREPROCESSOR_SYMBOLS; i++) {
+    struct Token *tok = &(table->symbols[i]);
+    if (tok->type == TOKEN_IDENTIFIER && tok->length == token->length &&
+        memcmp(tok->start, token->start, token->length) == 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// ============================================================================
+// Lexer State
+// ============================================================================
+struct LexerInterpolationState {
+  bool enabled;
+  int depth;
+};
+
 struct Lexer {
   const char *start;
   const char *current;
   int line;
   struct LexerInterpolationState interpolation;
+  bool should_ignore_elif;
   struct PPSymbolTable symbol_table;
 };
 
@@ -45,6 +100,7 @@ static void lexer_init(const char *source) {
   lexer.line = 1;
   lexer.interpolation.enabled = false;
   lexer.interpolation.depth = 0;
+  lexer.should_ignore_elif = true;
 
   pp_init_table(&lexer.symbol_table);
 }
@@ -442,65 +498,38 @@ static struct Token scan_block_comment() {
 }
 
 // ============================================================================
-// Pre-processor
+// Directives
 // ============================================================================
 #define CHECK_STR(str) (memcmp(lexer.current, str, ARRAY_SIZE(str) - 1) == 0)
 
 const char *pp_expression_error = NULL;
 
+static struct Token pp_symbol(const char *id_start, const char *id_end) {
+  struct Token sym;
+  sym.type = TOKEN_IDENTIFIER;
+  sym.start = id_start;
+  sym.length = id_end - id_start;
+  sym.line = lexer.line;
+  return sym;
+}
+
 static bool define_symbol(const char *id_start, const char *id_end) {
-  LEX_DEBUG(("DEFINE '%.*s'", (int)(id_end - id_start), id_start));
-  int len = id_end - id_start;
-  struct Token *target = NULL;
-  for (int i = 0; i < MAX_PREPROCESSOR_SYMBOLS; i++) {
-    struct Token *tok = &lexer.symbol_table.symbols[i];
-    if (tok->type == TOKEN_IDENTIFIER && tok->length == len &&
-        memcmp(tok->start, id_start, len) == 0) {
-      return true;
-    }
-
-    if (target == NULL && tok->type == TOKEN_NONE) {
-      target = tok;
-    }
-  }
-
-  if (target == NULL) {
-    return false;
-  }
-
-  target->type = TOKEN_IDENTIFIER;
-  target->start = id_start;
-  target->length = len;
-  target->line = lexer.line;
-  return true;
+  struct Token sym = pp_symbol(id_start, id_end);
+  LEX_DEBUG(("DEFINE '%.*s'", sym.length, sym.start));
+  return pp_define_symbol(&(lexer.symbol_table), &sym);
 }
 
 static void undefine_symbol(const char *id_start, const char *id_end) {
-  LEX_DEBUG(("UNDEF '%.*s'", (int)(id_end - id_start), id_start));
-  int len = id_end - id_start;
-  for (int i = 0; i < MAX_PREPROCESSOR_SYMBOLS; i++) {
-    struct Token *tok = &lexer.symbol_table.symbols[i];
-    if (tok->type == TOKEN_IDENTIFIER && tok->length == len &&
-        memcmp(tok->start, id_start, len) == 0) {
-      tok->type = TOKEN_NONE;
-      tok->length = 0;
-      break;
-    }
-  }
+  struct Token sym = pp_symbol(id_start, id_end);
+  LEX_DEBUG(("UNDEF '%.*s'", sym.length, sym.start));
+  pp_undefine_symbol(&(lexer.symbol_table), &sym);
 }
 
 static bool is_symbol_defined(const char *id_start, const char *id_end) {
-  int len = id_end - id_start;
-  for (int i = 0; i < MAX_PREPROCESSOR_SYMBOLS; i++) {
-    struct Token *tok = &lexer.symbol_table.symbols[i];
-    if (tok->type == TOKEN_IDENTIFIER && tok->length == len &&
-        memcmp(tok->start, id_start, len) == 0) {
-      LEX_DEBUG(("LOOKUP '%.*s' -> TRUE", (int)(id_end - id_start), id_start));
-      return true;
-    }
-  }
-  LEX_DEBUG(("LOOKUP '%.*s' -> FALSE", (int)(id_end - id_start), id_start));
-  return false;
+  struct Token sym = pp_symbol(id_start, id_end);
+  bool ret = pp_is_symbol_defined(&(lexer.symbol_table), &sym);
+  LEX_DEBUG(("? '%.*s' -> %s", sym.length, sym.start, ret ? "true" : "false"));
+  return ret;
 }
 
 static bool scan_and_eval_pp_expression();
@@ -602,8 +631,8 @@ static bool scan_and_eval_pp_expression() {
 static struct Token scan_disabled_text() {
   // We're in a disabled part of the text here because we failed a preprocessor
   // conditional. We need to scan and deal with nesting and stuff until we find
-  // the next #elif or #else or #something. We'll count everything here as
-  // one big TRIVIA_DIRECTIVE and it will be ignored by our consumer.
+  // the next #elif or #else or #something. We'll count everything here as one
+  // big TRIVIA_DIRECTIVE and it will be ignored by our consumer.
   int nest = 0;
   for (;;) {
     if (is_at_end()) {
@@ -632,9 +661,9 @@ static struct Token scan_disabled_text() {
 }
 
 static struct Token scan_directive() {
-  // This is its own dorky little language with its own state table.
-  // We actually want to handle it here because skipped source text is allowed
-  // to be *lexically incorrect*. (http://dotyl.ink/l/n5u7nwelyi) So we have no
+  // This is its own dorky little language with its own state table.  We
+  // actually want to handle it here because skipped source text is allowed to
+  // be *lexically incorrect*. (http://dotyl.ink/l/n5u7nwelyi) So we have no
   // choice but to try to understand these things.
   eat_whitespace();
   if (CHECK_STR("define")) {
@@ -681,13 +710,19 @@ static struct Token scan_directive() {
       return error_token(pp_expression_error);
     } else if (!eval_result) {
       LEX_DEBUG(("IF -> FALSE"));
+      lexer.should_ignore_elif = false;
       return scan_disabled_text();
     } else {
-      LEX_DEBUG(("***** IF -> TRUE"));
+      LEX_DEBUG(("IF -> TRUE"));
+      lexer.should_ignore_elif = true;
     }
   } else if (CHECK_STR("elif")) {
     lexer.current += (ARRAY_SIZE("elif") - 1);
     eat_whitespace();
+
+    if (lexer.should_ignore_elif) {
+      return scan_disabled_text();
+    }
 
     pp_expression_error = NULL;
     bool eval_result = scan_and_eval_pp_expression();
@@ -695,14 +730,21 @@ static struct Token scan_directive() {
       return error_token(pp_expression_error);
     } else if (!eval_result) {
       LEX_DEBUG(("ELIF -> FALSE"));
+      lexer.should_ignore_elif = false;
       return scan_disabled_text();
     } else {
       LEX_DEBUG(("ELIF -> TRUE"));
+      lexer.should_ignore_elif = true;
     }
   } else if (CHECK_STR("else")) {
-    LEX_DEBUG(("ELSE"));
+    if (lexer.should_ignore_elif) {
+      return scan_disabled_text();
+    } else {
+      lexer.should_ignore_elif = true;
+    }
   } else if (CHECK_STR("endif")) {
     LEX_DEBUG(("ENDIF"));
+    lexer.should_ignore_elif = true;
   }
 
   for (;;) {
