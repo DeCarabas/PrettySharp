@@ -7,11 +7,25 @@ struct LexerInterpolationState {
   int depth;
 };
 
+#define MAX_PREPROCESSOR_SYMBOLS (1000)
+
+struct PPSymbolTable {
+  struct Token symbols[MAX_PREPROCESSOR_SYMBOLS];
+};
+
+static void pp_init_table(struct PPSymbolTable *table) {
+  for (int i = 0; i < MAX_PREPROCESSOR_SYMBOLS; i++) {
+    table->symbols[i].type = TOKEN_NONE;
+    table->symbols[i].length = 0;
+  }
+}
+
 struct Lexer {
   const char *start;
   const char *current;
   int line;
   struct LexerInterpolationState interpolation;
+  struct PPSymbolTable symbol_table;
 };
 
 struct Lexer lexer;
@@ -31,7 +45,42 @@ static void lexer_init(const char *source) {
   lexer.line = 1;
   lexer.interpolation.enabled = false;
   lexer.interpolation.depth = 0;
+
+  pp_init_table(&lexer.symbol_table);
 }
+
+// #define LEX_PRINT_DEBUG_ENABLED
+
+#ifdef LEX_PRINT_DEBUG_ENABLED
+
+int last_debug_line = -1;
+static void vLEX_DEBUG(const char *format, va_list args) {
+  if (parser.current.line != last_debug_line) {
+    fprintf(stderr, "%4d ", parser.current.line);
+    last_debug_line = parser.current.line;
+  } else {
+    fprintf(stderr, "   | ");
+  }
+  vfprintf(stderr, format, args);
+  fprintf(stderr, "\n");
+  UNUSED(format);
+  UNUSED(args);
+}
+
+static void LEX_DEBUG_(const char *format, ...) {
+  va_list args;
+  va_start(args, format);
+  vLEX_DEBUG(format, args);
+  va_end(args);
+}
+
+#define LEX_DEBUG(x) (DEBUG_ x)
+
+#else
+
+#define LEX_DEBUG(x) ((void)0)
+
+#endif
 
 static struct Token scan_token();
 
@@ -81,9 +130,13 @@ struct Token error_token(const char *message) {
   return token;
 }
 
-struct Token scan_whitespace() {
+static void eat_whitespace() {
   while (match(' ') || match('\t') || match('\r')) {
   }
+}
+
+struct Token scan_whitespace() {
+  eat_whitespace();
   return make_token(TOKEN_TRIVIA_WHITESPACE);
 }
 
@@ -319,19 +372,287 @@ struct Token scan_interpolated_string_literal(bool verbatim) {
   return make_token(TOKEN_INTERPOLATED_STRING);
 }
 
-struct Token scan_line_comment() {
+static void eat_to_end_of_line() {
   for (;;) {
+    if (is_at_end()) {
+      return;
+    }
     switch (peek()) {
     case '\r':
     case '\n':
-      return make_token(TOKEN_TRIVIA_LINE_COMMENT);
+      return;
     default:
       advance();
     }
   }
 }
 
+struct Token scan_line_comment() {
+  eat_to_end_of_line();
+  return make_token(TOKEN_TRIVIA_LINE_COMMENT);
+}
+
+#define CHECK_STR(str) (memcmp(lexer.current, str, ARRAY_SIZE(str) - 1) == 0)
+
+const char *pp_expression_error = NULL;
+
+static bool define_symbol(const char *id_start, const char *id_end) {
+  LEX_DEBUG(("DEFINE '%.*s'", (int)(id_end - id_start), id_start));
+  int len = id_end - id_start;
+  struct Token *target = NULL;
+  for (int i = 0; i < MAX_PREPROCESSOR_SYMBOLS; i++) {
+    struct Token *tok = &lexer.symbol_table.symbols[i];
+    if (tok->type == TOKEN_IDENTIFIER && tok->length == len &&
+        memcmp(tok->start, id_start, len) == 0) {
+      return true;
+    }
+
+    if (target == NULL && tok->type == TOKEN_NONE) {
+      target = tok;
+    }
+  }
+
+  if (target == NULL) {
+    return false;
+  }
+
+  target->type = TOKEN_IDENTIFIER;
+  target->start = id_start;
+  target->length = len;
+  target->line = lexer.line;
+  return true;
+}
+
+static void undefine_symbol(const char *id_start, const char *id_end) {
+  LEX_DEBUG(("UNDEF '%.*s'", (int)(id_end - id_start), id_start));
+  int len = id_end - id_start;
+  for (int i = 0; i < MAX_PREPROCESSOR_SYMBOLS; i++) {
+    struct Token *tok = &lexer.symbol_table.symbols[i];
+    if (tok->type == TOKEN_IDENTIFIER && tok->length == len &&
+        memcmp(tok->start, id_start, len) == 0) {
+      tok->type = TOKEN_NONE;
+      tok->length = 0;
+      break;
+    }
+  }
+}
+
+static bool is_symbol_defined(const char *id_start, const char *id_end) {
+  int len = id_end - id_start;
+  for (int i = 0; i < MAX_PREPROCESSOR_SYMBOLS; i++) {
+    struct Token *tok = &lexer.symbol_table.symbols[i];
+    if (tok->type == TOKEN_IDENTIFIER && tok->length == len &&
+        memcmp(tok->start, id_start, len) == 0) {
+      LEX_DEBUG(("LOOKUP '%.*s' -> TRUE", (int)(id_end - id_start), id_start));
+      return true;
+    }
+  }
+  LEX_DEBUG(("LOOKUP '%.*s' -> FALSE", (int)(id_end - id_start), id_start));
+  return false;
+}
+
+static bool scan_and_eval_pp_expression();
+
+static bool scan_and_eval_pp_primary_expression() {
+  if (match('(')) {
+    eat_whitespace();
+    bool result = scan_and_eval_pp_expression();
+    eat_whitespace();
+    if (!match(')')) {
+      pp_expression_error =
+          "Expected a ) after a parenthesized preprocessor expression";
+    }
+    return result;
+  }
+
+  const char *id_start = lexer.current;
+  struct Token identifier = scan_identifier_or_keyword();
+  if (identifier.type == TOKEN_ERROR) {
+    pp_expression_error = identifier.start;
+    return false;
+  } else if (identifier.type == TOKEN_KW_TRUE) {
+    return true;
+  } else if (identifier.type == TOKEN_KW_FALSE) {
+    return false;
+  } else {
+    const char *id_end = lexer.current;
+    return is_symbol_defined(id_start, id_end);
+  }
+}
+
+static bool scan_and_eval_pp_unary_expression() {
+  bool negate = false;
+  while (match('!')) {
+    eat_whitespace();
+    negate = !negate;
+  }
+
+  bool result = scan_and_eval_pp_primary_expression();
+  return negate ? !result : result;
+}
+
+static bool scan_and_eval_pp_equality_expression() {
+  bool result = scan_and_eval_pp_unary_expression();
+  eat_whitespace();
+  for (;;) {
+    if (CHECK_STR("==")) {
+      lexer.current += 2;
+      eat_whitespace();
+      bool sub_result = scan_and_eval_pp_unary_expression();
+      result = (sub_result == result);
+      eat_whitespace();
+    } else if (CHECK_STR("!=")) {
+      lexer.current += 2;
+      eat_whitespace();
+      bool sub_result = scan_and_eval_pp_unary_expression();
+      result = (sub_result != result);
+      eat_whitespace();
+    } else {
+      break;
+    }
+  }
+  return result;
+}
+
+static bool scan_and_eval_pp_and_expression() {
+  bool result = scan_and_eval_pp_equality_expression();
+  eat_whitespace();
+  while (CHECK_STR("||")) {
+    lexer.current += 2;
+    eat_whitespace();
+    bool sub_result = scan_and_eval_pp_equality_expression();
+    result = result && sub_result;
+    eat_whitespace();
+  }
+  return result;
+}
+
+static bool scan_and_eval_pp_or_expression() {
+  bool result = scan_and_eval_pp_and_expression();
+  eat_whitespace();
+  while (CHECK_STR("||")) {
+    lexer.current += 2;
+    eat_whitespace();
+    bool sub_result = scan_and_eval_pp_and_expression();
+    result = result || sub_result;
+    eat_whitespace();
+  }
+  return result;
+}
+
+static bool scan_and_eval_pp_expression() {
+  eat_whitespace();
+  bool result = scan_and_eval_pp_or_expression();
+  eat_whitespace();
+  return result;
+}
+
+struct Token scan_disabled_text() {
+  // We're in a disabled part of the text here because we failed a preprocessor
+  // conditional. We need to scan and deal with nesting and stuff until we find
+  // the next #elif or #else or #something. We'll count everything here as
+  // one big TRIVIA_DIRECTIVE and it will be ignored by our consumer.
+  int nest = 0;
+  for (;;) {
+    if (is_at_end()) {
+      break;
+    }
+    eat_to_end_of_line();
+    advance();
+    lexer.line += 1;
+
+    eat_whitespace();
+    if (CHECK_STR("#if")) {
+      nest++;
+    } else if (CHECK_STR("#elif") || CHECK_STR("#else")) {
+      if (nest == 0) {
+        break;
+      }
+    } else if (CHECK_STR("#endif")) {
+      if (nest == 0) {
+        break;
+      }
+      nest -= 1;
+    }
+  }
+
+  return make_token(TOKEN_TRIVIA_DIRECTIVE);
+}
+
 struct Token scan_directive() {
+  // This is its own dorky little language with its own state table.
+  // We actually want to handle it here because skipped source text is allowed
+  // to be *lexically incorrect*. (http://dotyl.ink/l/n5u7nwelyi) So we have no
+  // choice but to try to understand these things.
+  eat_whitespace();
+  if (CHECK_STR("define")) {
+    lexer.current += (ARRAY_SIZE("define") - 1);
+    eat_whitespace();
+
+    const char *id_start = lexer.current;
+    struct Token identifier = scan_identifier_or_keyword();
+    if (identifier.type == TOKEN_ERROR) {
+      return identifier;
+    } else if (identifier.type == TOKEN_KW_TRUE) {
+      return error_token("Literal 'true' not allowed in #define");
+    } else if (identifier.type == TOKEN_KW_FALSE) {
+      return error_token("Literal 'false' not allowed in #define");
+    }
+    const char *id_end = lexer.current;
+
+    if (!define_symbol(id_start, id_end)) {
+      return error_token("Too many preprocessor symbols defined");
+    }
+  } else if (CHECK_STR("undef")) {
+    lexer.current += (ARRAY_SIZE("undef") - 1);
+    eat_whitespace();
+
+    const char *id_start = lexer.current;
+    struct Token identifier = scan_identifier_or_keyword();
+    if (identifier.type == TOKEN_ERROR) {
+      return identifier;
+    } else if (identifier.type == TOKEN_KW_TRUE) {
+      return error_token("Literal 'true' not allowed in #define");
+    } else if (identifier.type == TOKEN_KW_FALSE) {
+      return error_token("Literal 'false' not allowed in #define");
+    }
+    const char *id_end = lexer.current;
+
+    undefine_symbol(id_start, id_end);
+  } else if (CHECK_STR("if")) {
+    lexer.current += (ARRAY_SIZE("if") - 1);
+    eat_whitespace();
+
+    pp_expression_error = NULL;
+    bool eval_result = scan_and_eval_pp_expression();
+    if (pp_expression_error) {
+      return error_token(pp_expression_error);
+    } else if (!eval_result) {
+      LEX_DEBUG(("IF -> FALSE"));
+      return scan_disabled_text();
+    } else {
+      LEX_DEBUG(("***** IF -> TRUE"));
+    }
+  } else if (CHECK_STR("elif")) {
+    lexer.current += (ARRAY_SIZE("elif") - 1);
+    eat_whitespace();
+
+    pp_expression_error = NULL;
+    bool eval_result = scan_and_eval_pp_expression();
+    if (pp_expression_error) {
+      return error_token(pp_expression_error);
+    } else if (!eval_result) {
+      LEX_DEBUG(("ELIF -> FALSE"));
+      return scan_disabled_text();
+    } else {
+      LEX_DEBUG(("ELIF -> TRUE"));
+    }
+  } else if (CHECK_STR("else")) {
+    LEX_DEBUG(("ELSE"));
+  } else if (CHECK_STR("endif")) {
+    LEX_DEBUG(("ENDIF"));
+  }
+
   for (;;) {
     switch (peek()) {
     case '\r':
@@ -342,6 +663,8 @@ struct Token scan_directive() {
     }
   }
 }
+
+#undef CHECK_STR
 
 struct Token scan_block_comment() {
   int end_line = lexer.line;
