@@ -821,6 +821,12 @@ static void parenthesized_implicitly_typed_lambda() {
   end();
 }
 
+static enum TokenType anon_func_param_modifier[] = {
+    TOKEN_KW_REF,
+    TOKEN_KW_OUT,
+    TOKEN_KW_IN,
+};
+
 static bool check_parenthesized_explicitly_typed_lambda() {
   // do we have the following:
   //   case 1: ( T x , ... ) =>
@@ -836,11 +842,78 @@ static bool check_parenthesized_explicitly_typed_lambda() {
   // Note: in the first two cases, we cannot distinguish a lambda from a tuple
   // expression containing declaration expressions, so we scan forwards to the
   // `=>` so we know for sure.
-  return false;
+  bool requires_scan = true;
+  int index = parser.index;
+  struct Token token = parser.current;
+  if (token.type != TOKEN_OPENPAREN) {
+    DEBUG(("explicit paren lambda: no openparen -> false"));
+    return false;
+  }
+
+  token = next_significant_token(&index);
+  if (check_is_any(token.type, anon_func_param_modifier,
+                   ARRAY_SIZE(anon_func_param_modifier))) {
+    token = next_significant_token(&index);
+
+    // TODO: Why do we even continue here? The official C# parser does, but
+    // could this really be anything else?
+    requires_scan = false;
+  }
+
+  if (!check_is_type(&index, &token, /*array*/ true)) {
+    DEBUG(("explicit paren lambda: no type -> false"));
+    return false;
+  }
+
+  if (!is_identifier_token(token.type)) {
+    DEBUG(("explicit paren lambda: no variable identifier -> false"));
+    return false;
+  }
+
+  token = next_significant_token(&index);
+  if (token.type != TOKEN_CLOSEPAREN && token.type != TOKEN_COMMA) {
+    DEBUG(("explicit paren lambda: no ) or , -> false"));
+    return false;
+  }
+
+  if (requires_scan) {
+    while (token.type != TOKEN_CLOSEPAREN) {
+      token = next_significant_token(&index);
+      if (token.type == TOKEN_EOF || token.type == TOKEN_SEMICOLON) {
+        DEBUG(("explicit paren lambda: didn't find ) -> false"));
+        return false;
+      }
+    }
+
+    token = next_significant_token(&index);
+    if (token.type != TOKEN_EQUALS_GREATERTHAN) {
+      DEBUG(("explicit paren lambda: no '=>' -> false"));
+      return false;
+    }
+  }
+
+  return true;
 }
 
+static void formal_parameter_list(const char *where);
+
 static void parenthesized_explicitly_typed_lambda() {
-  notimplemented("Not Implemented: Parenthesized explicitly typed lambda");
+  group();
+  formal_parameter_list(
+      "at the beginning of a parenthesized, explicitly typed lambda");
+  space();
+  token(TOKEN_EQUALS_GREATERTHAN, "in parenthesized lambda");
+  if (check(TOKEN_OPENBRACE)) {
+    space();
+    inline_block("at the beginning of the body of an explicitly typed lambda");
+  } else {
+    line_indent();
+    group();
+    expression("in the expression body of an explicitly typed lambda");
+    end();
+    dedent();
+  }
+  end();
 }
 
 const static enum TokenType cannot_follow_cast_tokens[] = {
@@ -964,11 +1037,21 @@ static void unary_prefix() {
 
 static void unary_postfix() { single_token(); }
 
+static void anonymous_method_expression() {
+  token(TOKEN_KW_DELEGATE, "at the beginning of an anonymous method");
+  if (check(TOKEN_OPENPAREN)) {
+    space();
+    formal_parameter_list("at the beginning of an anonymous method");
+  }
+  line();
+  inline_block("at the beginning of the body of an anonymous method");
+}
+
 static void async_lambda_or_delegate() {
   token(TOKEN_KW_ASYNC, "in an async expression?");
   if (check(TOKEN_KW_DELEGATE)) {
-    notimplemented("Not Implemented: async delegate thingie");
-    advance();
+    space();
+    anonymous_method_expression();
   } else if (check_identifier() && check_next(TOKEN_EQUALS_GREATERTHAN)) {
     line_indent();
     implicitly_typed_lambda();
@@ -2398,6 +2481,28 @@ static bool check_formal_parameter() {
          check_type() || check(TOKEN_COMMA);
 }
 
+static void formal_parameter() {
+  group();
+  attributes();
+  if (match_any(parameter_modifier_tokens,
+                ARRAY_SIZE(parameter_modifier_tokens))) {
+    space();
+  }
+  type();
+  space();
+  identifier("in a parameter name");
+  if (check(TOKEN_EQUALS)) {
+    space();
+    token(TOKEN_EQUALS, "between the name and default value of a parameter");
+    {
+      line_indent();
+      expression("in the default value of a parameter");
+      dedent();
+    }
+  }
+  end();
+}
+
 static void formal_parameter_list_inner() {
   bool first = true;
   while (check_formal_parameter()) {
@@ -2407,28 +2512,7 @@ static void formal_parameter_list_inner() {
     }
     first = false;
 
-    {
-      group();
-      attributes();
-      if (match_any(parameter_modifier_tokens,
-                    ARRAY_SIZE(parameter_modifier_tokens))) {
-        space();
-      }
-      type();
-      space();
-      identifier("in a parameter name");
-      if (check(TOKEN_EQUALS)) {
-        space();
-        token(TOKEN_EQUALS,
-              "between the name and default value of a parameter");
-        {
-          line_indent();
-          expression("in the default value of a parameter");
-          dedent();
-        }
-      }
-      end();
-    }
+    formal_parameter();
   }
 }
 
@@ -2838,6 +2922,7 @@ static void operator_declaration() {
     token(TOKEN_OPENPAREN, "before the argument in a conversion operator");
     {
       softline_indent();
+      formal_parameter();
       dedent();
     }
     softline();
@@ -3048,6 +3133,10 @@ static enum MemberKind check_member() {
   if (is_type_keyword(token.type)) {
     DEBUG(("type keyword -> MEMBERKIND_TYPE"));
     return MEMBERKIND_TYPE;
+  }
+  if (token.type == TOKEN_KW_IMPLICIT || token.type == TOKEN_KW_EXPLICIT) {
+    DEBUG(("implicit or explicit -> MEMBERKIND_OPERATOR"));
+    return MEMBERKIND_OPERATOR;
   }
 
   if (!check_is_type(&index, &token, /*array*/ true)) {
