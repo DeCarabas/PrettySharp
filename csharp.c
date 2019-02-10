@@ -395,7 +395,7 @@ static void type();
 static void optional_type_argument_list() {
   group();
   if (match(TOKEN_LESSTHAN)) {
-    {
+    if (!check(TOKEN_GREATERTHAN)) {
       softline_indent();
       type();
       while (match(TOKEN_COMMA)) {
@@ -473,7 +473,9 @@ static void non_array_type() {
 }
 
 static void rank_specifier() {
-  token(TOKEN_OPENBRACKET, "in array rank specifier");
+  if (!match(TOKEN_QUESTION_OPENBRACKET)) {
+    token(TOKEN_OPENBRACKET, "in array rank specifier");
+  }
   while (match(TOKEN_COMMA)) {
     ;
   }
@@ -483,12 +485,21 @@ static void rank_specifier() {
 static void type() {
   non_array_type();
 
-  // Handle all the stuff at the end....
+  // Handle all the stuff at the end.
+  // N.B.: TOKEN_QUESTION_OPENBRACKET is the result of a design decision that
+  // makes the pratt expression parser work better, but makes this part a
+  // little....
+  //
+  //   •_•)
+  //   ( •_•)>⌐■-■
+  //   (⌐■_■)
+  //
+  //       *questionable*.
   while (check(TOKEN_OPENBRACKET) || check(TOKEN_QUESTION) ||
-         check(TOKEN_ASTERISK)) {
+         check(TOKEN_QUESTION_OPENBRACKET) || check(TOKEN_ASTERISK)) {
 
     // Array ranks.
-    if (check(TOKEN_OPENBRACKET)) {
+    if (check(TOKEN_OPENBRACKET) || check(TOKEN_QUESTION_OPENBRACKET)) {
       rank_specifier();
     }
 
@@ -1073,6 +1084,22 @@ static void await_expression() {
   line_indent();
   parse_precedence(PREC_UNARY, "to the right of await");
   dedent();
+  end();
+}
+
+static void typeof_expression() {
+  group();
+  token(TOKEN_KW_TYPEOF, "at the beginning of a typeof expression");
+  token(TOKEN_OPENPAREN,
+        "at the beginning of the argument to a typeof expression");
+  {
+    softline_indent();
+    type();
+    dedent();
+  }
+  softline();
+  token(TOKEN_CLOSEPAREN, "at the end of the argument to a typeof expression");
+
   end();
 }
 
