@@ -964,7 +964,15 @@ static void unary_prefix() {
 
 static void unary_postfix() { single_token(); }
 
-// TODO: UNARY!
+static void await_expression() {
+  group();
+  token(TOKEN_KW_AWAIT, "in await expression");
+  line_indent();
+  parse_precedence(PREC_UNARY, "to the right of await");
+  dedent();
+  end();
+}
+
 static void array_initializer_inner(const char *where) {
   group();
   token(TOKEN_OPENBRACE, where);
@@ -1639,6 +1647,15 @@ static bool check_local_variable_declaration() {
   struct Token token = parser.current;
   if (token.type == TOKEN_KW_VAR) {
     token = next_significant_token(&index);
+  } else if (token.type == TOKEN_KW_AWAIT) {
+    // So technically this is wrong: in a non-async method you can have a local
+    // variable declaration where the type is named "await" and that's OK.
+    // Fixing this properly means that we need to actually attempt to parse a
+    // non-declaration statement before we parse a declaration statement, and
+    // that's slow and expensive and I don't want to do it right now. So uh:
+    // don't name types "await".
+    DEBUG(("Check local variable declaration: await"));
+    return false;
   } else if (!check_is_type(&index, &token, /*array*/ true)) {
     // This leaves index and token on the next token after the end of the
     // type.
