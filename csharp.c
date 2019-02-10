@@ -2451,7 +2451,7 @@ static void type_constraint() {
   } else {
     if (!match(TOKEN_KW_CLASS)) {
       if (!match(TOKEN_KW_STRUCT)) {
-        identifier("or 'class' or 'struct' in type constraint");
+        type();
       }
     }
   }
