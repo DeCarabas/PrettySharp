@@ -152,6 +152,13 @@ static char advance() {
 static bool is_at_end() { return *lexer.current == '\0'; }
 
 static char peek() { return *lexer.current; }
+static char peek_next() {
+  if (is_at_end()) {
+    return '\0';
+  }
+
+  return lexer.current[1];
+}
 
 static bool match(char c) {
   if (is_at_end()) {
@@ -379,7 +386,8 @@ static bool scan_numeric_literal(char first) {
     }
 
     // If first is '.' then we just read the fraction, above.
-    if (first != '.' && peek() == '.') {
+    if (first != '.' && peek() == '.' &&
+        (is_digit(peek_next()) || peek_next() == '_')) {
       advance();
       while (is_digit(peek()) || peek() == '_') {
         advance();
