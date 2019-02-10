@@ -700,6 +700,9 @@ static void null_member_access() {
   optional_type_argument_list();
 }
 
+static bool check_local_variable_declaration();
+static void local_variable_type();
+
 static void argument_list_inner(enum TokenType closing_type) {
   if (!check(closing_type)) {
     softline_indent();
@@ -710,10 +713,21 @@ static void argument_list_inner(enum TokenType closing_type) {
       space();
     }
 
-    if (match(TOKEN_KW_IN) || match(TOKEN_KW_OUT) || match(TOKEN_KW_REF)) {
+    if (match(TOKEN_KW_OUT)) {
       space();
+      if (check_local_variable_declaration()) {
+        local_variable_type();
+        space();
+        identifier("in an inline out parameter declaration");
+      } else {
+        expression("as the value of an out argument");
+      }
+    } else {
+      if (match(TOKEN_KW_IN) || match(TOKEN_KW_REF)) {
+        space();
+      }
+      expression("as the value of an argument");
     }
-    expression("as the value of an argument");
 
     while (match(TOKEN_COMMA)) {
       end();
@@ -727,10 +741,21 @@ static void argument_list_inner(enum TokenType closing_type) {
         space();
       }
 
-      if (match(TOKEN_KW_IN) || match(TOKEN_KW_OUT) || match(TOKEN_KW_REF)) {
+      if (match(TOKEN_KW_OUT)) {
         space();
+        if (check_local_variable_declaration()) {
+          local_variable_type();
+          space();
+          identifier("in an inline out parameter declaration");
+        } else {
+          expression("as the value of an out argument");
+        }
+      } else {
+        if (match(TOKEN_KW_IN) || match(TOKEN_KW_REF)) {
+          space();
+        }
+        expression("as the value of an argument");
       }
-      expression("as the value of an argument");
     }
     end();
     dedent();
@@ -1208,7 +1233,9 @@ static void object_initializer() {
 }
 
 static void array_sizes(const char *where) {
-  token(TOKEN_OPENBRACKET, where);
+  if (!match(TOKEN_QUESTION_OPENBRACKET)) {
+    token(TOKEN_OPENBRACKET, where);
+  }
   if (!check(TOKEN_CLOSEBRACKET)) {
     softline_indent();
     group();
@@ -1247,7 +1274,7 @@ static void object_creation() {
     } else if (check(TOKEN_OPENBRACE)) {
       line();
       object_initializer();
-    } else if (check(TOKEN_OPENBRACKET)) {
+    } else if (check(TOKEN_OPENBRACKET) || check(TOKEN_QUESTION_OPENBRACKET)) {
       if (!check_next(TOKEN_COMMA)) {
         array_sizes("in object creation");
       }
@@ -2531,15 +2558,18 @@ static void formal_parameter() {
 }
 
 static void formal_parameter_list_inner() {
-  bool first = true;
-  while (check_formal_parameter()) {
-    if (!first) {
-      token(TOKEN_COMMA, "between parameters");
-      line();
-    }
-    first = false;
+  // N.B. __arglist is massively undocumented so shrug.
+  if (!match(TOKEN_KW_ARGLIST)) {
+    bool first = true;
+    while (check_formal_parameter()) {
+      if (!first) {
+        token(TOKEN_COMMA, "between parameters");
+        line();
+      }
+      first = false;
 
-    formal_parameter();
+      formal_parameter();
+    }
   }
 }
 

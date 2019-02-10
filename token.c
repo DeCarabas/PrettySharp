@@ -62,11 +62,17 @@ static enum TokenType check_kw(const char *token_start, int token_length,
 enum TokenType keyword_type(const char *start, int len) {
   if (len > 0) {
     switch (start[0]) {
+    case '_':
+      return check_kw(start, len, 1, 8, "_arglist", TOKEN_KW_ARGLIST);
     case 'a':
       if (len > 1) {
         switch (start[1]) {
         case 'b':
           return check_kw(start, len, 2, 6, "stract", TOKEN_KW_ABSTRACT);
+        case 'd':
+          return check_kw(start, len, 2, 1, "d", TOKEN_KW_ADD);
+        case 'l':
+          return check_kw(start, len, 2, 3, "ias", TOKEN_KW_ALIAS);
         case 's':
           if (len > 2) {
             switch (start[2]) {
@@ -81,10 +87,6 @@ enum TokenType keyword_type(const char *start, int len) {
             }
           }
           break;
-        case 'd':
-          return check_kw(start, len, 2, 1, "d", TOKEN_KW_ADD);
-        case 'l':
-          return check_kw(start, len, 2, 3, "ias", TOKEN_KW_ALIAS);
         case 'w':
           return check_kw(start, len, 2, 3, "ait", TOKEN_KW_AWAIT);
         }
@@ -199,6 +201,8 @@ enum TokenType keyword_type(const char *start, int len) {
           return check_kw(start, len, 2, 2, "se", TOKEN_KW_ELSE);
         case 'n':
           return check_kw(start, len, 2, 2, "um", TOKEN_KW_ENUM);
+        case 'q':
+          return check_kw(start, len, 2, 4, "uals", TOKEN_KW_EQUALS);
         case 'v':
           return check_kw(start, len, 2, 3, "ent", TOKEN_KW_EVENT);
         case 'x':
@@ -211,8 +215,6 @@ enum TokenType keyword_type(const char *start, int len) {
             }
           }
           break;
-        case 'q':
-          return check_kw(start, len, 2, 4, "uals", TOKEN_KW_EQUALS);
         }
       }
       break;
@@ -259,12 +261,12 @@ enum TokenType keyword_type(const char *start, int len) {
     case 'g':
       if (len > 1) {
         switch (start[1]) {
-        case 'o':
-          return check_kw(start, len, 2, 2, "to", TOKEN_KW_GOTO);
         case 'e':
           return check_kw(start, len, 2, 1, "t", TOKEN_KW_GET);
         case 'l':
           return check_kw(start, len, 2, 4, "obal", TOKEN_KW_GLOBAL);
+        case 'o':
+          return check_kw(start, len, 2, 2, "to", TOKEN_KW_GOTO);
         case 'r':
           return check_kw(start, len, 2, 3, "oup", TOKEN_KW_GROUP);
         }
@@ -331,9 +333,13 @@ enum TokenType keyword_type(const char *start, int len) {
         }
       }
       break;
+    case 'j':
+      return check_kw(start, len, 1, 3, "oin", TOKEN_KW_JOIN);
     case 'l':
       if (len > 1) {
         switch (start[1]) {
+        case 'e':
+          return check_kw(start, len, 2, 1, "t", TOKEN_KW_LET);
         case 'o':
           if (len > 2) {
             switch (start[2]) {
@@ -344,8 +350,6 @@ enum TokenType keyword_type(const char *start, int len) {
             }
           }
           break;
-        case 'e':
-          return check_kw(start, len, 2, 1, "t", TOKEN_KW_LET);
         }
       }
       break;
@@ -361,11 +365,11 @@ enum TokenType keyword_type(const char *start, int len) {
                 case 'e':
                   if (len > 4) {
                     switch (start[4]) {
+                    case 'o':
+                      return check_kw(start, len, 5, 1, "f", TOKEN_KW_NAMEOF);
                     case 's':
                       return check_kw(start, len, 5, 4, "pace",
                                       TOKEN_KW_NAMESPACE);
-                    case 'o':
-                      return check_kw(start, len, 5, 1, "f", TOKEN_KW_NAMEOF);
                     }
                   }
                   break;
@@ -387,19 +391,19 @@ enum TokenType keyword_type(const char *start, int len) {
         switch (start[1]) {
         case 'b':
           return check_kw(start, len, 2, 4, "ject", TOKEN_KW_OBJECT);
-        case 'p':
-          return check_kw(start, len, 2, 6, "erator", TOKEN_KW_OPERATOR);
-        case 'u':
-          return check_kw(start, len, 2, 1, "t", TOKEN_KW_OUT);
-        case 'v':
-          return check_kw(start, len, 2, 6, "erride", TOKEN_KW_OVERRIDE);
         case 'n':
           if (len == 2) {
             return TOKEN_KW_ON;
           }
           break;
+        case 'p':
+          return check_kw(start, len, 2, 6, "erator", TOKEN_KW_OPERATOR);
         case 'r':
           return check_kw(start, len, 2, 5, "derby", TOKEN_KW_ORDERBY);
+        case 'u':
+          return check_kw(start, len, 2, 1, "t", TOKEN_KW_OUT);
+        case 'v':
+          return check_kw(start, len, 2, 6, "erride", TOKEN_KW_OVERRIDE);
         }
       }
       break;
@@ -450,10 +454,10 @@ enum TokenType keyword_type(const char *start, int len) {
                 return TOKEN_KW_REF;
               }
               break;
-            case 't':
-              return check_kw(start, len, 3, 3, "urn", TOKEN_KW_RETURN);
             case 'm':
               return check_kw(start, len, 3, 3, "ove", TOKEN_KW_REMOVE);
+            case 't':
+              return check_kw(start, len, 3, 3, "urn", TOKEN_KW_RETURN);
             }
           }
           break;
@@ -580,18 +584,6 @@ enum TokenType keyword_type(const char *start, int len) {
     case 'v':
       if (len > 1) {
         switch (start[1]) {
-        case 'i':
-          return check_kw(start, len, 2, 5, "rtual", TOKEN_KW_VIRTUAL);
-        case 'o':
-          if (len > 2) {
-            switch (start[2]) {
-            case 'i':
-              return check_kw(start, len, 3, 1, "d", TOKEN_KW_VOID);
-            case 'l':
-              return check_kw(start, len, 3, 5, "atile", TOKEN_KW_VOLATILE);
-            }
-          }
-          break;
         case 'a':
           if (len > 2) {
             switch (start[2]) {
@@ -605,6 +597,18 @@ enum TokenType keyword_type(const char *start, int len) {
             }
           }
           break;
+        case 'i':
+          return check_kw(start, len, 2, 5, "rtual", TOKEN_KW_VIRTUAL);
+        case 'o':
+          if (len > 2) {
+            switch (start[2]) {
+            case 'i':
+              return check_kw(start, len, 3, 1, "d", TOKEN_KW_VOID);
+            case 'l':
+              return check_kw(start, len, 3, 5, "atile", TOKEN_KW_VOLATILE);
+            }
+          }
+          break;
         }
       }
       break;
@@ -614,8 +618,6 @@ enum TokenType keyword_type(const char *start, int len) {
         case 'h':
           if (len > 2) {
             switch (start[2]) {
-            case 'i':
-              return check_kw(start, len, 3, 2, "le", TOKEN_KW_WHILE);
             case 'e':
               if (len > 3) {
                 switch (start[3]) {
@@ -629,14 +631,14 @@ enum TokenType keyword_type(const char *start, int len) {
                 }
               }
               break;
+            case 'i':
+              return check_kw(start, len, 3, 2, "le", TOKEN_KW_WHILE);
             }
           }
           break;
         }
       }
       break;
-    case 'j':
-      return check_kw(start, len, 1, 3, "oin", TOKEN_KW_JOIN);
     case 'y':
       return check_kw(start, len, 1, 4, "ield", TOKEN_KW_YIELD);
     }

@@ -53,7 +53,9 @@ class TrieNode(object):
         if self.key is not None:
             lines.append("'{}' == {}".format(self.key, self.value))
         if self.children is not None:
-            for key, value in self.children.items():
+            keys = list(sorted(self.children.keys()))
+            for key in keys:
+                value = self.children[key]
                 lines.append("{} ->".format(key))
                 lines.extend(indent(value.dump()))
         return lines
@@ -65,7 +67,9 @@ class TrieNode(object):
         if self.children is not None:
             lines.append("if (len > {}) {{".format(prefix_length))
             lines.append("  switch(start[{}]) {{".format(prefix_length))
-            for key, value in self.children.items():
+            keys = list(sorted(self.children.keys()))
+            for key in keys:
+                value = self.children[key]
                 lines.append("  case '{}':".format(key))
                 child_lines = value.dump_c(prefix_length + 1)
                 lines.extend(indent(child_lines, 4))
