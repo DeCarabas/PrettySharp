@@ -964,6 +964,26 @@ static void unary_prefix() {
 
 static void unary_postfix() { single_token(); }
 
+static void async_lambda_or_delegate() {
+  token(TOKEN_KW_ASYNC, "in an async expression?");
+  if (check(TOKEN_KW_DELEGATE)) {
+    notimplemented("Not Implemented: async delegate thingie");
+    advance();
+  } else if (check_identifier() && check_next(TOKEN_EQUALS_GREATERTHAN)) {
+    line_indent();
+    implicitly_typed_lambda();
+    dedent();
+  } else if (check_parenthesized_implicitly_typed_lambda()) {
+    line_indent();
+    parenthesized_implicitly_typed_lambda();
+    dedent();
+  } else if (check_parenthesized_explicitly_typed_lambda()) {
+    line_indent();
+    parenthesized_explicitly_typed_lambda();
+    dedent();
+  }
+}
+
 static void await_expression() {
   group();
   token(TOKEN_KW_AWAIT, "in await expression");
