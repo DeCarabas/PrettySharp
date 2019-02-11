@@ -604,11 +604,36 @@ static void parse_precedence(enum Precedence precedence, const char *where) {
 
 static void inline_block(const char *where);
 
+static bool check_implicitly_typed_lambda() {
+  int index = parser.index;
+  struct Token token = parser.current;
+  if (token.type == TOKEN_KW_ASYNC) {
+    token = next_significant_token(&index);
+  }
+
+  if (!is_identifier_token(token.type)) {
+    return false;
+  }
+
+  token = next_significant_token(&index);
+  if (token.type != TOKEN_EQUALS_GREATERTHAN) {
+    return false;
+  }
+  return true;
+}
+
 static void implicitly_typed_lambda() {
   group();
-  identifier("in implicitly typed lambda");
-  space();
-  token(TOKEN_EQUALS_GREATERTHAN, "in implicitly typed lambda");
+  {
+    group();
+    if (match(TOKEN_KW_ASYNC)) {
+      line();
+    }
+    identifier("in implicitly typed lambda");
+    space();
+    token(TOKEN_EQUALS_GREATERTHAN, "in implicitly typed lambda");
+    end();
+  }
   if (check(TOKEN_OPENBRACE)) {
     space();
     inline_block("at the beginning of the body of a lambda");
@@ -623,7 +648,7 @@ static void implicitly_typed_lambda() {
 }
 
 static void primary() {
-  if (check_identifier() && check_next(TOKEN_EQUALS_GREATERTHAN)) {
+  if (check_implicitly_typed_lambda()) {
     implicitly_typed_lambda();
   } else {
     single_token();
@@ -796,12 +821,17 @@ static bool check_parenthesized_implicitly_typed_lambda() {
   // Case 1: ( x ,
   // Case 2: ( x ) =>
   // Case 3: ( ) =>
-  if (parser.current.type != TOKEN_OPENPAREN) {
+  int index = parser.index;
+  struct Token token = parser.current;
+  if (token.type == TOKEN_KW_ASYNC) {
+    token = next_significant_token(&index);
+  }
+
+  if (token.type != TOKEN_OPENPAREN) {
     return false;
   }
 
-  int index = parser.index;
-  struct Token token = next_significant_token(&index);
+  token = next_significant_token(&index);
   if (is_identifier_token(token.type)) {
     token = next_significant_token(&index);
     if (token.type == TOKEN_COMMA) {
@@ -839,6 +869,9 @@ static void parenthesized_implicitly_typed_lambda() {
   group();
   {
     group();
+    if (match(TOKEN_KW_ASYNC)) {
+      line();
+    }
     token(TOKEN_OPENPAREN, "in parenthesized lambda");
     if (check_identifier()) {
       softline_indent();
@@ -896,6 +929,10 @@ static bool check_parenthesized_explicitly_typed_lambda() {
   bool requires_scan = true;
   int index = parser.index;
   struct Token token = parser.current;
+  if (token.type == TOKEN_KW_ASYNC) {
+    token = next_significant_token(&index);
+  }
+
   if (token.type != TOKEN_OPENPAREN) {
     DEBUG(("explicit paren lambda: no openparen -> false"));
     return false;
@@ -950,10 +987,17 @@ static void formal_parameter_list(const char *where);
 
 static void parenthesized_explicitly_typed_lambda() {
   group();
-  formal_parameter_list(
-      "at the beginning of a parenthesized, explicitly typed lambda");
-  space();
-  token(TOKEN_EQUALS_GREATERTHAN, "in parenthesized lambda");
+  {
+    group();
+    if (match(TOKEN_KW_ASYNC)) {
+      line();
+    }
+    formal_parameter_list(
+        "at the beginning of a parenthesized, explicitly typed lambda");
+    space();
+    token(TOKEN_EQUALS_GREATERTHAN, "in parenthesized lambda");
+    end();
+  }
   if (check(TOKEN_OPENBRACE)) {
     space();
     inline_block("at the beginning of the body of an explicitly typed lambda");
@@ -1099,22 +1143,18 @@ static void anonymous_method_expression() {
 }
 
 static void async_lambda_or_delegate() {
-  token(TOKEN_KW_ASYNC, "in an async expression?");
-  if (check(TOKEN_KW_DELEGATE)) {
+  if (check_next(TOKEN_KW_DELEGATE)) {
+    token(TOKEN_KW_ASYNC, "in an async expression?");
     space();
     anonymous_method_expression();
-  } else if (check_identifier() && check_next(TOKEN_EQUALS_GREATERTHAN)) {
-    line_indent();
+  } else if (check_implicitly_typed_lambda()) {
     implicitly_typed_lambda();
-    dedent();
   } else if (check_parenthesized_implicitly_typed_lambda()) {
-    line_indent();
     parenthesized_implicitly_typed_lambda();
-    dedent();
   } else if (check_parenthesized_explicitly_typed_lambda()) {
-    line_indent();
     parenthesized_explicitly_typed_lambda();
-    dedent();
+  } else {
+    error("Expected some kind of lambda or delegate");
   }
 }
 
@@ -2380,6 +2420,7 @@ static void opt_attribute_arguments() {
       softline_indent();
       attribute_argument();
       while (match(TOKEN_COMMA)) {
+        line();
         attribute_argument();
       }
       dedent();
@@ -3009,48 +3050,52 @@ static enum TokenType overloadable_operator_tokens[] = {
 };
 
 static void operator_declaration() {
-  // method header
   attributes();
+
   group();
-  declaration_modifiers();
-  line();
-  if (match(TOKEN_KW_EXPLICIT) || match(TOKEN_KW_IMPLICIT)) {
-    space();
-    token(TOKEN_KW_OPERATOR, "in conversion operator");
-    line();
-    type();
-    token(TOKEN_OPENPAREN, "before the argument in a conversion operator");
-    {
-      softline_indent();
-      formal_parameter();
-      dedent();
-    }
-    softline();
-    token(TOKEN_CLOSEPAREN, "after the argument in a conversion operator");
-  } else {
-    {
-      group();
-      type();
+  {
+    group();
+    declaration_modifiers();
+    if (match(TOKEN_KW_EXPLICIT) || match(TOKEN_KW_IMPLICIT)) {
+      token(TOKEN_KW_OPERATOR, "in conversion operator");
       line();
-      token(TOKEN_KW_OPERATOR, "after the type in an operator declaration");
-      if ((parser.index < parser.buffer.count - 1) &&
-          (parser.buffer.tokens[parser.index].type == TOKEN_GREATERTHAN) &&
-          (parser.buffer.tokens[parser.index + 1].type == TOKEN_GREATERTHAN)) {
-        // NOTE: This is a bit weird here but we don't tokenize >> as a right
-        // shift because it would make parsing generic types difficult. We rely
-        // on the fact that we can see trivia in our parser to disambiguate
-        // this.
-        token(TOKEN_GREATERTHAN,
-              "in an overloaded right shift declaration (1)");
-        token(TOKEN_GREATERTHAN,
-              "in an overloaded right shift declaration (2)");
-      } else if (!match_any(overloadable_operator_tokens,
-                            ARRAY_SIZE(overloadable_operator_tokens))) {
-        error("Expected an overloadable operator in an operator declaration");
+      type();
+      token(TOKEN_OPENPAREN, "before the argument in a conversion operator");
+      {
+        softline_indent();
+        formal_parameter();
+        dedent();
       }
-      end();
+      softline();
+      token(TOKEN_CLOSEPAREN, "after the argument in a conversion operator");
+    } else {
+      {
+        group();
+        type();
+        line();
+        token(TOKEN_KW_OPERATOR, "after the type in an operator declaration");
+        line();
+        if ((parser.index < parser.buffer.count - 1) &&
+            (parser.buffer.tokens[parser.index].type == TOKEN_GREATERTHAN) &&
+            (parser.buffer.tokens[parser.index + 1].type ==
+             TOKEN_GREATERTHAN)) {
+          // NOTE: This is a bit weird here but we don't tokenize >> as a right
+          // shift because it would make parsing generic types difficult. We
+          // rely on the fact that we can see trivia in our parser to
+          // disambiguate this.
+          token(TOKEN_GREATERTHAN,
+                "in an overloaded right shift declaration (1)");
+          token(TOKEN_GREATERTHAN,
+                "in an overloaded right shift declaration (2)");
+        } else if (!match_any(overloadable_operator_tokens,
+                              ARRAY_SIZE(overloadable_operator_tokens))) {
+          error("Expected an overloadable operator in an operator declaration");
+        }
+        end();
+      }
+      formal_parameter_list("in an operator declaration");
     }
-    formal_parameter_list("in an operator declaration");
+    end();
   }
 
   if (!match(TOKEN_SEMICOLON)) {
@@ -3303,6 +3348,9 @@ static void member_declarations() {
            member_kind != MEMBERKIND_CONST)) {
         // Everything except fields gets a blank line in between.
         line();
+      } else if (check(TOKEN_OPENBRACKET)) {
+        // If you start with attributes you need a blank line.
+        line();
       }
     }
 
@@ -3453,15 +3501,24 @@ static void struct_declaration() {
 }
 
 static void interface_declaration() {
-  token(TOKEN_KW_INTERFACE, "at the beginning of an interface declaration");
-  space();
-  identifier("in the name of an interface declaration");
-  optional_type_parameter_list();
+  group();
+  {
+    group();
+    {
+      group();
+      token(TOKEN_KW_INTERFACE, "at the beginning of an interface declaration");
+      space();
+      identifier("in the name of an interface declaration");
+      optional_type_parameter_list();
+      end();
+    }
 
-  if (check(TOKEN_COLON)) {
-    line_indent();
-    base_types();
-    dedent();
+    if (check(TOKEN_COLON)) {
+      line_indent();
+      base_types();
+      dedent();
+    }
+    end();
   }
 
   if (check(TOKEN_KW_WHERE)) {
@@ -3469,6 +3526,7 @@ static void interface_declaration() {
     type_parameter_constraint_clauses();
     dedent();
   }
+  end();
 
   line();
   token(TOKEN_OPENBRACE, "at the beginning of an interface declaration");
@@ -3498,18 +3556,22 @@ static void enum_declaration() {
   {
     line_indent();
 
+    group();
     bool first = true;
     while (check(TOKEN_OPENBRACKET) || check_identifier() ||
            check(TOKEN_COMMA)) {
       if (!first) {
         token(TOKEN_COMMA, "between enum members");
+        if (check(TOKEN_CLOSEBRACE)) {
+          // Handle lone trailing comma
+          break;
+        }
+
+        end();
         line();
+        group();
       }
       first = false;
-
-      if (check(TOKEN_CLOSEBRACE)) {
-        break;
-      }
 
       // TODO: Attributes here??
       identifier("in the name of an enum member");
@@ -3523,6 +3585,7 @@ static void enum_declaration() {
         }
       }
     }
+    end();
 
     dedent();
   }
