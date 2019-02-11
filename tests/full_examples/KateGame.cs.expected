@@ -436,8 +436,7 @@ namespace Garden
         }
     }
 
-    class KateGame
-        : Game
+    class KateGame : Game
     {
         GraphicsDeviceManager graphics;
         SpriteFont font;

@@ -15,6 +15,7 @@ struct Parser {
   int trivia_index;
   bool has_trivia;
 
+  bool last_was_line;
   bool had_error;
   bool panic_mode;
   bool suppress_errors;
@@ -123,34 +124,35 @@ static void flush_trivia() {
     return;
   }
 
-  bool must_break = true;
+  bool last_was_line = parser.last_was_line;
   for (; parser.trivia_index < parser.index; parser.trivia_index++) {
     struct Token trivia = parser.buffer.tokens[parser.trivia_index];
     if (trivia.type == TOKEN_TRIVIA_BLOCK_COMMENT) {
       DEBUG(("Handling block comment"));
       doc_text(parser.builder, trivia.start, trivia.length);
       doc_line(parser.builder);
-      must_break = false;
+      last_was_line = true;
     } else if (trivia.type == TOKEN_TRIVIA_LINE_COMMENT) {
       DEBUG(("Handling line comment"));
       doc_breakparent(parser.builder);
       doc_text(parser.builder, trivia.start, trivia.length);
       doc_line(parser.builder);
-      must_break = false;
+      last_was_line = true;
     } else if (trivia.type == TOKEN_TRIVIA_DIRECTIVE) {
       DEBUG(("Handling directive"));
       doc_breakparent(parser.builder);
-      if (must_break) {
+      if (!last_was_line) {
         doc_line(parser.builder); // TODO: Maintain indent?
       }
       doc_text(parser.builder, trivia.start, trivia.length);
       doc_line(parser.builder);
-      must_break = false;
+      last_was_line = true;
     } else {
       // TODO: Consecutive newlines?
     }
   }
 
+  parser.last_was_line = last_was_line;
   parser.has_trivia = false;
 }
 
@@ -160,6 +162,7 @@ static void flush_trivia() {
 
 static void text(struct Token token) {
   flush_trivia();
+  parser.last_was_line = false;
   doc_text(parser.builder, token.start, token.length);
 }
 static void group() {
@@ -169,12 +172,18 @@ static void group() {
 static void end() { doc_end(parser.builder); }
 static void indent() { doc_indent(parser.builder); }
 static void dedent() { doc_dedent(parser.builder); }
-static void line() { doc_line(parser.builder); }
+static void line() {
+  parser.last_was_line = true;
+  doc_line(parser.builder);
+}
 static void line_indent() {
   indent();
   line();
 }
-static void softline() { doc_softline(parser.builder); }
+static void softline() {
+  parser.last_was_line = true;
+  doc_softline(parser.builder);
+}
 static void softline_indent() {
   indent();
   softline();
@@ -1417,6 +1426,7 @@ static void join_clause() {
     group();
     token(TOKEN_KW_ON,
           "between the collection and the condition in a join clause");
+    line();
     {
       group();
       expression("on the left of the equality in a join clause");
@@ -1429,9 +1439,9 @@ static void join_clause() {
     end();
   }
 
-  line();
-
   if (check(TOKEN_KW_INTO)) {
+    line();
+
     group();
     token(TOKEN_KW_INTO, "after the condition in a join into clause");
     space();
@@ -1541,6 +1551,9 @@ static void query_body() {
       more_query = true;
     }
     end();
+    if (more_query) {
+      line();
+    }
   } while (more_query);
 }
 
@@ -1632,8 +1645,9 @@ static void greater_than() {
 
 static void is() {
   group();
-  token(TOKEN_KW_IS, "in relational expression (is)");
   space();
+  token(TOKEN_KW_IS, "in relational expression (is)");
+  line();
   type();
   if (check_identifier()) {
     space();
@@ -1644,8 +1658,9 @@ static void is() {
 
 static void as() {
   group();
-  token(TOKEN_KW_AS, "in relational expression (as)");
   space();
+  token(TOKEN_KW_AS, "in relational expression (as)");
+  line();
   type();
   end();
 }
@@ -1653,6 +1668,7 @@ static void as() {
 static void conditional() {
   const struct ParseRule *rule = get_rule(TOKEN_QUESTION);
 
+  space();
   token(TOKEN_QUESTION, "at the beginning of a ternary expression");
   line_indent();
   parse_precedence((enum Precedence)(rule->precedence + 1),
@@ -1906,6 +1922,7 @@ static void switch_statement() {
             space();
             expression("after 'when' in a pattern case pattern");
             end();
+            dedent();
           }
           end();
         } else {
@@ -1962,25 +1979,19 @@ static void statement_expression_list(const char *where) {
 }
 
 static void for_initializer() {
-  if (!match(TOKEN_SEMICOLON)) {
-    if (check_local_variable_declaration()) {
-      local_variable_declaration();
-    } else {
-      statement_expression_list("in the initializer of a for loop");
-    }
-    token(TOKEN_SEMICOLON, "at the end of the initializer of a for loop");
+  if (check_local_variable_declaration()) {
+    local_variable_declaration();
+  } else {
+    statement_expression_list("in the initializer of a for loop");
   }
+  token(TOKEN_SEMICOLON, "at the end of the initializer of a for loop");
 }
 static void for_condition() {
-  if (!match(TOKEN_SEMICOLON)) {
-    expression("in the condition of a for loop");
-    token(TOKEN_SEMICOLON, "between sections of a for loop");
-  }
+  expression("in the condition of a for loop");
+  token(TOKEN_SEMICOLON, "between sections of a for loop");
 }
 static void for_iterator() {
-  if (!check(TOKEN_CLOSEPAREN)) {
-    statement_expression_list("in the iterator of a for loop");
-  }
+  statement_expression_list("in the iterator of a for loop");
 }
 
 static void for_statement() {
@@ -1991,15 +2002,19 @@ static void for_statement() {
     token(TOKEN_OPENPAREN, "at the beginning of a for loop");
     {
       softline_indent();
-      for_initializer();
+      if (!match(TOKEN_SEMICOLON)) {
+        for_initializer();
+      }
 
-      line();
+      if (!match(TOKEN_SEMICOLON)) {
+        line();
+        for_condition();
+      }
 
-      for_condition();
-
-      line();
-
-      for_iterator();
+      if (!check(TOKEN_CLOSEPAREN)) {
+        line();
+        for_iterator();
+      }
       dedent();
     }
     softline();
@@ -2095,7 +2110,9 @@ static void try_statement() {
     line();
     block("at the beginning of the body of a catch block");
   }
-  if (match(TOKEN_KW_FINALLY)) {
+  if (check(TOKEN_KW_FINALLY)) {
+    line();
+    token(TOKEN_KW_FINALLY, "at the beginning of a finally block");
     line();
     block("in the body of a finally block");
   }
@@ -2133,24 +2150,33 @@ static void lock_statement() {
 }
 
 static void using_statement() {
-  token(TOKEN_KW_USING, "at the beginning of a using statement");
-  space();
-  {
-    group();
-    token(TOKEN_OPENPAREN,
-          "at the beginning of the using statement, expression");
-    {
-      softline_indent();
-      if (check_local_variable_declaration()) {
-        local_variable_declaration();
-      } else {
-        expression("in the value of the resource in a using statement");
-      }
-      dedent();
+  // Here we intentionally stack nested using statements at the same level of
+  // indent because that's how lots of people like to use them.
+  bool first = true;
+  while (check(TOKEN_KW_USING)) {
+    if (!first) {
+      line();
     }
-    softline();
-    token(TOKEN_CLOSEPAREN, "at the end of the using statement expression");
-    end();
+    first = false;
+    token(TOKEN_KW_USING, "at the beginning of a using statement");
+    space();
+    {
+      group();
+      token(TOKEN_OPENPAREN,
+            "at the beginning of the using statement, expression");
+      {
+        softline_indent();
+        if (check_local_variable_declaration()) {
+          local_variable_declaration();
+        } else {
+          expression("in the value of the resource in a using statement");
+        }
+        dedent();
+      }
+      softline();
+      token(TOKEN_CLOSEPAREN, "at the end of the using statement expression");
+      end();
+    }
   }
   embedded_statement(/*embedded*/ true);
 }
@@ -2861,13 +2887,21 @@ static void event_declaration() {
     if (check_next(TOKEN_OPENBRACE)) {
       space();
       identifier("in the name of an event declaration");
+      end();
+      group();
 
       line();
       token(TOKEN_OPENBRACE, "at the beginning of an event declaration");
       {
         line_indent();
+        bool first = true;
         while (check(TOKEN_KW_ADD) || check(TOKEN_KW_REMOVE) ||
                check(TOKEN_OPENBRACKET)) {
+          if (!first) {
+            line();
+          }
+          first = false;
+
           attributes();
 
           group();
@@ -2878,13 +2912,10 @@ static void event_declaration() {
           line();
           block("as the body of an event accessor");
           end();
-
-          line();
         }
-        // Stuff
-
         dedent();
       }
+      line();
       token(TOKEN_CLOSEBRACE, "at the end of an event declaration");
     } else {
       variable_declarators("in an event declaration");
@@ -3346,21 +3377,29 @@ static void base_types() {
 }
 
 static void class_declaration() {
-  token(TOKEN_KW_CLASS, "at the beginning of a class declaration");
-  space();
-  identifier("in the name a class declaration");
-  optional_type_parameter_list();
+  {
+    group();
+    {
+      group();
+      token(TOKEN_KW_CLASS, "at the beginning of a class declaration");
+      space();
+      identifier("in the name a class declaration");
+      optional_type_parameter_list();
 
-  if (check(TOKEN_COLON)) {
-    line_indent();
-    base_types();
-    dedent();
-  }
+      if (check(TOKEN_COLON)) {
+        line_indent();
+        base_types();
+        dedent();
+      }
+      end();
+    }
 
-  if (check(TOKEN_KW_WHERE)) {
-    line_indent();
-    type_parameter_constraint_clauses();
-    dedent();
+    if (check(TOKEN_KW_WHERE)) {
+      line_indent();
+      type_parameter_constraint_clauses();
+      dedent();
+    }
+    end();
   }
 
   line();
@@ -3376,21 +3415,29 @@ static void class_declaration() {
 }
 
 static void struct_declaration() {
-  token(TOKEN_KW_STRUCT, "at the beginning of a struct declaration");
-  space();
-  identifier("in the name of a struct declaration");
-  optional_type_parameter_list();
+  {
+    group();
+    {
+      group();
+      token(TOKEN_KW_STRUCT, "at the beginning of a struct declaration");
+      space();
+      identifier("in the name of a struct declaration");
+      optional_type_parameter_list();
 
-  if (check(TOKEN_COLON)) {
-    line_indent();
-    base_types();
-    dedent();
-  }
+      if (check(TOKEN_COLON)) {
+        line_indent();
+        base_types();
+        dedent();
+      }
+      end();
+    }
 
-  if (check(TOKEN_KW_WHERE)) {
-    line_indent();
-    type_parameter_constraint_clauses();
-    dedent();
+    if (check(TOKEN_KW_WHERE)) {
+      line_indent();
+      type_parameter_constraint_clauses();
+      dedent();
+    }
+    end();
   }
 
   line();
@@ -3486,14 +3533,18 @@ static void enum_declaration() {
 
 static void delegate_declaration() {
   group();
-  token(TOKEN_KW_DELEGATE, "at the beginning of a delegate declaration");
-  space();
-  return_type();
-  line();
-  identifier("in the name of a delegate declaration");
-  optional_type_parameter_list();
+  {
+    group();
+    token(TOKEN_KW_DELEGATE, "at the beginning of a delegate declaration");
+    space();
+    return_type();
+    line();
+    identifier("in the name of a delegate declaration");
+    optional_type_parameter_list();
 
-  formal_parameter_list("in a delegate declaration");
+    formal_parameter_list("in a delegate declaration");
+    end();
+  }
 
   if (check(TOKEN_KW_WHERE)) {
     line_indent();
@@ -3683,6 +3734,7 @@ static void compilation_unit() {
 
 bool format_csharp(struct DocBuilder *builder, const char *source) {
   parser.builder = builder;
+  parser.last_was_line = true;
   parser.had_error = false;
   parser.panic_mode = false;
   parser.suppress_errors = false;
