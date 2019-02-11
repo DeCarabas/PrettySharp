@@ -123,23 +123,29 @@ static void flush_trivia() {
     return;
   }
 
+  bool must_break = true;
   for (; parser.trivia_index < parser.index; parser.trivia_index++) {
     struct Token trivia = parser.buffer.tokens[parser.trivia_index];
     if (trivia.type == TOKEN_TRIVIA_BLOCK_COMMENT) {
       DEBUG(("Handling block comment"));
       doc_text(parser.builder, trivia.start, trivia.length);
       doc_line(parser.builder);
+      must_break = false;
     } else if (trivia.type == TOKEN_TRIVIA_LINE_COMMENT) {
       DEBUG(("Handling line comment"));
       doc_breakparent(parser.builder);
       doc_text(parser.builder, trivia.start, trivia.length);
       doc_line(parser.builder);
+      must_break = false;
     } else if (trivia.type == TOKEN_TRIVIA_DIRECTIVE) {
       DEBUG(("Handling directive"));
       doc_breakparent(parser.builder);
-      doc_line(parser.builder); // TODO: Maintain indent?
+      if (must_break) {
+        doc_line(parser.builder); // TODO: Maintain indent?
+      }
       doc_text(parser.builder, trivia.start, trivia.length);
       doc_line(parser.builder);
+      must_break = false;
     } else {
       // TODO: Consecutive newlines?
     }
