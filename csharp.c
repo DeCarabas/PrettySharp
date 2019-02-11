@@ -2787,6 +2787,7 @@ static void method_declaration() {
           token(TOKEN_KW_BASE, "in a constructor initializer");
         }
         argument_list();
+        dedent();
       }
     } else {
       if (check(TOKEN_KW_WHERE)) {
