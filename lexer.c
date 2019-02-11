@@ -274,6 +274,27 @@ static struct Token scan_verbatim_string_literal() {
 
 static struct Token scan_token();
 
+static const char *scan_format_specifier(bool verbatim) {
+  for (;;) {
+    if (is_at_end() || peek() == '"') {
+      return "Unterminated verbatim string constant (in format specifier)";
+    }
+    if (!verbatim && match('\\')) {
+      if (!is_at_end()) {
+        advance();
+      }
+    } else if (match('}')) {
+      if (match('}')) {
+        // OK escaped.
+      } else {
+        // End of the format specifier, no error.
+        return NULL;
+      }
+    }
+    advance();
+  }
+}
+
 static struct Token scan_interpolated_string_literal(bool verbatim) {
   // OK we're doing what Roslyn does here, which is treat the entire
   // interpolated string as a single token, rather than tracking the state
@@ -303,14 +324,21 @@ static struct Token scan_interpolated_string_literal(bool verbatim) {
     } else if (match('{')) {
       if (!match('{')) {
         // This is the interpolation hole, spin it around...
+        lexer.interpolation.depth = 1;
         for (;;) {
-          lexer.interpolation.depth = 1;
           struct Token nested = scan_token();
           if (nested.type == TOKEN_ERROR) {
             return nested;
           }
           if (nested.type == TOKEN_EOF ||
               nested.type == TOKEN_INTERPOLATION_END) {
+            break;
+          }
+          if (nested.type == TOKEN_INTERPOLATION_FORMAT) {
+            const char *error = scan_format_specifier(verbatim);
+            if (error) {
+              return error_token(error);
+            }
             break;
           }
         }
@@ -808,6 +836,9 @@ static struct Token scan_token() {
     return make_token(match('=') ? TOKEN_SLASH_EQUALS : TOKEN_SLASH);
 
   case '#':
+    if (lexer.interpolation.enabled) {
+      return error_token("Directives not allowed in interpolated strings.");
+    }
     return scan_directive();
 
   case '.':
@@ -827,6 +858,9 @@ static struct Token scan_token() {
     return make_token(TOKEN_COMMA);
 
   case ':':
+    if (lexer.interpolation.enabled && lexer.interpolation.depth == 1) {
+      return make_token(TOKEN_INTERPOLATION_FORMAT);
+    }
     return make_token(match(':') ? TOKEN_COLON_COLON : TOKEN_COLON);
 
   case ';':
@@ -852,9 +886,18 @@ static struct Token scan_token() {
     return make_token(match('=') ? TOKEN_ASTERISK_EQUALS : TOKEN_ASTERISK);
 
   case '(':
+    if (lexer.interpolation.enabled) {
+      lexer.interpolation.depth++;
+    }
     return make_token(TOKEN_OPENPAREN);
 
   case ')':
+    if (lexer.interpolation.enabled) {
+      lexer.interpolation.depth--;
+      if (lexer.interpolation.depth == 0) {
+        return error_token("Mismatched parentheses in interpolated string");
+      }
+    }
     return make_token(TOKEN_CLOSEPAREN);
 
   case '{':
@@ -873,9 +916,18 @@ static struct Token scan_token() {
     return make_token(TOKEN_CLOSEBRACE);
 
   case '[':
+    if (lexer.interpolation.enabled) {
+      lexer.interpolation.depth++;
+    }
     return make_token(TOKEN_OPENBRACKET);
 
   case ']':
+    if (lexer.interpolation.enabled) {
+      lexer.interpolation.depth--;
+      if (lexer.interpolation.depth == 0) {
+        return error_token("Mismatched brackets in interpolated string");
+      }
+    }
     return make_token(TOKEN_CLOSEBRACKET);
 
   case '?':
