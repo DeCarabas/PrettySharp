@@ -1602,19 +1602,25 @@ static void greater_than() {
 
   enum Precedence prec = PREC_GREATERTHAN;
   if (parser.index < parser.buffer.count) {
-    if (parser.buffer.tokens[parser.index + 1].type == TOKEN_GREATERTHAN) {
+    const enum TokenType next = parser.buffer.tokens[parser.index].type;
+    if (next == TOKEN_GREATERTHAN) {
       prec = PREC_SHIFT;
+    } else if (next == TOKEN_GREATERTHAN_EQUALS) {
+      prec = PREC_ASSIGNMENT;
     }
   }
 
   space();
-  token(TOKEN_GREATERTHAN, "in binary expression");
-  if (prec == PREC_SHIFT) {
+  token(TOKEN_GREATERTHAN, "in greater than expression");
+  if (PREC_SHIFT == prec) {
     token(TOKEN_GREATERTHAN, "in left shift expression");
+  } else if (PREC_ASSIGNMENT == prec) {
+    token(TOKEN_GREATERTHAN_EQUALS, "in left shift assignment expression");
   }
   line();
 
-  parse_precedence(prec + 1, "to the right of a binary expression");
+  parse_precedence(prec + 1,
+                   "to the right of a greater than or left shift expression");
   end();
 }
 
