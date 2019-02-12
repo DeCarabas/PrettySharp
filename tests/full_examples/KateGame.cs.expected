@@ -171,12 +171,14 @@ namespace Garden
             temp[1].Color = rgba;
             temp[2].Position = pt2;
             temp[2].Color = rgba;
+
             temp[3].Position = pt0;
             temp[3].Color = rgba;
             temp[4].Position = pt2;
             temp[4].Color = rgba;
             temp[5].Position = pt3;
             temp[5].Color = rgba;
+
             this.worldMatrix.SetValue(world);
             this.shapesEffect.CurrentTechnique = this.squareTechnique;
             foreach (
@@ -234,20 +236,25 @@ namespace Garden
         {
             this.id = NextID++;
             this.parent = parent;
+
             if (parent != null)
             {
                 this.depth = parent.depth + 1;
                 this.dna = parent.dna;
+
                 var skew = (float)Math.Pow(this.dna[ANGLE_SKEW] - .5f, 3);
                 var spread = (1.5f * this.dna[BUSHINESS]);
                 this.baseAngle = parent.angle + spread * (childPct - .5f) + skew;
                 this.baseAngle +=
                     this.dna[WIGGLE] * .1f * MathF.Sin(this.depth) * this.depth;
+
                 var mult = 15 - 12 * this.dna[BUSHINESS];
                 this.branchLength = .7f * mult * parent.radius;
+
                 this.branchLength *=
                     (1 + this.dna[VARIATION] * (random.NextFloat() - .5f));
                 this.radius = parent.radius * (.6f + .3f * this.dna[SHRINKAGE]);
+
                 this.position =
                     polarOffset(
                         parent.position,
@@ -313,6 +320,7 @@ namespace Garden
                     .1f * (1.2f + this.depth) *
                     MathF.Sin(2 * elapsed + this.depth);
                 angleOffset += 0.2f * MathF.Sin(this.id);
+
                 this.angle = this.baseAngle + angleOffset;
                 this.position =
                     polarOffset(
@@ -335,9 +343,11 @@ namespace Garden
                 Vector3 edge = child.position - position;
                 float length = child.branchLength;
                 float angle = (float)Math.Atan2(edge.Y, edge.X);
+
                 Matrix world =
                     Matrix.CreateRotationZ(angle) *
                     Matrix.CreateTranslation(this.position);
+
                 context.DrawSquare(
                     this.idColor,
                     world,
@@ -346,6 +356,7 @@ namespace Garden
                     new Vector3(length, +child.radius, 0),
                     new Vector3(length, -child.radius, 0)
                 );
+
                 var leafCount = (float)Math.Floor(this.dna[LEAF_COUNT] * 5);
                 for (var j = 0; j < (int)leafCount; j++)
                 {
@@ -354,15 +365,18 @@ namespace Garden
                             shade: 0.3f * MathF.Sin(j + this.depth),
                             fade: -0.3f + 0.2f * MathF.Sin(j + this.depth)
                         );
+
                     world =
                         Matrix.CreateTranslation(length / leafCount, 0, 0) *
                         world;
+
                     var r0 = 15 * this.radius * (.3f + this.dna[LEAF_ASPECT]);
                     var r1 = r0 * (.7f * this.dna[LEAF_SHAPE] + .12f);
                     var theta = MathF.Sin(j * 3 + this.depth);
                     var dTheta = 1 / (.8f + 2 * this.dna[LEAF_ASPECT]);
                     var theta0 = theta - dTheta;
                     var theta1 = theta + dTheta;
+
                     context.DrawSquare(
                         leafColor,
                         world,
@@ -394,8 +408,10 @@ namespace Garden
                 Matrix world =
                     Matrix.CreateRotationZ(this.angle) *
                     Matrix.CreateTranslation(this.position);
+
                 var flowerCount = (float)Math.Round(8 * this.dna[FLOWER_COUNT]);
                 var petalSize = 5 * this.radius;
+
                 var aspect = .1f + .9f * this.dna[PETAL_ASPECT];
                 var petalH = petalSize * aspect;
                 var petalW = petalSize * (1 - aspect);
@@ -408,9 +424,11 @@ namespace Garden
                             MathF.Unit(.9f + .3f * MathF.Sin(i * 3)),
                             .7f
                         );
+
                     world =
                         Matrix.CreateRotationZ(MathHelper.TwoPi / flowerCount) *
                         world;
+
                     var flowerCenter =
                         Vector3.Transform(
                             new Vector3(petalH * 1.5f, 0, 0),
@@ -455,8 +473,10 @@ namespace Garden
         {
             font = Content.Load<SpriteFont>("fonts/basic");
             effect = new BasicEffect(GraphicsDevice);
+
             shapesEffect = Content.Load<Effect>("shaders/shapes");
             shapesEffect.CurrentTechnique = shapesEffect.Techniques[0];
+
             drawingContext = new DrawingContext(GraphicsDevice, shapesEffect);
         }
 
@@ -522,6 +542,7 @@ namespace Garden
             GraphicsDevice.Clear(background.ToColor());
             GraphicsDevice.RasterizerState = RasterizerState.CullNone;
             GraphicsDevice.BlendState = BlendState.AlphaBlend;
+
             Matrix view =
                 Matrix.CreateLookAt(
                     new Vector3(0, 0, -10),
@@ -535,8 +556,10 @@ namespace Garden
                     0.0f,
                     100.0f
                 );
+
             this.drawingContext.View = view;
             this.drawingContext.Projection = projection;
+
             this.node.Draw(this.drawingContext);
         }
     }

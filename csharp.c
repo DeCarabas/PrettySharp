@@ -1780,7 +1780,33 @@ static void inter_statement_space() {
   const enum TokenType prev = parser.previous.type;
   if (prev != TOKEN_SEMICOLON && prev != TOKEN_COLON) {
     line();
+  } else {
+    // If there's a blank line between statements on purpose then maintain it.
+    // We should maybe maintain this when scanning forward and not scan
+    // backwards?
+    int eol_count = 0;
+    for (int i = parser.index - 2; i >= 0; i--) {
+      enum TokenType typ = parser.buffer.tokens[i].type;
+      if (typ == TOKEN_TRIVIA_WHITESPACE) {
+        continue;
+      } else if (typ == TOKEN_TRIVIA_EOL) {
+        eol_count += 1;
+        if (eol_count > 1) {
+          break;
+        }
+      } else if (typ == TOKEN_TRIVIA_BLOCK_COMMENT ||
+                 typ == TOKEN_TRIVIA_LINE_COMMENT ||
+                 typ == TOKEN_TRIVIA_DIRECTIVE) {
+        eol_count = 0;
+      } else {
+        break;
+      }
+    }
+    if (eol_count > 1) {
+      line();
+    }
   }
+
   line();
 }
 

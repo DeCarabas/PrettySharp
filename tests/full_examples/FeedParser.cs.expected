@@ -147,6 +147,7 @@ namespace OnceAndFuture.Syndication
             string rel = link.Attribute(XNames.Atom.Rel)?.Value ?? "alternate";
             string type = link.Attribute(XNames.Atom.Type)?.Value ?? "text/html";
             string href = link.Attribute(XNames.Atom.Href)?.Value;
+
             if (
                 String.Equals(
                     rel,
@@ -170,6 +171,7 @@ namespace OnceAndFuture.Syndication
             string rel = link.Attribute(XNames.Atom.Rel)?.Value ?? "alternate";
             string type = link.Attribute(XNames.Atom.Type)?.Value ?? "text/html";
             string href = link.Attribute(XNames.Atom.Href)?.Value;
+
             if (
                 String.Equals(
                     rel,
@@ -227,6 +229,7 @@ namespace OnceAndFuture.Syndication
         static Item HandleGuid(Item item, XElement element)
         {
             item = item.With(id: element.Value);
+
             if (
                 item.Id.StartsWith(
                     "http://",
@@ -271,6 +274,7 @@ namespace OnceAndFuture.Syndication
                         null,
                         element
                     );
+
                 int width, height;
                 if (
                     url != null &&

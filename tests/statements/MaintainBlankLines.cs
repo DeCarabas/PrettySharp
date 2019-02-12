@@ -1,0 +1,19 @@
+class Program {
+    int bar() {
+        int x;
+        x = 7;
+        x = 10;
+
+        // Blank lines preserved.
+        x = 20;
+
+
+        // Multiple blank lines erased.
+        x = 30;
+
+        x = 40;
+
+
+        x = 50;
+    }
+}
