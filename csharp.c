@@ -1776,6 +1776,14 @@ static void expression(const char *where) {
 static void statement();
 static void embedded_statement(bool embedded);
 
+static void inter_statement_space() {
+  const enum TokenType prev = parser.previous.type;
+  if (prev != TOKEN_SEMICOLON && prev != TOKEN_COLON) {
+    line();
+  }
+  line();
+}
+
 static void block_impl(bool force_break, const char *where) {
   token(TOKEN_OPENBRACE, where);
   if (check(TOKEN_CLOSEBRACE)) {
@@ -1798,10 +1806,7 @@ static void block_impl(bool force_break, const char *where) {
         breakparent();
         broken = true;
       }
-      if (parser.previous.type != TOKEN_SEMICOLON) {
-        line();
-      }
-      line();
+      inter_statement_space();
       statement();
     }
     dedent();
@@ -1979,7 +1984,20 @@ static void switch_statement() {
   line();
   token(TOKEN_OPENBRACE, "at the beginning of the case block");
   line();
+  if (match(TOKEN_CLOSEBRACE)) {
+    return;
+  }
+
+  bool first_case = true;
   while (check(TOKEN_KW_CASE) || check(TOKEN_KW_DEFAULT)) {
+    if (!first_case) {
+      if (parser.previous.type != TOKEN_COLON) {
+        line();
+      }
+      line();
+    }
+    first_case = false;
+
     if (match(TOKEN_KW_CASE)) {
       space();
       {
@@ -2009,21 +2027,22 @@ static void switch_statement() {
     }
     token(TOKEN_COLON,
           "between the label and statement list in the case block");
-    {
+    if (!check_any(switch_section_end_tokens,
+                   ARRAY_SIZE(switch_section_end_tokens))) {
       line_indent();
       bool first = true;
       while (!check_any(switch_section_end_tokens,
                         ARRAY_SIZE(switch_section_end_tokens))) {
         if (!first) {
-          line();
+          inter_statement_space();
         }
         first = false;
         statement();
       }
       dedent();
     }
-    line();
   }
+  line();
   token(TOKEN_CLOSEBRACE, "at the end of the case block");
 }
 

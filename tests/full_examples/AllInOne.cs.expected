@@ -199,16 +199,17 @@ namespace My.Moy
             switch (i)
             {
             case 0:
-
             case 1:
                 {
                     goto case 2;
                 }
+
             case 2 + 3:
                 {
                     goto default;
                     break;
                 }
+
             default:
                 {
                     return;
@@ -220,9 +221,11 @@ namespace My.Moy
             case Circle c:
                 WriteLine($"circle with radius {c.Radius}");
                 break;
+
             case Rectangle s when (s.Length == s.Height):
                 WriteLine($"{s.Length} x {s.Height} square");
                 break;
+
             case null:
                 throw new ArgumentNullException(nameof(shape));
             }
