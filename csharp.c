@@ -119,36 +119,68 @@ static void notimplemented(const char *format, ...) {
 //       before we've had a chance to look at .current, because we might be
 //       writing inter-production whitespace. And we don't want the trivia to be
 //       part of a group started by the main code (in general). So, this.
-static void flush_trivia() {
+static void flush_trivia(bool next_is_line) {
   if (!parser.has_trivia) {
     return;
   }
 
+  bool alone_on_line = false;
   bool last_was_line = parser.last_was_line;
   for (; parser.trivia_index < parser.index; parser.trivia_index++) {
     struct Token trivia = parser.buffer.tokens[parser.trivia_index];
     if (trivia.type == TOKEN_TRIVIA_BLOCK_COMMENT) {
       DEBUG(("Handling block comment"));
+      if (!last_was_line) {
+        if (alone_on_line) {
+          doc_line(parser.builder);
+        } else {
+          doc_text(parser.builder, " ", 1);
+        }
+      }
+
       doc_text(parser.builder, trivia.start, trivia.length);
-      doc_line(parser.builder);
-      last_was_line = true;
     } else if (trivia.type == TOKEN_TRIVIA_LINE_COMMENT) {
       DEBUG(("Handling line comment"));
+      if (!last_was_line) {
+        if (alone_on_line) {
+          doc_line(parser.builder);
+        } else {
+          doc_text(parser.builder, " ", 1);
+        }
+      }
+
       doc_breakparent(parser.builder);
       doc_text(parser.builder, trivia.start, trivia.length);
-      doc_line(parser.builder);
-      last_was_line = true;
     } else if (trivia.type == TOKEN_TRIVIA_DIRECTIVE) {
       DEBUG(("Handling directive"));
-      doc_breakparent(parser.builder);
+
       if (!last_was_line) {
         doc_line(parser.builder); // TODO: Maintain indent?
       }
+
+      doc_breakparent(parser.builder);
       doc_text(parser.builder, trivia.start, trivia.length);
+    } else if (trivia.type == TOKEN_TRIVIA_EOL) {
+      if (next_is_line) {
+        // We're only flushing up to the end of the line; let everything else
+        // take it's course naturally. (Leave has_trivia set to true.) This
+        // causes trailing comments to stick to the token before them,
+        // generally, but leaves any additional comments sticking to the
+        // trailing tokens, where they should be.
+        return;
+      }
+      alone_on_line = true;
+      continue;
+    } else {
+      continue;
+    }
+
+    if (!next_is_line) {
       doc_line(parser.builder);
       last_was_line = true;
+      alone_on_line = true;
     } else {
-      // TODO: Consecutive newlines?
+      last_was_line = false;
     }
   }
 
@@ -161,28 +193,30 @@ static void flush_trivia() {
 // ============================================================================
 
 static void text(struct Token token) {
-  flush_trivia();
+  flush_trivia(/*next_is_line*/ false);
   parser.last_was_line = false;
   doc_text(parser.builder, token.start, token.length);
 }
 static void group() {
-  flush_trivia();
+  flush_trivia(/*next_is_line*/ false);
   doc_group(parser.builder);
 }
 static void end() { doc_end(parser.builder); }
 static void indent() { doc_indent(parser.builder); }
 static void dedent() { doc_dedent(parser.builder); }
 static void line() {
-  parser.last_was_line = true;
+  flush_trivia(/*next_is_line*/ true);
   doc_line(parser.builder);
+  parser.last_was_line = true;
 }
 static void line_indent() {
   indent();
   line();
 }
 static void softline() {
-  parser.last_was_line = true;
+  flush_trivia(/*next_is_line*/ true);
   doc_softline(parser.builder);
+  parser.last_was_line = true;
 }
 static void softline_indent() {
   indent();

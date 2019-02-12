@@ -188,10 +188,8 @@ namespace My.Moy
             int[,,] cube =
                 {{{1111, 1121, }, {1211, 1221}}, {{2111, 2121}, {2211, 2221}}};
             int[][] jagged = {{111}, {121, 122}};
-            int[][,] arr = new int[5][,];
-            // as opposed to new int[][5,5]
-            arr[0] = new int[5, 5];
-            // as opposed to arr[0,0] = new int[5];
+            int[][,] arr = new int[5][,]; // as opposed to new int[][5,5]
+            arr[0] = new int[5, 5]; // as opposed to arr[0,0] = new int[5];
             arr[0][0, 0] = 47;
             int[] arrayTypeInference = new[] {0, 1, };
             switch (3)
@@ -541,8 +539,7 @@ namespace My.Moy
                 await SystemxThreadingxTasksxTaskxFooooooooooooooooooooxDelay(0);
             }
 
-            void AsyncAnonymous()
-            // C # 5 feature
+            void AsyncAnonymous() // C # 5 feature
             {
                 var task =
                     Task.Factory.StartNew(
@@ -702,7 +699,7 @@ namespace Comments.XmlComments.UndocumentedKeywords
     /// <seealso cref=" "/>
     /// <value></value>
     /// <typeparam name="T"></typeparam>
-    class /*///*/ C<T>
+    class  /*///*/ C<T>
     {
         void M<U>(T t, U u)
         {
@@ -715,38 +712,35 @@ namespace Comments.XmlComments.UndocumentedKeywords
             // /***/
             /*s*/
             int /*s*/ intValue = 0;
-            intValue = intValue/*s*/  + 1;
+            intValue = intValue /*s*/  + 1;
             string strValue = /*s*/ "hello";
             /*s*/
             MyClass c = new MyClass();
             string verbatimStr = /*s*/ @"\\\\";
             int i =
-                0// foo
-                 + 1// bar
-                 + 2;
-            // qux
+                0 // foo
+                 + 1 // bar
+                 + 2; // qux
             i =
-                3// foo
-                 + 4// bar
-                 + 5;
-            // qux
+                3 // foo
+                 + 4 // bar
+                 + 5; // qux
             i =
                 strValue != null ?
                     6
-                    : // bar
-                    7;
-        // qux
+                    :  // bar
+                    7; // qux
         }
     }
 
     //General Test F. Type a very long class name, verify colorization happens correctly only upto the correct size (118324)
-    class TestClassXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX/*Scen8*/
+    class TestClassXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX /*Scen8*/
 
     {
 
     }
 
-    class TestClassXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX22/*Scen9*/
+    class TestClassXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX22 /*Scen9*/
 
     {
 
@@ -783,76 +777,42 @@ namespace Comments.XmlComments.UndocumentedKeywords
 
         public partial void method()
         {
-            int?[] a = new int?[5];
-            /*[] bug*/
-            // YES []
-            int[] var = {1, 2, 3, 4, 5};
-            /*,;*/
-            int i = a[i];
-            /*[]*/
-            Foo<T> f = new Foo<int>();
-            /*<> ()*/
-            f.method();
-            /*().*/
-            i = i + i - i * i / i % i & i | i ^ i;
-            /*+ - * / % & | ^*/
-            bool b = true & false | true ^ false;
-            /*& | ^*/
-            b = !b;
-            /*!*/
-            i = ~i;
-            /*~i*/
-            b = i < i && i > i;
-            /*< && >*/
-            int? ii = 5;
-            /*? bug*/
-            // NO ?
-            int f = true ? 1 : 0;
-            /*? :*/
-            // YES :
-            i++;
-            /*++*/
-            i--;
-            /*--*/
-            b = true && false || true;
-            /*&& ||*/
-            i << 5;
-            /*<<*/
-            i >> 5;
-            /*>>*/
-            b = i == i && i != i && i <= i && i >= i;
-            /*= == && != <= >=*/
-            i += 5.0;
-            /*+=*/
-            i -= i;
-            /*-=*/
-            i *= i;
-            /**=*/
-            i /= i;
-            /*/=*/
-            i %= i;
-            /*%=*/
-            i &= i;
-            /*&=*/
-            i |= i;
-            /*|=*/
-            i ^= i;
-            /*^=*/
-            i <<= i;
-            /*<<=*/
-            i >>= i;
-            /*>>=*/
-            object s = x => x + 1;
-            /*=>*/
+            int?[] a = new int?[5]; /*[] bug*/ // YES []
+            int[] var = {1, 2, 3, 4, 5}; /*,;*/
+            int i = a[i]; /*[]*/
+            Foo<T> f = new Foo<int>(); /*<> ()*/
+            f.method(); /*().*/
+            i = i + i - i * i / i % i & i | i ^ i; /*+ - * / % & | ^*/
+            bool b = true & false | true ^ false; /*& | ^*/
+            b = !b; /*!*/
+            i = ~i; /*~i*/
+            b = i < i && i > i; /*< && >*/
+            int? ii = 5; /*? bug*/ // NO ?
+            int f = true ? 1 : 0; /*? :*/ // YES :
+            i++; /*++*/
+            i--; /*--*/
+            b = true && false || true; /*&& ||*/
+            i << 5; /*<<*/
+            i >> 5; /*>>*/
+            b = i == i && i != i && i <= i && i >= i; /*= == && != <= >=*/
+            i += 5.0; /*+=*/
+            i -= i; /*-=*/
+            i *= i; /**=*/
+            i /= i; /*/=*/
+            i %= i; /*%=*/
+            i &= i; /*&=*/
+            i |= i; /*|=*/
+            i ^= i; /*^=*/
+            i <<= i; /*<<=*/
+            i >>= i; /*>>=*/
+            object s = x => x + 1; /*=>*/
             double d = .3;
             ;
             Point point;
             unsafe
             {
-                Point* p = &point;
-                /** &*/
-                p->x = 10;
-            /*->*/
+                Point* p = &point; /** &*/
+                p->x = 10; /*->*/
             }
 
             IO::BinaryReader br = null;
@@ -901,7 +861,8 @@ namespace Comments.XmlComments.UndocumentedKeywords
         public int this[long id] => id;
 
         private void NoOp()
-        { // Empty body.
+        { 
+        // Empty body.
         }
 
         async void Test()
@@ -909,17 +870,12 @@ namespace Comments.XmlComments.UndocumentedKeywords
             // Using static
             WriteLine(Sqrt(3 * 3 + 4 * 4));
             WriteLine(Friday - Monday);
-            var range = Range(5, 17);
-            // Ok: not extension
-            var even = range.Where(i => i % 2 == 0);
-            // Ok
+            var range = Range(5, 17); // Ok: not extension
+            var even = range.Where(i => i % 2 == 0); // Ok
             // Null-conditional operators
-            int? length = customers?.Length;
-            // null if customers is null
-            Customer first = customers?[0];
-            // null if customers is null
-            int length = customers?.Length ?? 0;
-            // 0 if customers is null
+            int? length = customers?.Length; // null if customers is null
+            Customer first = customers?[0]; // null if customers is null
+            int length = customers?.Length ?? 0; // 0 if customers is null
             int? first = customers?[0]?.Orders?.Count();
             PropertyChanged?.Invoke(this, args);
             // String interpolation
@@ -933,8 +889,7 @@ namespace Comments.XmlComments.UndocumentedKeywords
             // nameof expressions
             if (x == null)
                 throw new ArgumentNullException(nameof(x));
-            WriteLine(nameof(person.Address.ZipCode));
-            // prints "ZipCode"
+            WriteLine(nameof(person.Address.ZipCode)); // prints "ZipCode"
             // Index initializers
             var numbers =
                 new Dictionary<int, string>
@@ -949,19 +904,16 @@ namespace Comments.XmlComments.UndocumentedKeywords
             Resource res = null;
             try
             {
-                res = await Resource.OpenAsync();
-            // You could do this.
+                res = await Resource.OpenAsync(); // You could do this.
             }
             catch (ResourceException e)
             {
-                await Resource.LogAsync(res, e);
-            // Now you can do this …
+                await Resource.LogAsync(res, e); // Now you can do this …
             }
             finally
             {
                 if (res != null)
-                    await res.CloseAsync();
-            // … and this.
+                    await res.CloseAsync(); // … and this.
             }
         }
     }
