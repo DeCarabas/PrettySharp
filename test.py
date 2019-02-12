@@ -15,7 +15,6 @@ def test_file(path):
         encoding="utf8",
     )
     if proc.returncode:
-
         result = TestResult(
             path=path,
             message="  {}".format("\n  ".join(proc.stderr.splitlines())),
@@ -44,6 +43,9 @@ def test_file(path):
 
 results = []
 for path, dirs, files in os.walk("tests"):
+    if "fuzzing" in path:
+        continue
+
     for fname in files:
         if fname.endswith(".cs"):
             results.append(test_file(os.path.join(path, fname)))
