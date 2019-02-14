@@ -3,11 +3,16 @@
 #include "token.h"
 #include <assert.h>
 
+// #define BREAK_ON_STUCK
+
 struct Parser {
   struct DocBuilder *builder;
   struct TokenBuffer buffer;
   int index;
+
+#ifdef BREAK_ON_STUCK
   int loop_count;
+#endif
 
   struct Token current;
   struct Token previous;
@@ -230,7 +235,10 @@ static void space() { doc_text(parser.builder, " ", 1); }
 // ============================================================================
 
 static void advance() {
+#ifdef BREAK_ON_STUCK
   parser.loop_count = 0;
+#endif
+
   parser.previous = parser.current;
   parser.trivia_index = parser.index;
   for (;;) {
@@ -316,14 +324,16 @@ static void token(enum TokenType type, const char *where) {
 }
 
 static bool check_(enum TokenType type, int line) {
+#ifdef BREAK_ON_STUCK
   parser.loop_count++;
-  if (parser.loop_count == 100) {
+  if (parser.loop_count == 100000) {
     fprintf(stderr,
             "%4d We're stuck!! Looking for '%s' at '%s' on source line %d\n",
             line, token_text(type), token_text(parser.current.type),
             parser.current.line);
     abort();
   }
+#endif
 
   bool result = parser.current.type == type;
   DEBUG(("%4d Check %s == %s -> %s", line, token_text(type),
@@ -3655,7 +3665,7 @@ static void enum_declaration() {
       }
       first = false;
 
-      // TODO: Attributes here??
+      attributes();
       identifier("in the name of an enum member");
       if (check(TOKEN_EQUALS)) {
         space();

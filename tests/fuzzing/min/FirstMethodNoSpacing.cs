@@ -1,1 +1,0 @@
-class Foo { int bar() { return 5; } }
