@@ -17,7 +17,7 @@ struct Parser {
 
   bool last_was_line;
   bool had_error;
-  bool panic_mode;
+  int panic_mode;
   bool suppress_errors;
 };
 
@@ -69,7 +69,7 @@ static void verror_at(struct Token *token, const char *format, va_list args) {
 #endif
     return;
   }
-  parser.panic_mode = true;
+  parser.panic_mode = 3;
 
   fprintf(stderr, "[line %d] Error", token->line);
 
@@ -301,6 +301,9 @@ static bool check_next_identifier() {
 static void single_token() {
   text(parser.current);
   advance();
+  if (parser.panic_mode) {
+    parser.panic_mode -= 1;
+  }
 }
 
 static void token(enum TokenType type, const char *where) {
@@ -408,8 +411,6 @@ static void resync() {
       }
       advance();
     }
-
-    parser.panic_mode = false;
   }
 }
 
@@ -3482,6 +3483,7 @@ static void member_declarations() {
     }
 
     last_member_kind = member_kind;
+    resync();
   }
 }
 
@@ -3834,6 +3836,7 @@ static void namespace_members() {
       break;
     }
     first = false;
+    resync();
   }
 }
 

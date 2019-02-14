@@ -11,3 +11,6 @@ test: prettysharp
 
 clean:
 	rm prettysharp
+
+prettysharp-afl: $(SOURCES) $(HEADERS)
+	afl-clang -o prettysharp-afl -Werror -O3 $(SOURCES)
