@@ -1,7 +1,6 @@
 #include "csharp.h"
 #include "lexer.h"
 #include "token.h"
-#include <assert.h>
 
 // #define BREAK_ON_STUCK
 
