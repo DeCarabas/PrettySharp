@@ -4,7 +4,7 @@ HEADERS=*.h *.inc
 .PHONY: test clean
 
 prettysharp: $(SOURCES) $(HEADERS)
-	$(CC) -o prettysharp -Werror $(SOURCES)
+	$(CC) -std=c99 -o prettysharp -Werror $(SOURCES)
 
 test: prettysharp
 	python3 ./test.py
