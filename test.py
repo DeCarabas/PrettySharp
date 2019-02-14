@@ -8,20 +8,20 @@ TestResult = namedtuple("TestResult", ["path", "message", "passed"])
 
 
 def test_file(path):
-    proc = subprocess.run(
-        ["./prettysharp", path],
-        stderr=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        encoding="utf8",
+    proc = subprocess.Popen(
+        ["./prettysharp", path], stderr=subprocess.PIPE, stdout=subprocess.PIPE
     )
+    stdout, stderr = proc.communicate()
+    stdout = stdout.decode("utf-8")
+    stderr = stderr.decode("utf-8")
     if proc.returncode:
         result = TestResult(
             path=path,
-            message="  {}".format("\n  ".join(proc.stderr.splitlines())),
+            message="  {}".format("\n  ".join(stderr.splitlines())),
             passed=False,
         )
     else:
-        actual = proc.stdout.splitlines()
+        actual = stdout.splitlines()
         with open(path + ".expected") as f:
             expected = f.read().splitlines()
         diff = list(
