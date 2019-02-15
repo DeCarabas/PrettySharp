@@ -1,1 +1,3 @@
 prettysharp
+prettysharp-afl
+tests/fuzzing/out
