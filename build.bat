@@ -1,1 +1,1 @@
-cl *.c /Fe: prettysharp.exe /W4 /O2
+cl *.c /D_CRT_SECURE_NO_DEPRECATE /Fe: prettysharp.exe /W4 /O2 /WX

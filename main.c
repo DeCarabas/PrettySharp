@@ -62,6 +62,20 @@ char *read_file(FILE *input) {
   return buffer;
 }
 
+FILE *open_input_file(const char *fname) {
+  if (fname) {
+    FILE *input = fopen(fname, "r");
+    if (!input) {
+      fprintf(stderr, "Unable to open input file '%s': %s", fname,
+              strerror(errno));
+      exit(ERR_CANNOT_OPEN);
+    }
+    return input;
+  } else {
+    return stdin;
+  }
+}
+
 int main(int argc, const char *argv[]) {
   FILE *input;
   const char *fname = NULL;
@@ -87,16 +101,7 @@ int main(int argc, const char *argv[]) {
     }
   }
 
-  if (fname) {
-    input = fopen(argv[1], "r");
-    if (!input) {
-      fprintf(stderr, "Unable to open input file '%s': %s", argv[1],
-              strerror(errno));
-      exit(ERR_CANNOT_OPEN);
-    }
-  } else {
-    input = stdin;
-  }
+  input = open_input_file(fname);
 
   int rc = ERR_PARSE_ERROR;
   char *source = read_file(input);
