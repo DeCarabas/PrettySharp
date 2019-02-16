@@ -1,5 +1,8 @@
 prettysharp
 prettysharp-afl
 tests/fuzzing/out
+managed/packages/
+managed/src/obj/
+managed/tests/obj/
 *.obj
 *.exe
