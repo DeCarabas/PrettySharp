@@ -59,6 +59,15 @@ char *read_file(FILE *input) {
     }
   }
 
+  if (cursor == end) {
+    size_t new_buffer_size = buffer_size + 1;
+    buffer = realloc(buffer, new_buffer_size);
+    end = buffer + new_buffer_size;
+    cursor = buffer + buffer_size;
+    buffer_size = new_buffer_size;
+  }
+  *cursor = '\0';
+
   return buffer;
 }
 
