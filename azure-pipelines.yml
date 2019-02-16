@@ -1,6 +1,6 @@
-# What?
-pool:
-  vmImage: 'Ubuntu 16.04'
-
-steps:
-- script: make test
+jobs:
+- job: Linux build
+  pool:
+    vmImage: 'Ubuntu 16.04'
+  steps:
+  - script: make test
