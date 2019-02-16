@@ -40,8 +40,9 @@ def test_file(path):
         )
     else:
         actual = stdout.splitlines()
-        with open(path + ".expected") as f:
-            expected = f.read().splitlines()
+        with open(path + ".expected", "rb") as f:
+            text = f.read().decode("utf-8")
+            expected = text.splitlines()
         diff = list(
             difflib.unified_diff(
                 expected, actual, fromfile=path, tofile=path + ".expected", lineterm=""
