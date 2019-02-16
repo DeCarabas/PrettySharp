@@ -15,5 +15,9 @@ jobs:
   pool:
     vmImage: 'vs2017-win2016'
   steps:
-  - script: build.bat
+  - script: |
+    "C:\Program Files (x86)\Microsoft Visual Studio\2017\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
+    build.bat
+    displayName: Build it
   - script: python.exe test.py
+    displayName: Run tests
