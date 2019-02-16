@@ -29,13 +29,13 @@ enum TokenType {
 struct Token {
   enum TokenType type;
   const char *start;
-  int length;
+  size_t length;
   int line;
 };
 
 const char *token_text(enum TokenType type);
 bool is_identifier_token(enum TokenType type);
-enum TokenType keyword_type(const char *start, int len);
+enum TokenType keyword_type(const char *start, size_t len);
 
 const char *dbg_token_type(enum TokenType type);
 

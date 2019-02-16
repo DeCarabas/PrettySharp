@@ -25,7 +25,7 @@ enum DocType { DOC_TEXT, DOC_LINE, DOC_GROUP, DOC_END, DOC_BREAKPARENT };
 struct Doc {
   enum DocType type;
   int margin;
-  int length;
+  size_t length;
   const char *string;
 };
 
@@ -44,7 +44,7 @@ void builder_free(struct DocBuilder *builder);
 
 void doc_indent(struct DocBuilder *builder);
 void doc_dedent(struct DocBuilder *builder);
-void doc_text(struct DocBuilder *builder, const char *text, int length);
+void doc_text(struct DocBuilder *builder, const char *text, size_t length);
 void doc_textz(struct DocBuilder *builder, const char *text);
 void doc_line(struct DocBuilder *builder);
 void doc_softline(struct DocBuilder *builder);

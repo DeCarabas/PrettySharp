@@ -126,7 +126,7 @@ for text, token in kw_map.items():
     root.insert(text, token)
 
 lines = []
-lines.append("enum TokenType keyword_type(const char *start, int len) {")
+lines.append("enum TokenType keyword_type(const char *start, size_t len) {")
 lines.extend(["  " + line for line in root.dump_c(0)])
 lines.append("  return TOKEN_IDENTIFIER;")
 lines.append("}")

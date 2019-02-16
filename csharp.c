@@ -44,6 +44,27 @@ struct Parser {
 
 struct Parser parser;
 
+static void parser_init(struct DocBuilder *builder, struct TokenBuffer buffer) {
+  parser.builder = builder;
+  parser.buffer = buffer;
+  parser.index = 0;
+
+#ifdef BREAK_ON_STUCK
+  parser.loop_count = 0;
+#endif
+
+  memset(&parser.current, 0, sizeof(struct Token));
+  memset(&parser.previous, 0, sizeof(struct Token));
+
+  parser.trivia_index = 0;
+  parser.has_trivia = false;
+
+  parser.last_was_line = true;
+  parser.had_error = false;
+  parser.panic_mode = 0;
+  parser.suppress_errors = false;
+}
+
 // ============================================================================
 // Error Reporting
 // ============================================================================
@@ -99,7 +120,7 @@ static void verror_at(struct Token *token, const char *format, va_list args) {
   } else if (token->type == TOKEN_ERROR) {
     // Nothing.
   } else {
-    fprintf(stderr, " at '%.*s'", token->length, token->start);
+    fprintf(stderr, " at '%.*s'", (int)(token->length), token->start);
   }
 
   fprintf(stderr, ": ");
@@ -349,6 +370,8 @@ static bool check_(enum TokenType type, int line) {
             parser.current.line);
     abort();
   }
+#else
+  (void)(line);
 #endif
 
   bool result = parser.current.type == type;
@@ -361,6 +384,10 @@ static bool check_(enum TokenType type, int line) {
 
 static bool check_is_any_(enum TokenType type, const enum TokenType *types,
                           int count, int line) {
+#ifndef PRINT_DEBUG_ENABLED
+  (void)(line);
+#endif
+
   DEBUG(("%4d Check any %s == ", line, token_text(type)));
   for (int i = 0; i < count; i++) {
     bool result = type == types[i];
@@ -3905,16 +3932,7 @@ static void compilation_unit() {
 }
 
 bool format_csharp(struct DocBuilder *builder, const char *source) {
-  parser.builder = builder;
-  parser.last_was_line = true;
-  parser.had_error = false;
-  parser.panic_mode = false;
-  parser.suppress_errors = false;
-
-  parser.buffer = scan_tokens(source);
-  parser.index = 0;
-  parser.trivia_index = 0;
-  parser.has_trivia = false;
+  parser_init(builder, scan_tokens(source));
 
   advance();
 

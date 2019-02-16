@@ -196,7 +196,7 @@ static struct Token make_token(enum TokenType type) {
   struct Token token;
   token.type = type;
   token.start = lexer.start;
-  token.length = (int)(lexer.current - lexer.start);
+  token.length = (size_t)(lexer.current - lexer.start);
   token.line = lexer.line;
   return token;
 }
@@ -1125,7 +1125,7 @@ void dump_lex(const char *source) {
       printf("   | ");
     }
     printf("%3d %-25s '%.*s'\n", token.type, dbg_token_type(token.type),
-           token.length, token.start);
+           (int)(token.length), token.start);
 
     if (token.type == TOKEN_EOF || token.type == TOKEN_ERROR)
       break;

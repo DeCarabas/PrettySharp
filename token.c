@@ -66,8 +66,8 @@ const char *dbg_token_type(enum TokenType type) {
   }
 }
 
-static enum TokenType check_kw(const char *token_start, int token_length,
-                               int start, int length, const char *rest,
+static enum TokenType check_kw(const char *token_start, size_t token_length,
+                               size_t start, size_t length, const char *rest,
                                enum TokenType type) {
   if (token_length == start + length &&
       memcmp(token_start + start, rest, length) == 0) {
@@ -77,7 +77,7 @@ static enum TokenType check_kw(const char *token_start, int token_length,
 }
 
 // This function was generated based on token.inc by the 'maketrie.py' program.
-enum TokenType keyword_type(const char *start, int len) {
+enum TokenType keyword_type(const char *start, size_t len) {
   if (len > 0) {
     switch (start[0]) {
     case '_':

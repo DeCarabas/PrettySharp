@@ -68,7 +68,7 @@ void doc_dedent(struct DocBuilder *builder) {
   assert(builder->margin >= 0);
 }
 
-void doc_text(struct DocBuilder *builder, const char *text, int length) {
+void doc_text(struct DocBuilder *builder, const char *text, size_t length) {
   struct Doc *out = builder_add(builder);
   out->type = DOC_TEXT;
   out->length = length;
@@ -136,7 +136,7 @@ enum OutputDocType { OUT_TEXT, OUT_LINE };
 
 struct OutputDoc {
   enum OutputDocType type;
-  int length;
+  size_t length;
   const char *string;
 };
 
@@ -170,7 +170,7 @@ static struct OutputDoc *output_add(struct OutputBuilder *builder) {
   return builder->contents + (builder->count - 1);
 }
 
-static void output_push_string(struct OutputBuilder *result, int length,
+static void output_push_string(struct OutputBuilder *result, size_t length,
                                const char *string) {
   assert(length >= 0);
 
@@ -193,12 +193,12 @@ static void best_rep(struct OutputBuilder *result, int width, struct Doc *docs,
                      int length) {
   struct Doc *saved_it = NULL;
   int saved_result_count = 0;
-  int saved_used = 0;
+  size_t saved_used = 0;
   int group_depth = 0;
 
   struct Doc *end = docs + length;
   struct Doc *it = docs;
-  int used = 0;
+  size_t used = 0;
   while (it != end) {
     switch (it->type) {
     case DOC_LINE:
@@ -273,7 +273,7 @@ static void layout(FILE *file, struct OutputDoc *docs, int length) {
   while (it != end) {
     switch (it->type) {
     case OUT_TEXT:
-      fprintf(file, "%.*s", it->length, it->string);
+      fprintf(file, "%.*s", (int)it->length, it->string);
       break;
 
     case OUT_LINE:
