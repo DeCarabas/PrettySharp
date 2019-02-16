@@ -16,4 +16,4 @@ jobs:
     vmImage: 'vs2017-win2016'
   steps:
   - script: make test
-    env: { "CC": "gcc" }
+    env: { "CC": "gcc", "PYTHON": "python.exe" }

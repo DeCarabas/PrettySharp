@@ -1,13 +1,15 @@
 SOURCES=*.c
 HEADERS=*.h *.inc
 
+PYTHON?=python3
+
 .PHONY: test clean
 
 prettysharp: $(SOURCES) $(HEADERS)
 	$(CC) -std=c99 -o prettysharp -Werror $(SOURCES)
 
 test: prettysharp
-	python3 ./test.py
+	$(PYTHON) ./test.py
 
 clean:
 	rm prettysharp
