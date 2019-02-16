@@ -37,9 +37,9 @@ struct Parser {
   bool has_trivia;
 
   bool last_was_line;
+
+  bool check_only;
   bool had_error;
-  int panic_mode;
-  bool suppress_errors;
 };
 
 struct Parser parser;
@@ -61,8 +61,7 @@ static void parser_init(struct DocBuilder *builder, struct TokenBuffer buffer) {
 
   parser.last_was_line = true;
   parser.had_error = false;
-  parser.panic_mode = 0;
-  parser.suppress_errors = false;
+  parser.check_only = false;
 }
 
 // ============================================================================
@@ -103,7 +102,7 @@ static void DEBUG_(const char *format, ...) {
 
 static void verror_at(struct Token *token, const char *format, va_list args) {
   parser.had_error = true;
-  if (parser.panic_mode || parser.suppress_errors) {
+  if (parser.check_only) {
 #ifdef PRINT_DEBUG_ENABLED
     DEBUG_("vv SUPPRESSED ERROR vv");
     vDEBUG(format, args);
@@ -111,7 +110,6 @@ static void verror_at(struct Token *token, const char *format, va_list args) {
 #endif
     return;
   }
-  parser.panic_mode = 3;
 
   fprintf(stderr, "[line %d] Error", token->line);
 
@@ -126,6 +124,10 @@ static void verror_at(struct Token *token, const char *format, va_list args) {
   fprintf(stderr, ": ");
   vfprintf(stderr, format, args);
   fprintf(stderr, "\n");
+
+  // N.B.: Resync is hard and we're not doing anything if we get a parse error
+  // anyway; right now we'll just abort here.
+  exit(ERR_PARSE_ERROR);
 }
 
 static void verror(const char *format, va_list args) {
@@ -346,9 +348,6 @@ static bool check_next_identifier() {
 static void single_token() {
   text(parser.current);
   advance();
-  if (parser.panic_mode) {
-    parser.panic_mode -= 1;
-  }
 }
 
 static void token(enum TokenType type, const char *where) {
@@ -371,7 +370,7 @@ static bool check_(enum TokenType type, int line) {
     abort();
   }
 #else
-  (void)(line);
+  UNUSED(line);
 #endif
 
   bool result = parser.current.type == type;
@@ -385,7 +384,7 @@ static bool check_(enum TokenType type, int line) {
 static bool check_is_any_(enum TokenType type, const enum TokenType *types,
                           int count, int line) {
 #ifndef PRINT_DEBUG_ENABLED
-  (void)(line);
+  UNUSED(line);
 #endif
 
   DEBUG(("%4d Check any %s == ", line, token_text(type)));
@@ -427,7 +426,7 @@ static bool check_expensive(void (*parse_func)(), struct Token *token,
                             int *index) {
   struct Parser saved_parser = parser;
   parser.had_error = false;
-  parser.suppress_errors = true;
+  parser.check_only = true;
   parser.index = *index;
   parser.current = *token;
 
@@ -447,24 +446,6 @@ static bool check_expensive(void (*parse_func)(), struct Token *token,
   parser.builder->group_depth = saved_builder.group_depth;
 
   return success;
-}
-
-static void resync() {
-  if (parser.panic_mode) {
-    for (;;) {
-      if (check(TOKEN_EOF)) {
-        break;
-      }
-      if (check(TOKEN_CLOSEBRACE)) {
-        break;
-      }
-      if (check(TOKEN_SEMICOLON)) {
-        advance();
-        break;
-      }
-      advance();
-    }
-  }
 }
 
 // ============================================================================
@@ -2488,8 +2469,6 @@ static void embedded_statement(bool embedded) {
       }
     }
 
-    resync();
-
     if (embedded) {
       dedent();
     }
@@ -3536,7 +3515,6 @@ static void member_declarations() {
     }
 
     last_member_kind = member_kind;
-    resync();
   }
 }
 
@@ -3889,7 +3867,6 @@ static void namespace_members() {
       break;
     }
     first = false;
-    resync();
   }
 }
 

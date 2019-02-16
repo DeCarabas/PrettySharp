@@ -30,4 +30,9 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #define UNUSED(x) (void)(x)
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof(x[0]))
 
+#define ERR_INVALID_ARGS 1
+#define ERR_CANNOT_OPEN 2
+#define ERR_CANNOT_READ 3
+#define ERR_PARSE_ERROR 72
+
 #endif

@@ -25,11 +25,6 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "csharp.h"
 #include "lexer.h"
 
-#define ERR_INVALID_ARGS 1
-#define ERR_CANNOT_OPEN 2
-#define ERR_CANNOT_READ 3
-#define ERR_PARSE_ERROR 72
-
 char *read_file(FILE *input) {
   const int chunk_size = 4 * 1024 * 1024;
 
