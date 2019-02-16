@@ -18,6 +18,7 @@
 
 import subprocess
 import os
+import sys
 import difflib
 from collections import namedtuple
 
@@ -68,6 +69,11 @@ for path, dirs, files in os.walk("tests"):
             results.append(test_file(os.path.join(path, fname)))
 
 print()
+failed = False
 for result in results:
     if not result.passed:
         print("FAILED {}:\n{}\n\n".format(result.path, result.message))
+        failed = True
+
+
+sys.exit(-1 if failed else 0)
