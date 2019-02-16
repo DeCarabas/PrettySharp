@@ -1,6 +1,18 @@
 jobs:
 - job: linux
   pool:
-    vmImage: 'Ubuntu 16.04'
+    vmImage: 'ubuntu-16.04'
+  steps:
+  - script: make test
+
+- job: macos
+  pool:
+    vmImage: 'macos-10.13'
+  steps:
+  - script: make test
+
+- job: windows
+  pool:
+    vmImage: 'vs2017-win2016'
   steps:
   - script: make test
