@@ -25,6 +25,28 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "csharp.h"
 #include "lexer.h"
 
+void print_version_string() {
+  printf("prettysharp C# Source Code Formatter 0.9.0\n"
+         "Copyright (c) 2019 John Doty\n"
+         "This is free software; you are free to change and redistribute it\n"
+         "under the terms of the GNU General Public License version 3 or\n"
+         "later.\n");
+}
+
+void print_usage_message() {
+  print_version_string();
+  printf("\n"
+         "Usage: prettysharp [options] [<input file>]\n\n"
+         "By default, input is read from stdin, and formatted C# is written\n"
+         "to stdout.\n\n"
+         "Options:\n"
+         "\n"
+         "  --version      Print version information.\n"
+         "  -h -? --help   Show this help.\n"
+         "  <input file>   The name of the input file. If not provided, read\n"
+         "                 from stdin.\n");
+}
+
 char *read_file(FILE *input) {
   const int chunk_size = 4 * 1024 * 1024;
 
@@ -85,6 +107,8 @@ int main(int argc, const char *argv[]) {
   const char *fname = NULL;
   bool dump_tokens = false;
   bool dump_doc = false;
+  bool print_version = false;
+  bool show_help = false;
 
   for (int i = 1; i < argc; i++) {
     const char *arg = argv[i];
@@ -93,6 +117,11 @@ int main(int argc, const char *argv[]) {
         dump_tokens = true;
       } else if (strcmp(arg, "-dd") == 0) {
         dump_doc = true;
+      } else if (strcmp(arg, "--version") == 0) {
+        print_version = true;
+      } else if ((strcmp(arg, "--help") == 0) || (strcmp(arg, "-?") == 0) ||
+                 (strcmp(arg, "-h") == 0)) {
+        show_help = true;
       } else {
         fprintf(stderr, "Unrecognized switch: %s\n", arg);
         exit(ERR_INVALID_ARGS);
@@ -103,6 +132,16 @@ int main(int argc, const char *argv[]) {
     } else {
       fname = arg;
     }
+  }
+
+  if (print_version) {
+    print_version_string();
+    exit(0);
+  }
+
+  if (show_help) {
+    print_usage_message();
+    exit(0);
   }
 
   input = open_input_file(fname);
