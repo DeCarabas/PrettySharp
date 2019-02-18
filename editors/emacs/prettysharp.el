@@ -25,25 +25,22 @@
 ;; This file is not part of GNU Emacs.
 
 ;;; Code:
+(defgroup prettysharp nil
+  "Minor mode to format C# code on save."
+  :group 'languages
+  :prefix "prettysharp"
+  :link '(url-link "https://github.com/DeCarabas/PrettySharp"))
+
 (defcustom prettysharp-command "prettysharp"
   "The 'prettysharp' command."
   :type 'string
-  :group 'prettysharp)
-
-(defcustom prettysharp-args nil
-  "Additional arguments to pass to prettysharp."
-  :type '(repeat string)
   :group 'prettysharp)
 
 (defcustom prettysharp-show-errors 'buffer
   "Where to display prettysharp error output.
 
 It can either be displayed in its own buffer, in the echo area,
-or not at all.
-
-Please note that Emacs outputs to the echo area when writing
-files and will overwrite prettysharp's echo output if used from
-inside a `before-save-hook'."
+or not at all."
   :type '(choice
           (const :tag "Own buffer" buffer)
           (const :tag "Echo area" echo)
@@ -59,71 +56,63 @@ Errors are displayed according to the value of prettysharp-show-errors."
 (defun prettysharp/make-patch (outfile patch-buffer)
   "Diff the contents of the current buffer with OUTFILE, generate an RCS-style patch, and put the results into PATCH-BUFFER."
   (call-process-region (point-min) (point-max) "diff" nil
-                       patch-buffer nil "-e" "--strip-trailing-cr"
+                       patch-buffer nil "-n" "--strip-trailing-cr"
                        "-" outfile))
 
-(defun prettysharp/apply-patch (patch-buffer)
-  "Apply the contents of PATCH-BUFFER as an ed-script against the current buffer."
-  (let ((target-buffer (current-buffer)))
+(defun prettysharp/apply-diff (patch-buffer)
+  "Apply the contents of PATCH-BUFFER as an RCS diff against the current buffer."
+  (let ((target-buffer (current-buffer))
+        ;; Tracks the "current" line number in the target buffer. This is the
+        ;; logical line number in the file before any changes were
+        ;; made. Keeping this number accurate is subtle. Just remember:
+        ;; (point) is always at tne end of the text we just manipulated, and
+        ;; of course we're always at the line the script just told us to go
+        ;; to. Keep that in mind and you'll be OK.
+        (current-line 0))
     (save-excursion
+      (goto-char (point-min))
       (with-current-buffer patch-buffer
         (goto-char (point-min))
         (while (not (eobp))
           (cond
-           ((looking-at "^\\([0-9]+\\)a")
-            ;; add command: Insert the following text
+
+           ((looking-at "^$")
+            ;; blank line is a valid command, meaning do nothing.
+            (forward-line))
+
+           ((looking-at "^a\\([0-9]+\\) \\([0-9]+\\)$")
+            ;; add lines.
             (forward-line)
-            (let ((start-point (point))
-                  (target-line (string-to-number (match-string 1))))
-              (while (not (or (looking-at "^.$") (eobp)))
-                (forward-line))
-              (let ((to-insert (buffer-substring start-point (point))))
+            (let ((text-start (point))
+                  (insert-at (string-to-number (match-string 1)))
+                  (line-count (string-to-number (match-string 2))))
+              (forward-line (1+ line-count))
+              (let ((to-insert (buffer-substring text-start (point))))
                 (with-current-buffer target-buffer
-                  (goto-char (point-min))
-                  (forward-line target-line)
-                  (insert to-insert)))
-              (forward-line))
+                  (forward-line (- insert-at current-line))
+                  ;; It can happen that forward-line moves us to the end of
+                  ;; the buffer but not a blank line; in this case we need to
+                  ;; insert a newline.
+                  (if (and (eobp) (looking-at "$") (not (looking-at "^")))
+                      (insert "\n"))
+                  (insert to-insert))
+                (setq current-line insert-at))))
 
-           ((looking-at "^\\([0-9]+\\)\\(?:,\\([0-9]+\\)\\)?c")
-            ;; change command
+           ((looking-at "^d\\([0-9]+\\) \\([0-9]+\\)$")
+            ;; delete lines.
             (forward-line)
-            (letrec ((start-point (point))
-                     (target-start (string-to-number (match-string 1)))
-                     (target-end (if (match-string 2)
-                                     (string-to-number (match-string 2))
-                                   target-start)))
-
-              (while (not (or (looking-at "^.$") (eobp)))
-                (forward-line))
-              (let ((to-insert (buffer-substring start-point (point))))
-                (with-current-buffer target-buffer
-                  (goto-char (point-min))
-                  (forward-line target-line)
-                  (let ((del-start (point)))
-                    (forward-line (1+ (- target-end target-start)))
-                    (delete-region del-start (point)))
-                  (insert to-insert)))
-              (forward-line))
-
-           ((looking-at "^\\([0-9]+\\)\\(?:,\\([0-9]+\\)\\)?d")
-            ;; delete command
-            (forward-line)
-            (letrec ((target-start (string-to-number (match-string 1)))
-                     (target-end (if (match-string 2)
-                                     (string-to-number (match-string 2))
-                                   target-start)))
+            (let ((delete-at (string-to-number (match-string 1)))
+                  (line-count (string-to-number (match-string 2))))
               (with-current-buffer target-buffer
-                  (goto-char (point-min))
-                  (forward-line target-line)
-                  (let ((del-start (point)))
-                    (forward-line (1+ (- target-end target-start)))
-                    (delete-region del-start (point))))))
+                (forward-line (1- (- delete-at current-line)))
+                (let ((delete-start (point)))
+                  (forward-line line-count)
+                  (delete-region delete-start (point))))
+              (setq current-line delete-at)))
 
            (t
-            (error "Internal error in prettysharp/apply-patch: Unrecognized ed command"))
-
-          )))))))
-
+            (error "Unrecognized RCS command in prettysharp/apply-diff"))
+           ))))))
 
 (defun prettysharp ()
   "Format the current buffer according to prettysharp."
@@ -131,8 +120,7 @@ Errors are displayed according to the value of prettysharp-show-errors."
   (let ((outfile (make-temp-file "prettysharp" nil "cs"))
         (patch-buffer (get-buffer-create "*prettysharp patch*"))
         (coding-system-for-read 'utf-8)
-        (coding-system-for-write 'utf-8)
-        our-prettysharp-args)
+        (coding-system-for-write 'utf-8))
 
     (unwind-protect
         (save-restriction
@@ -144,7 +132,7 @@ Errors are displayed according to the value of prettysharp-show-errors."
                                           nil (list :file outfile) nil))
               (progn
                 (prettysharp/make-patch outfile patch-buffer)
-                (prettysharp/apply-patch patch-buffer))
+                (prettysharp/apply-diff patch-buffer))
             (prettysharp/show-errors outfile)))
 
       (delete-file outfile))))
