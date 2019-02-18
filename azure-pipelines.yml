@@ -1,5 +1,5 @@
 jobs:
-- job: linux (ubuntu)
+- job: linux
   pool:
     vmImage: 'ubuntu-16.04'
   steps:
