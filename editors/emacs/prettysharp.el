@@ -135,5 +135,13 @@ Errors are displayed according to the value of prettysharp-show-errors."
 
       (delete-file outfile))))
 
+;;;###autoload
+(define-minor-mode prettysharp-mode
+  "Minor mode to run prettysharp on file save."
+  :lighter " pretty#"
+  (if prettysharp-mode
+      (add-hook 'before-save-hook 'prettysharp nil 'local)
+    (remove-hook 'before-save-hook 'prettysharp 'local)))
+
 (provide 'prettysharp)
 ;;; prettysharp.el ends here
