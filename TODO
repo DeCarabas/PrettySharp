@@ -2,11 +2,6 @@
   - Stamp build time into binary somehow
   - How do people get this?
 
-- Finish emacs integration
-  - Modify pipeline to publish to melpa?
-
-- Finish vscode extension
-
 - Write XML from test suite?
   - To publish into the pipeline
     http://dotyl.ink/l/7dilco6znu
