@@ -62,13 +62,7 @@ Errors are displayed according to the value of prettysharp-show-errors."
 (defun prettysharp/apply-diff (patch-buffer)
   "Apply the contents of PATCH-BUFFER as an RCS diff against the current buffer."
   (let ((target-buffer (current-buffer))
-        ;; Tracks the "current" line number in the target buffer. This is the
-        ;; logical line number in the file before any changes were
-        ;; made. Keeping this number accurate is subtle. Just remember:
-        ;; (point) is always at tne end of the text we just manipulated, and
-        ;; of course we're always at the line the script just told us to go
-        ;; to. Keep that in mind and you'll be OK.
-        (current-line 0))
+        (line-offset 0))
     (save-excursion
       (goto-char (point-min))
       (with-current-buffer patch-buffer
@@ -86,17 +80,19 @@ Errors are displayed according to the value of prettysharp-show-errors."
             (let ((text-start (point))
                   (insert-at (string-to-number (match-string 1)))
                   (line-count (string-to-number (match-string 2))))
-              (forward-line (1+ line-count))
+              (forward-line line-count)
               (let ((to-insert (buffer-substring text-start (point))))
                 (with-current-buffer target-buffer
-                  (forward-line (- insert-at current-line))
-                  ;; It can happen that forward-line moves us to the end of
-                  ;; the buffer but not a blank line; in this case we need to
-                  ;; insert a newline.
-                  (if (and (eobp) (looking-at "$") (not (looking-at "^")))
-                      (insert "\n"))
-                  (insert to-insert))
-                (setq current-line insert-at))))
+                  (save-excursion
+                    (goto-char (point-min))
+                    (forward-line (+ insert-at line-offset))
+                    ;; It can happen that forward-line moves us to the end of
+                    ;; the buffer but not a blank line; in this case we need
+                    ;; to insert a newline.
+                    (if (and (eobp) (looking-at "$") (not (looking-at "^")))
+                        (insert "\n"))
+                    (insert to-insert))
+                  (setq line-offset (+ line-offset line-count))))))
 
            ((looking-at "^d\\([0-9]+\\) \\([0-9]+\\)$")
             ;; delete lines.
@@ -104,11 +100,13 @@ Errors are displayed according to the value of prettysharp-show-errors."
             (let ((delete-at (string-to-number (match-string 1)))
                   (line-count (string-to-number (match-string 2))))
               (with-current-buffer target-buffer
-                (forward-line (1- (- delete-at current-line)))
-                (let ((delete-start (point)))
-                  (forward-line line-count)
-                  (delete-region delete-start (point))))
-              (setq current-line delete-at)))
+                (save-excursion
+                  (goto-char (point-min))
+                  (forward-line (1- (+ delete-at line-offset)))
+                  (let ((delete-start (point)))
+                    (forward-line line-count)
+                    (delete-region delete-start (point))))
+                (setq line-offset (- line-offset line-count)))))
 
            (t
             (error "Unrecognized RCS command in prettysharp/apply-diff"))
