@@ -47,11 +47,41 @@ or not at all."
           (const :tag "None" nil))
   :group 'prettysharp)
 
+(defconst prettysharp/error-buffer-name " *PrettySharp Errors*"
+  "The title of the buffer we show errors in.")
+
+(defconst prettysharp/patch-buffer-name " *PrettySharp Patch*"
+  "The title of the buffer we format the patch in.")
+
 (defun prettysharp/show-errors (outfile)
   "Display the errors in OUTFILE.
 
 Errors are displayed according to the value of prettysharp-show-errors."
-  )
+  (when prettysharp-show-errors
+    (let ((error-buffer (get-buffer-create prettysharp/error-buffer-name)))
+      (with-current-buffer error-buffer
+        (setq buffer-read-only nil)
+        (insert-file-contents outfile nil nil nil 'replace)
+        (cond
+         ((eq prettysharp-show-errors 'buffer)
+          (goto-char (point-min))
+          (insert "prettysharp errors:\n")
+          (compilation-mode)
+          (display-buffer error-buffer))
+
+         ((eq prettysharp-show-errors 'echo)
+          (message "%s" (buffer-string)))
+         )))))
+
+(defun prettysharp/clear-errors ()
+  "Clear any errors from PrettySharp."
+  (let ((error-buffer (get-buffer prettysharp/error-buffer-name)))
+    (when error-buffer
+      (message "Clear errors?")
+      (with-current-buffer error-buffer
+        (setq buffer-read-only nil)
+        (erase-buffer))
+      (kill-buffer error-buffer))))
 
 (defun prettysharp/make-patch (outfile patch-buffer)
   "Diff the contents of the current buffer with OUTFILE, generate an RCS-style patch, and put the results into PATCH-BUFFER."
@@ -116,7 +146,7 @@ Errors are displayed according to the value of prettysharp-show-errors."
   "Format the current buffer according to prettysharp."
   (interactive)
   (let ((outfile (make-temp-file "prettysharp" nil "cs"))
-        (patch-buffer (get-buffer-create "*prettysharp patch*"))
+        (patch-buffer (get-buffer-create prettysharp/patch-buffer-name))
         (coding-system-for-read 'utf-8)
         (coding-system-for-write 'utf-8))
 
@@ -130,7 +160,8 @@ Errors are displayed according to the value of prettysharp-show-errors."
                                           nil (list :file outfile) nil))
               (progn
                 (prettysharp/make-patch outfile patch-buffer)
-                (prettysharp/apply-diff patch-buffer))
+                (prettysharp/apply-diff patch-buffer)
+                (prettysharp/clear-errors))
             (prettysharp/show-errors outfile)))
 
       (delete-file outfile))))

@@ -1,8 +1,8 @@
 - Packaging
+  - Stamp build time into binary somehow
   - How do people get this?
 
 - Finish emacs integration
-  - Show errors
   - Modify pipeline to publish to melpa?
 
 - Finish vscode extension
