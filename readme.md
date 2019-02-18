@@ -2,6 +2,8 @@
 
 This is a C# pretty-printer ala clang-format and prettier.
 
+[![Build Status](https://dev.azure.com/doty/PrettySharp/_apis/build/status/PrettySharp-CI?branchName=master)](https://dev.azure.com/doty/PrettySharp/_build/latest?definitionId=2&branchName=master)
+
 ## The Algorithm
 It started out using Wadler's pretty-printer algorithm, but it was converted into an imperative form and tweaked a bit.
 As a result, it is no longer strictly equivalent to the one described in "A Prettier Printer".
