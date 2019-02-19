@@ -28,6 +28,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 void print_version_string() {
   printf("prettysharp C# Source Code Formatter 0.9.0\n"
          "Copyright (c) 2019 John Doty\n"
+         "https://github.com/DeCarabas/PrettySharp\n\n"
          "This is free software; you are free to change and redistribute it\n"
          "under the terms of the GNU General Public License version 3 or\n"
          "later.\n");
