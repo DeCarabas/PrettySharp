@@ -3,7 +3,7 @@ jobs:
   pool:
     vmImage: 'ubuntu-16.04'
   steps:
-  - script: tar -zcf '$(Build.ArtifactStagingDirectory)/prettysharp-0.7.0.tar.gz' .
+  - script: tar -zcf '$(Build.ArtifactStagingDirectory)/prettysharp-0.9.0.tar.gz' .
   - script: make test
   - task: CopyFiles@2
     inputs:
@@ -41,13 +41,13 @@ jobs:
     inputs:
       rootFolderOrFile: 'prettysharp.exe'
       archiveType: 'zip'
-      archiveFile: '$(Build.ArtifactStagingDirectory)/prettysharp-0.7.0-win.zip'
+      archiveFile: '$(Build.ArtifactStagingDirectory)/prettysharp-0.9.0-win.zip'
       replaceExistingArchive: true
   - task: ArchiveFiles@2
     inputs:
       rootFolderOrFile: 'LICENSE'
       archiveType: 'zip'
-      archiveFile: '$(Build.ArtifactStagingDirectory)/prettysharp-0.7.0-win.zip'
+      archiveFile: '$(Build.ArtifactStagingDirectory)/prettysharp-0.9.0-win.zip'
       replaceExistingArchive: false
   - task: CopyFiles@2
     inputs:
