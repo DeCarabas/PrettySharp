@@ -4,6 +4,70 @@ This is a C# pretty-printer ala clang-format and prettier.
 
 [![Build Status](https://dev.azure.com/doty/PrettySharp/_apis/build/status/PrettySharp-CI?branchName=master)](https://dev.azure.com/doty/PrettySharp/_build/latest?definitionId=2&branchName=master)
 
+## Installing
+
+### Windows
+If you have Visual Studio, make sure you have the C++ compiler installed.
+Then:
+
+- Clone this repository.
+
+- Open up a command prompt (`cmd.exe`) and navigate to the directory you cloned this code into.
+
+- Make sure you have the environment variables set up for Visual C++.
+  This means you'll want to run one of these batch files, depending on what edition you have:
+
+  ```
+  REM If you have VS Enterprise
+  "C:\Program Files (x86)\Microsoft Visual Studio\2017\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
+
+  REM If you have VS Professional
+  "C:\Program Files (x86)\Microsoft Visual Studio\2017\Professional\VC\Auxiliary\Build\vcvarsall.bat" x64
+
+  REM If you have VS Community
+  "C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\VC\Auxiliary\Build\vcvarsall.bat" x64
+  ```
+
+- Run `build.bat` from this directory to build prettysharp.exe.
+
+(If you have MinGW installed and on your path, then you can more or less follow the Unix instructions, below, except that you won't be able to `make install`.)
+
+### MacOS X
+Install the "command line developer tools," which are part of XCode.
+Then you should be able to:
+
+- Clone this repository
+
+- Open a terminal and navigate to the folder you cloned into
+
+- Run `make` to build the `prettysharp` binary.
+
+- Run `sudo make install` to copy the binary to `/usr/local/bin`, which should be on your path.
+
+
+### Unices
+You'll need `make` and some kind of C compiler.
+(There are many ways to get these; probably as many ways as there are unix variants.
+On debian linux distributions, you'll want something like `sudo apt get build-essential`.
+I don't know what you want on Redhat or any of the BSDs or anything else, I'm sorry.)
+
+From this directory, run `make` to build the `prettysharp` binary.
+
+Running `sudo make install` will copy it into `/usr/local/bin`.
+If you don't want it there, feel free to copy it wherever you like.
+
+## Running
+To format a C# file, run:
+
+```
+prettysharp <path to C# file>
+```
+
+If run without arguments, it will read the C# from stdin.
+
+If it can parse the file successfully, it will print formatted C# to stdout, and exit with error code 0.
+If not, it will print an error indicating what went wrong to stderr, and exit with a non-zero error code.
+
 ## The Algorithm
 It started out using Wadler's pretty-printer algorithm, but it was converted into an imperative form and tweaked a bit.
 As a result, it is no longer strictly equivalent to the one described in "A Prettier Printer".
