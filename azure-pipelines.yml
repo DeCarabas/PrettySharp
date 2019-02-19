@@ -37,10 +37,18 @@ jobs:
   - script: python.exe test.py
     displayName: Test
   - script: make prettysharp.msi
-  - task: CopyFiles@2
+  - task: ArchiveFiles@2
     inputs:
-      targetFolder: '$(Build.ArtifactStagingDirectory)'
-      contents: 'prettysharp.exe'
+      rootFolderOrFile: 'prettysharp.exe'
+      archiveType: 'zip'
+      archiveFile: '$(Build.ArtifactStagingDirectory)/prettysharp-0.7.0-win.zip'
+      replaceExistingArchive: true
+  - task: ArchiveFiles@2
+    inputs:
+      rootFolderOrFile: 'LICENSE'
+      archiveType: 'zip'
+      archiveFile: '$(Build.ArtifactStagingDirectory)/prettysharp-0.7.0-win.zip'
+      replaceExistingArchive: false
   - task: CopyFiles@2
     inputs:
       targetFolder: '$(Build.ArtifactStagingDirectory)'
@@ -48,4 +56,4 @@ jobs:
   - task: PublishBuildArtifacts@1
     inputs:
       pathtoPublish: '$(Build.ArtifactStagingDirectory)'
-      artifactName: 'windows-binary'
+      artifactName: 'windows-binaries'
