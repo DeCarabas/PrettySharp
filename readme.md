@@ -57,7 +57,16 @@ Running `sudo make install` will copy it into `/usr/local/bin`.
 If you don't want it there, feel free to copy it wherever you like.
 
 ## Running
-To format a C# file, run:
+
+### Editor Integration
+Probably you want this tool integrated into your favorite editor.
+Right now integration exists for:
+
+- [emacs](https://github.com/DeCarabas/prettysharp-emacs)
+- [Visual Studio Code](https://github.com/DeCarabas/prettysharp-vscode)
+
+### By Hand
+To format a C# file by hand, run:
 
 ```
 prettysharp <path to C# file>
