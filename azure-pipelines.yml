@@ -1,11 +1,9 @@
-name: 0.7.$(Date:yyyyMMdd)
-
 jobs:
 - job: linux
   pool:
     vmImage: 'ubuntu-16.04'
   steps:
-  - script: tar -zcf '$(Build.ArtifactStagingDirectory)/prettysharp-$(Build.BuildNumber).tar.gz' .
+  - script: tar -zcf '$(Build.ArtifactStagingDirectory)/prettysharp-0.7.0.tar.gz' .
   - script: make test
   - task: CopyFiles@2
     inputs:
