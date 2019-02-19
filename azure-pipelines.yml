@@ -36,10 +36,15 @@ jobs:
     displayName: Build
   - script: python.exe test.py
     displayName: Test
+  - script: make prettysharp.msi
   - task: CopyFiles@2
     inputs:
       targetFolder: '$(Build.ArtifactStagingDirectory)'
       contents: 'prettysharp.exe'
+  - task: CopyFiles@2
+    inputs:
+      targetFolder: '$(Build.ArtifactStagingDirectory)'
+      contents: 'prettysharp.msi'
   - task: PublishBuildArtifacts@1
     inputs:
       pathtoPublish: '$(Build.ArtifactStagingDirectory)'

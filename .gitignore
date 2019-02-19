@@ -8,6 +8,6 @@ managed/src/obj/
 managed/tests/obj/
 *.obj
 *.exe
-
-# The vs code extension is a javascript project
-editors/vscode/node_modules/
+*.msi
+*.wixobj
+*.wixpdb
