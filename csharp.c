@@ -2066,16 +2066,18 @@ static void switch_statement() {
         if (check_type()) {
           group();
           type();
-          line();
-          identifier("after the type in a case pattern");
-          if (check(TOKEN_KW_WHEN)) {
-            line_indent();
-            group();
-            token(TOKEN_KW_WHEN, "after the identifier in a case pattern");
-            space();
-            expression("after 'when' in a pattern case pattern");
-            end();
-            dedent();
+          if (check_identifier()) {
+            line();
+            identifier("after the type in a case pattern");
+            if (check(TOKEN_KW_WHEN)) {
+              line_indent();
+              group();
+              token(TOKEN_KW_WHEN, "after the identifier in a case pattern");
+              space();
+              expression("after 'when' in a pattern case pattern");
+              end();
+              dedent();
+            }
           }
           end();
         } else {
