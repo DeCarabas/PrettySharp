@@ -6,7 +6,36 @@ This is a C# pretty-printer ala clang-format and prettier.
 
 ## Installing
 
-### Windows
+Prebuilt binaries are available for Windows, in the [releases](https://github.com/DeCarabas/PrettySharp/releases).
+
+For MacOS X and Unix you'll have to build your own, but it's pretty easy.
+
+### Building on MacOS X
+Install the "command line developer tools," which are part of XCode.
+Then you should be able to:
+
+- Clone this repository
+
+- Open a terminal and navigate to the folder you cloned into
+
+- Run `make` to build the `prettysharp` binary.
+
+- Run `sudo make install` to copy the binary to `/usr/local/bin`, which should be on your path.
+
+
+### Building on Unix
+You'll need `make` and some kind of C compiler.
+(There are many ways to get these; probably as many ways as there are unix variants.
+On debian linux distributions, you'll want something like `sudo apt get build-essential`.
+I don't know what you want on Redhat or any of the BSDs or anything else, I'm sorry.)
+
+From this directory, run `make` to build the `prettysharp` binary.
+
+Running `sudo make install` will copy it into `/usr/local/bin`.
+If you don't want it there, feel free to copy it wherever you like.
+
+### Building on Windows
+If you really want to build it yourself on Windows, OK.
 If you have Visual Studio, make sure you have the C++ compiler installed.
 Then:
 
@@ -31,30 +60,6 @@ Then:
 - Run `build.bat` from this directory to build prettysharp.exe.
 
 (If you have MinGW installed and on your path, then you can more or less follow the Unix instructions, below, except that you won't be able to `make install`.)
-
-### MacOS X
-Install the "command line developer tools," which are part of XCode.
-Then you should be able to:
-
-- Clone this repository
-
-- Open a terminal and navigate to the folder you cloned into
-
-- Run `make` to build the `prettysharp` binary.
-
-- Run `sudo make install` to copy the binary to `/usr/local/bin`, which should be on your path.
-
-
-### Unices
-You'll need `make` and some kind of C compiler.
-(There are many ways to get these; probably as many ways as there are unix variants.
-On debian linux distributions, you'll want something like `sudo apt get build-essential`.
-I don't know what you want on Redhat or any of the BSDs or anything else, I'm sorry.)
-
-From this directory, run `make` to build the `prettysharp` binary.
-
-Running `sudo make install` will copy it into `/usr/local/bin`.
-If you don't want it there, feel free to copy it wherever you like.
 
 ## Running
 
