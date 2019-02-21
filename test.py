@@ -29,6 +29,9 @@ from collections import namedtuple
 TestResult = namedtuple("TestResult", ["path", "message", "passed"])
 
 
+test_count = 0
+
+
 def test_file(path, compare):
     expectedfile = path + ".expected"
     proc = subprocess.Popen(
@@ -67,7 +70,15 @@ def test_file(path, compare):
         else:
             result = TestResult(path=path, message="OK!", passed=True)
 
-    print("." if result.passed else "F", end="")
+    global test_count
+    test_count += 1
+    if test_count > 100:
+        flush = True
+        test_count = 0
+    else:
+        flush = False
+
+    print("." if result.passed else "F", end="", flush=flush)
     return result
 
 
