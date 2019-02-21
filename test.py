@@ -32,6 +32,16 @@ TestResult = namedtuple("TestResult", ["path", "message", "passed"])
 test_count = 0
 
 
+def baseline_file(path):
+    expectedfile = path + ".expected"
+    proc = subprocess.Popen(
+        ["./prettysharp", path], stderr=subprocess.PIPE, stdout=subprocess.PIPE
+    )
+    stdout, stderr = proc.communicate()
+    with open(expectedfile, "wb") as f:
+        f.write(stdout)
+
+
 def test_file(path, compare):
     expectedfile = path + ".expected"
     proc = subprocess.Popen(
@@ -45,6 +55,7 @@ def test_file(path, compare):
             path=path,
             message="  {}".format("\n  ".join(stderr.splitlines())),
             passed=False,
+            expected=None,
         )
     elif not compare:
         result = TestResult(path=path, message="OK! (No compare)", passed=True)
@@ -54,7 +65,7 @@ def test_file(path, compare):
         )
     else:
         actual = stdout.splitlines()
-        with open(path + ".expected", "rb") as f:
+        with open(expectedfile, "rb") as f:
             text = f.read().decode("utf-8")
             expected = text.splitlines()
         diff = list(
@@ -89,6 +100,9 @@ parser.add_argument(
 parser.add_argument(
     "--no-compare", action="store_true", help="Don't look for baselines and stuff"
 )
+parser.add_argument(
+    "--rebase", action="store_true", help="Regenerate baseline files if necessary"
+)
 
 args = parser.parse_args()
 
@@ -109,6 +123,13 @@ for result in results:
     if not result.passed:
         print("FAILED {}:\n{}\n\n".format(result.path, result.message))
         failed = True
+        if args.rebase:
+            yn = input("Re-write baseline? (yN) ")
+            if len(yn) > 0 and yn[0] in ("Y", "y"):
+                baseline_file(result.path)
+                print("Wrote new baseline for {}".format(result.path))
+                failed = False
+            print()
 
 
 sys.exit(-1 if failed else 0)
