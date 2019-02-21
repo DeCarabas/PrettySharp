@@ -55,7 +55,6 @@ def test_file(path, compare):
             path=path,
             message="  {}".format("\n  ".join(stderr.splitlines())),
             passed=False,
-            expected=None,
         )
     elif not compare:
         result = TestResult(path=path, message="OK! (No compare)", passed=True)
