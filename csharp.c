@@ -142,12 +142,12 @@ static void error(const char *format, ...) {
 }
 
 // We only have this to help tracking parts we haven't done yet.
-static void notimplemented(const char *format, ...) {
-  va_list args;
-  va_start(args, format);
-  verror(format, args);
-  va_end(args);
-}
+/* static void notimplemented(const char *format, ...) { */
+/*   va_list args; */
+/*   va_start(args, format); */
+/*   verror(format, args); */
+/*   va_end(args); */
+/* } */
 
 // ============================================================================
 // Trivia
@@ -339,11 +339,11 @@ static bool check_next(enum TokenType type) {
   return token.type == type;
 }
 
-static bool check_next_identifier() {
-  int i = parser.index;
-  struct Token token = next_significant_token(&i);
-  return is_identifier_token(token.type);
-}
+/* static bool check_next_identifier() { */
+/*   int i = parser.index; */
+/*   struct Token token = next_significant_token(&i); */
+/*   return is_identifier_token(token.type); */
+/* } */
 
 static void single_token() {
   text(parser.current);
@@ -474,24 +474,54 @@ static void name_equals(const char *where) {
   token(TOKEN_EQUALS, where);
 }
 
-static void type();
+static bool check_is_type(int *index, struct Token *token, bool array);
+static void type(const char *where);
+
+static bool check_type_argument_list() {
+  int index = parser.index;
+  struct Token token = parser.current;
+  if (token.type != TOKEN_LESSTHAN) {
+    return false;
+  }
+
+  token = next_significant_token(&index);
+  while (token.type != TOKEN_GREATERTHAN) {
+    if (!check_is_type(&index, &token, /*array*/ true)) {
+      return false;
+    }
+
+    while (token.type == TOKEN_COMMA) {
+      token = next_significant_token(&index);
+      if (!check_is_type(&index, &token, /*array*/ true)) {
+        return false;
+      }
+    }
+  }
+
+  if (token.type != TOKEN_GREATERTHAN) {
+    return false;
+  }
+
+  return true;
+}
 
 static void optional_type_argument_list() {
-  group();
-  if (match(TOKEN_LESSTHAN)) {
+  if (check_type_argument_list()) {
+    group();
+    token(TOKEN_LESSTHAN, "at the beginnign of a type argument list");
     if (!check(TOKEN_GREATERTHAN)) {
       softline_indent();
-      type();
+      type("in an optional type argument list");
       while (match(TOKEN_COMMA)) {
         line();
-        type();
+        type("in an optional type argument list");
       }
       dedent();
     }
     softline();
     token(TOKEN_GREATERTHAN, "at the end of a type argument list");
+    end();
   }
-  end();
 }
 
 static void simple_name(const char *where) {
@@ -506,7 +536,7 @@ static void namespace_or_type_name(const char *where) {
   }
 }
 
-static void type_name() { namespace_or_type_name("in type name"); }
+static void type_name(const char *where) { namespace_or_type_name(where); }
 
 static bool check_name_equals() {
   return check(TOKEN_IDENTIFIER) && check_next(TOKEN_EQUALS);
@@ -521,7 +551,7 @@ const static enum TokenType builtin_type_tokens[] = {
 
 static void tuple_element_type() {
   group();
-  type();
+  type("in the element type of a tuple element");
   if (check_identifier()) {
     line_indent();
     identifier("as the name in a tuple type");
@@ -530,7 +560,7 @@ static void tuple_element_type() {
   end();
 }
 
-static void non_array_type() {
+static void non_array_type(const char *where) {
   if (match(TOKEN_OPENPAREN)) {
     softline_indent();
     tuple_element_type();
@@ -544,7 +574,7 @@ static void non_array_type() {
     softline();
     token(TOKEN_CLOSEPAREN, "at the end of a tuple type");
   } else if (!match_any(builtin_type_tokens, ARRAY_SIZE(builtin_type_tokens))) {
-    type_name();
+    type_name(where);
   }
 
   while (check(TOKEN_QUESTION) || check(TOKEN_ASTERISK)) {
@@ -566,8 +596,8 @@ static void rank_specifier() {
   token(TOKEN_CLOSEBRACKET, "in array rank specifier");
 }
 
-static void type() {
-  non_array_type();
+static void type(const char *where) {
+  non_array_type(where);
 
   // Handle all the stuff at the end.
   // N.B.: TOKEN_QUESTION_OPENBRACKET is the result of a design decision that
@@ -1162,7 +1192,7 @@ static bool check_cast() {
 
 static void cast() {
   token(TOKEN_OPENPAREN, "at the beginning of a type cast");
-  type();
+  type("in a type cast expression");
   token(TOKEN_CLOSEPAREN, "after the type in a type cast");
   parse_precedence(PREC_UNARY, "after a type cast");
 }
@@ -1243,7 +1273,7 @@ static void typeof_expression() {
         "at the beginning of the argument to a typeof expression");
   {
     softline_indent();
-    type();
+    type("in the type of a typeof expression");
     dedent();
   }
   softline();
@@ -1384,7 +1414,7 @@ static void object_creation() {
   bool had_type = false;
   if (check_non_array_type()) {
     space();
-    non_array_type();
+    non_array_type("in an object creation expression");
     had_type = true;
 
     if (check(TOKEN_OPENPAREN)) {
@@ -1444,7 +1474,7 @@ static void from_clause() {
     {
       group();
       if (!(check_identifier() && check_next(TOKEN_KW_IN))) {
-        type();
+        type("in the type of the variable in a from clause");
         line();
       }
       identifier("in the variable of a from clause");
@@ -1516,7 +1546,7 @@ static void join_clause() {
     {
       group();
       if (!(check_identifier() && check_next(TOKEN_KW_IN))) {
-        type();
+        type("in the type of the variable in a join clause");
         line();
       }
       identifier("in the variable of a join clause");
@@ -1757,7 +1787,7 @@ static void is() {
   space();
   token(TOKEN_KW_IS, "in relational expression (is)");
   line();
-  type();
+  type("in the type in an 'is' expression");
   if (check_identifier()) {
     space();
     identifier("in the pattern matching part of an 'is' expression");
@@ -1770,7 +1800,7 @@ static void as() {
   space();
   token(TOKEN_KW_AS, "in relational expression (as)");
   line();
-  type();
+  type("in the type in an 'as' expression");
   end();
 }
 
@@ -1906,7 +1936,7 @@ static void variable_declarators(const char *where) {
       } else if (match(TOKEN_KW_STACKALLOC)) {
         // Technically we can only do this in variable initializers, but...?
         line_indent();
-        non_array_type();
+        non_array_type("in the type of a stackalloc array initializer");
         if (match(TOKEN_OPENBRACKET)) {
           expression("between the brackets in a stackalloc array initializer");
           token(TOKEN_CLOSEBRACKET,
@@ -1942,7 +1972,7 @@ static void variable_declarators(const char *where) {
         } else if (match(TOKEN_KW_STACKALLOC)) {
           // Technically we can only do this in variable initializers, but...?
           line_indent();
-          non_array_type();
+          non_array_type("in the type of a stackalloc array initializer");
           if (match(TOKEN_OPENBRACKET)) {
             expression(
                 "between the brackets in a stackalloc array initializer");
@@ -1963,7 +1993,7 @@ static void variable_declarators(const char *where) {
 
 static void local_variable_type() {
   if (!match(TOKEN_KW_VAR)) {
-    type();
+    type("in the type of a local variable");
   }
 }
 
@@ -2065,7 +2095,7 @@ static void switch_statement() {
         indent();
         if (check_type()) {
           group();
-          type();
+          type("in the type in a case pattern");
           if (check_identifier()) {
             line();
             identifier("after the type in a case pattern");
@@ -2246,7 +2276,7 @@ static void try_statement() {
       if (check(TOKEN_OPENPAREN)) {
         space();
         token(TOKEN_OPENPAREN, "at the beginning of a catch block");
-        type();
+        type("in the type of the exception in a catch block");
         if (check_identifier()) {
           space();
           identifier("in the variable declaration in a catch block");
@@ -2501,7 +2531,7 @@ static void statement() {
 // Member Declarations
 // ============================================================================
 
-static void attribute_name() { type_name(); }
+static void attribute_name() { type_name("in an attribute name"); }
 
 static void attribute_argument() {
   group();
@@ -2664,7 +2694,7 @@ static void const_declaration() {
     declaration_modifiers();
     token(TOKEN_KW_CONST, "at the beginning of a const declaration");
     space();
-    type();
+    type("in the type of a const");
     {
       line_indent();
       bool first = true;
@@ -2702,7 +2732,7 @@ static void field_declaration() {
     declaration_modifiers();
     {
       group();
-      type();
+      type("in the type of a field");
       variable_declarators("in a field declaration");
       token(TOKEN_SEMICOLON, "at the end of a field declaration");
       end();
@@ -2713,7 +2743,7 @@ static void field_declaration() {
 
 static void return_type() {
   if (!match(TOKEN_KW_VOID)) {
-    type();
+    type("in the return type of a method");
   }
 }
 
@@ -2735,7 +2765,7 @@ static void formal_parameter() {
                 ARRAY_SIZE(parameter_modifier_tokens))) {
     space();
   }
-  type();
+  type("in the type of a formal parameter");
   space();
   identifier("in a parameter name");
   if (check(TOKEN_EQUALS)) {
@@ -2785,7 +2815,7 @@ static void type_constraint() {
   } else {
     if (!match(TOKEN_KW_CLASS)) {
       if (!match(TOKEN_KW_STRUCT)) {
-        type();
+        type("in the type of a type constraint");
       }
     }
   }
@@ -2977,7 +3007,7 @@ static void property_declaration() {
   {
     group();
     declaration_modifiers();
-    type();
+    type("in the type of a property");
     space();
     member_name("in the name of a property");
     end();
@@ -3038,7 +3068,7 @@ static void event_declaration() {
     declaration_modifiers();
     token(TOKEN_KW_EVENT, "at the beginning of an event declaration");
     space();
-    type();
+    type("in the type of an event");
 
     if (check_next(TOKEN_OPENBRACE)) {
       space();
@@ -3089,7 +3119,7 @@ static void indexer_declaration() {
   {
     group();
     declaration_modifiers();
-    type();
+    type("in the type of an indexer");
     space();
     if (check_identifier()) {
       member_name("in the interface name of an indexer");
@@ -3174,7 +3204,7 @@ static void operator_declaration() {
     if (match(TOKEN_KW_EXPLICIT) || match(TOKEN_KW_IMPLICIT)) {
       token(TOKEN_KW_OPERATOR, "in conversion operator");
       line();
-      type();
+      type("in the type of a conversion operator");
       token(TOKEN_OPENPAREN, "before the argument in a conversion operator");
       {
         softline_indent();
@@ -3186,7 +3216,7 @@ static void operator_declaration() {
     } else {
       {
         group();
-        type();
+        type("in the return type of an operator");
         line();
         token(TOKEN_KW_OPERATOR, "after the type in an operator declaration");
         line();
@@ -3273,7 +3303,7 @@ static void fixed_size_buffer_declaration() {
     group();
     token(TOKEN_KW_FIXED, "at the beginning of a fixed buffer declaration");
     line();
-    type();
+    type("in the type of a fixed size buffer");
 
     {
       line_indent();
@@ -3527,12 +3557,12 @@ static void base_types() {
   group();
   token(TOKEN_COLON, "before the list of base types");
   space();
-  type_name();
+  type_name("in a list of base types");
   {
     indent();
     while (match(TOKEN_COMMA)) {
       line();
-      type_name();
+      type_name("in a list of base types");
     }
     dedent();
   }
@@ -3662,7 +3692,7 @@ static void enum_declaration() {
 
   if (match(TOKEN_COLON)) {
     line_indent();
-    type();
+    type("in the base type of an enum");
     dedent();
   }
 
