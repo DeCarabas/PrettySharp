@@ -18,4 +18,8 @@ class Foo
             }
         }
     }
+
+    private void EmitBinaryOperator() {
+        var stack = ArrayBuilder<BoundBinaryOperator>.GetInstance();
+    }
 }

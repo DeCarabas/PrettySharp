@@ -601,7 +601,7 @@ namespace ConsoleApplication1
                     where V: IList<K>
                 {
                     A<int> a;
-                    M(A < B, C > (5));
+                    M(A<B, C>(5));
                 }
             };
         };

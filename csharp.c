@@ -749,6 +749,8 @@ static void implicitly_typed_lambda() {
 static void primary() {
   if (check_implicitly_typed_lambda()) {
     implicitly_typed_lambda();
+  } else if (check_identifier()) {
+    simple_name("in a primary expression");
   } else {
     single_token();
   }
