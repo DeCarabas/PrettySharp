@@ -1,4 +1,4 @@
-#!env python3
+#!/usr/bin/env python3
 
 # prettysharp
 # Copyright (C) 2019 John Doty
@@ -15,6 +15,8 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+"""The test harness for prettysharp."""
 
 import subprocess
 import os
