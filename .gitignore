@@ -2,6 +2,7 @@
 
 prettysharp
 prettysharp-afl
+prettysharp-asan
 tests/fuzzing/out
 managed/packages/
 managed/src/obj/

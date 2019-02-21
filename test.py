@@ -20,6 +20,7 @@
 
 import subprocess
 import os
+import os.path
 import sys
 import difflib
 from collections import namedtuple
@@ -28,6 +29,7 @@ TestResult = namedtuple("TestResult", ["path", "message", "passed"])
 
 
 def test_file(path):
+    expectedfile = path + ".expected"
     proc = subprocess.Popen(
         ["./prettysharp", path], stderr=subprocess.PIPE, stdout=subprocess.PIPE
     )
@@ -39,6 +41,10 @@ def test_file(path):
             path=path,
             message="  {}".format("\n  ".join(stderr.splitlines())),
             passed=False,
+        )
+    elif not os.path.exists(expectedfile):
+        result = TestResult(
+            path=path, message="  Baseline file doesn't exist", passed=False
         )
     else:
         actual = stdout.splitlines()

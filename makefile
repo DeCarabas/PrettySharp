@@ -17,6 +17,9 @@ clean:
 install: prettysharp
 	install ./prettysharp /usr/local/bin
 
+prettysharp-asan: $(SOURCES) $(HEADERS)
+	clang  -o prettysharp-asan -O1 -g -fsanitize=address -fno-omit-frame-pointer -Werror $(SOURCES)
+
 prettysharp-afl: $(SOURCES) $(HEADERS)
 	afl-clang -o prettysharp-afl -Werror -O3 $(SOURCES)
 
