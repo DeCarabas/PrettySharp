@@ -18,6 +18,7 @@
 
 """The test harness for prettysharp."""
 
+import argparse
 import subprocess
 import os
 import os.path
@@ -28,7 +29,7 @@ from collections import namedtuple
 TestResult = namedtuple("TestResult", ["path", "message", "passed"])
 
 
-def test_file(path):
+def test_file(path, compare):
     expectedfile = path + ".expected"
     proc = subprocess.Popen(
         ["./prettysharp", path], stderr=subprocess.PIPE, stdout=subprocess.PIPE
@@ -42,6 +43,8 @@ def test_file(path):
             message="  {}".format("\n  ".join(stderr.splitlines())),
             passed=False,
         )
+    elif not compare:
+        result = TestResult(path=path, message="OK! (No compare)", passed=True)
     elif not os.path.exists(expectedfile):
         result = TestResult(
             path=path, message="  Baseline file doesn't exist", passed=False
@@ -68,14 +71,26 @@ def test_file(path):
     return result
 
 
+parser = argparse.ArgumentParser(description="Test harness for prettysharp.")
+parser.add_argument(
+    "root", nargs="?", default="tests", help="The root directory to test."
+)
+parser.add_argument(
+    "--no-compare", action="store_true", help="Don't look for baselines and stuff"
+)
+
+args = parser.parse_args()
+
 results = []
-for path, dirs, files in os.walk("tests"):
+for path, dirs, files in os.walk(args.root):
     if "fuzzing" in path:
         continue
 
     for fname in files:
         if fname.endswith(".cs"):
-            results.append(test_file(os.path.join(path, fname)))
+            results.append(
+                test_file(os.path.join(path, fname), compare=(not args.no_compare))
+            )
 
 print()
 failed = False
