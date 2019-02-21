@@ -72,13 +72,13 @@ def test_file(path, compare):
 
     global test_count
     test_count += 1
-    if test_count > 100:
-        flush = True
+    if test_count > 80:
+        end = "\n"
         test_count = 0
     else:
-        flush = False
+        end = ""
 
-    print("." if result.passed else "F", end="", flush=flush)
+    print("." if result.passed else "F", end=end)
     return result
 
 
