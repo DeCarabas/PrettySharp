@@ -405,13 +405,15 @@ static bool check_any(const enum TokenType *types, int count) {
   return check_is_any(parser.current.type, types, count);
 }
 
-static bool match(enum TokenType type) {
-  if (!check(type)) {
+static bool match_(enum TokenType type, int line) {
+  if (!check_(type, line)) {
     return false;
   }
   single_token();
   return true;
 }
+
+#define match(t) match_(t, __LINE__)
 
 static bool match_any(const enum TokenType *types, int count) {
   for (int i = 0; i < count; i++) {
@@ -539,7 +541,7 @@ static void namespace_or_type_name(const char *where) {
 static void type_name(const char *where) { namespace_or_type_name(where); }
 
 static bool check_name_equals() {
-  return check(TOKEN_IDENTIFIER) && check_next(TOKEN_EQUALS);
+  return check_identifier() && check_next(TOKEN_EQUALS);
 }
 
 const static enum TokenType builtin_type_tokens[] = {
@@ -848,7 +850,7 @@ static void argument_list_inner(enum TokenType closing_type) {
   if (!check(closing_type)) {
     softline_indent();
     group();
-    if (check(TOKEN_IDENTIFIER) && check_next(TOKEN_COLON)) {
+    if (check_identifier() && check_next(TOKEN_COLON)) {
       identifier("in the name of a named argument");
       token(TOKEN_COLON, "after the name of a named argument");
       space();
@@ -876,7 +878,7 @@ static void argument_list_inner(enum TokenType closing_type) {
       line();
 
       group();
-      if (check(TOKEN_IDENTIFIER) && check_next(TOKEN_COLON)) {
+      if (check_identifier() && check_next(TOKEN_COLON)) {
         identifier("in the name of a named argument");
         token(TOKEN_COLON, "after the end of a named argument");
         space();
