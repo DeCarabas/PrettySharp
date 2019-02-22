@@ -1999,6 +1999,180 @@ static void local_variable_type() {
   }
 }
 
+static bool check_local_deconstruction_declaration() {
+  int index = parser.index;
+  struct Token token = parser.current;
+
+  int elementCount = 0;
+  if (token.type == TOKEN_KW_VAR) {
+    token = next_significant_token(&index);
+    if (token.type != TOKEN_OPENPAREN) {
+      DEBUG(("Check local decon: false (no open after var)"));
+      return false;
+    }
+
+    token = next_significant_token(&index);
+    for (;;) {
+      if (!is_identifier_token(token.type)) {
+        DEBUG(("Check local decon: false (tuple, not ident)"));
+        return false;
+      }
+
+      elementCount += 1;
+      token = next_significant_token(&index);
+      if (token.type != TOKEN_COMMA) {
+        break;
+      }
+      token = next_significant_token(&index);
+    }
+  } else {
+    if (token.type != TOKEN_OPENPAREN) {
+      DEBUG(("Check local decon: false (no open no var)"));
+      return false;
+    }
+
+    token = next_significant_token(&index);
+    for (;;) {
+      // N.B.: Much of this complexity is to keep from confusing a
+      // deconstruction with a cast or a function call or something. We need to
+      // be very careful in what we allow here.
+      if (token.type == TOKEN_KW_VAR) {
+        token = next_significant_token(&index);
+        if (!is_identifier_token(token.type)) {
+          DEBUG(("Check local decon: false (var not followed by ident)"));
+          return false;
+        }
+        token = next_significant_token(&index);
+      } else {
+        if (is_identifier_token(token.type)) {
+          // This could either be the start of a type or just a standalone
+          // identifier. There's currently no way of knowing! So let's just
+          // try...
+          int i2 = index;
+          struct Token t2 = next_significant_token(&i2);
+          if (t2.type == TOKEN_COMMA || t2.type == TOKEN_CLOSEPAREN) {
+            // Yeah, it is, we can move on.
+            index = i2;
+            token = t2;
+          } else {
+            // It was an identifier but must be the start of a type...
+            if (!check_is_type(&index, &token, /*array*/ true)) {
+              DEBUG(("Check local decon: false (id not type)"));
+              return false;
+            }
+
+            if (!is_identifier_token(token.type)) {
+              DEBUG(("Check local decon: false (no id after type)"));
+              return false;
+            }
+            token = next_significant_token(&index);
+          }
+        } else {
+          // It was not an identifier so must be the start of a type...
+          if (!check_is_type(&index, &token, /*array*/ true)) {
+            DEBUG(("Check local decon: false (not type)"));
+            return false;
+          }
+
+          if (!is_identifier_token(token.type)) {
+            DEBUG(("Check local decon: false (no id after type')"));
+            return false;
+          }
+          token = next_significant_token(&index);
+        }
+      }
+
+      elementCount += 1;
+      if (token.type != TOKEN_COMMA) {
+        break;
+      }
+      token = next_significant_token(&index);
+    }
+  }
+
+  if (elementCount < 2) {
+    DEBUG(("Check local decon: false (0 or 1 element)"));
+    return false;
+  }
+
+  if (token.type != TOKEN_CLOSEPAREN) {
+    DEBUG(("Check local decon: false (tuple, no close paren)"));
+    return false;
+  }
+
+  token = next_significant_token(&index);
+  if (token.type != TOKEN_EQUALS) {
+    DEBUG(("Check local decon: false (tuple, no =)"));
+    return false;
+  }
+
+  DEBUG(("Check local decon: true"));
+  return true;
+}
+
+static void local_deconstruction_declaration() {
+  group();
+  if (match(TOKEN_KW_VAR)) {
+    line();
+    {
+      group();
+      token(TOKEN_OPENPAREN, "after var in a tuple deconstruction");
+      softline_indent();
+      {
+        group();
+        for (;;) {
+          identifier("in the variable part of a tuple deconstruction");
+          if (!match(TOKEN_COMMA)) {
+            break;
+          }
+          line();
+        }
+        end();
+      }
+      dedent();
+      softline();
+      token(TOKEN_CLOSEPAREN, "at the end of a tuple deconstruction");
+      end();
+    }
+  } else {
+    group();
+    token(TOKEN_OPENPAREN, "at the start of a tuple deconstruction");
+    softline_indent();
+    {
+      group();
+      for (;;) {
+        if (check_identifier() &&
+            (check_next(TOKEN_COMMA) || check_next(TOKEN_CLOSEPAREN))) {
+          identifier(
+              "in the existing identifier slot of a tuple deconstruction");
+        } else {
+          group();
+          local_variable_type();
+          line();
+          identifier("in the varible slot of a tuple deconstruction");
+          end();
+        }
+        if (!match(TOKEN_COMMA)) {
+          break;
+        }
+        line();
+      }
+      end();
+    }
+    dedent();
+    softline();
+    token(TOKEN_CLOSEPAREN, "at the end of a tuple deconstruction");
+    end();
+  }
+
+  line();
+  token(TOKEN_EQUALS, "after ) in a tuple deconstruction");
+  line();
+  expression("to the right of = in a tuple deconstruction");
+
+  end();
+}
+
 static bool check_local_variable_declaration() {
   int index = parser.index;
   struct Token token = parser.current;
@@ -2522,6 +2696,9 @@ static void statement() {
   if (check_local_variable_declaration()) {
     local_variable_declaration();
     token(TOKEN_SEMICOLON, "at the end of a local variable declaration");
+  } else if (check_local_deconstruction_declaration()) {
+    local_deconstruction_declaration();
+    token(TOKEN_SEMICOLON, "at the end of a local deconstruction declaration");
   } else if (check(TOKEN_KW_CONST)) {
     local_const_declaration();
   } else {

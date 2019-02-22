@@ -348,7 +348,8 @@ namespace My.Moy
             (int? a, int? b) nullableMembers = (5, 10);
             (int, (int, int)) nestedTuple = (1, (2, 3));
             var (a, b, c) = LookupName(42);
-            (a, b, c) = (a, b, c);
+            (a, b, c) =
+                (a, b, c);
             return (named.first, named.second, id);
         }
         public int m<T>(T t)
