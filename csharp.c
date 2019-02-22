@@ -1785,14 +1785,25 @@ static void greater_than() {
 }
 
 static void is() {
+  const struct ParseRule *rule = get_rule(TOKEN_KW_IS);
+
   group();
   space();
   token(TOKEN_KW_IS, "in relational expression (is)");
   line();
-  type("in the type in an 'is' expression");
-  if (check_identifier()) {
+  if (match(TOKEN_KW_VAR)) {
     space();
-    identifier("in the pattern matching part of an 'is' expression");
+    identifier("after 'var' in an 'is' expression");
+  } else if (check_type()) {
+    type("in the type in an 'is' expression");
+    if (check_identifier()) {
+      space();
+      identifier("in the pattern matching part of an 'is' expression");
+    }
+  } else {
+    parse_precedence(
+        (enum Precedence)(rule->precedence + 1),
+        "as the constant expression pattern in an 'is' expression");
   }
   end();
 }
