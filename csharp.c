@@ -2170,10 +2170,15 @@ static void local_deconstruction_declaration_prologue() {
 static void local_deconstruction_declaration() {
   group();
   local_deconstruction_declaration_prologue();
-  line();
-  token(TOKEN_EQUALS, "after ) in a tuple deconstruction");
-  line();
-  expression("to the right of = in a tuple deconstruction");
+  line_indent();
+  {
+    group();
+    token(TOKEN_EQUALS, "after ) in a tuple deconstruction");
+    line();
+    expression("to the right of = in a tuple deconstruction");
+    end();
+  }
+  dedent();
   end();
 }
 

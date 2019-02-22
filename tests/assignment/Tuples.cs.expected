@@ -3,12 +3,10 @@ class Samples
     public static double StandardDeviation(IEnumerable<double> sequence)
     {
         (int count, double sum, double sumOfSquares)
-        =
-        ComputeSumAndSumOfSquares(sequence);
+            = ComputeSumAndSumOfSquares(sequence);
         var (sum, sumOfSquares, count) = ComputeSumAndSumOfSquares(sequence);
         (double sum, var sumOfSquares, var count)
-        =
-        ComputeSumAndSumOfSquares(sequence);
+            = ComputeSumAndSumOfSquares(sequence);
 
         var variance = sumOfSquares - sum * sum / count;
         return Math.Sqrt(variance / count);
