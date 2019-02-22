@@ -2101,8 +2101,8 @@ static bool check_local_deconstruction_declaration() {
   }
 
   token = next_significant_token(&index);
-  if (token.type != TOKEN_EQUALS) {
-    DEBUG(("Check local decon: false (tuple, no =)"));
+  if (token.type != TOKEN_EQUALS && token.type != TOKEN_KW_IN) {
+    DEBUG(("Check local decon: false (tuple, no = or in)"));
     return false;
   }
 
@@ -2110,7 +2110,7 @@ static bool check_local_deconstruction_declaration() {
   return true;
 }
 
-static void local_deconstruction_declaration() {
+static void local_deconstruction_declaration_prologue() {
   group();
   if (match(TOKEN_KW_VAR)) {
     line();
@@ -2164,12 +2164,16 @@ static void local_deconstruction_declaration() {
     token(TOKEN_CLOSEPAREN, "at the end of a tuple deconstruction");
     end();
   }
+  end();
+}
 
+static void local_deconstruction_declaration() {
+  group();
+  local_deconstruction_declaration_prologue();
   line();
   token(TOKEN_EQUALS, "after ) in a tuple deconstruction");
   line();
   expression("to the right of = in a tuple deconstruction");
-
   end();
 }
 
@@ -2394,9 +2398,13 @@ static void foreach_statement() {
     token(TOKEN_OPENPAREN, "at the beginning of a foreach loop");
     {
       softline_indent();
-      local_variable_type();
-      space();
-      identifier("as the variable in a foreach loop");
+      if (check_local_deconstruction_declaration()) {
+        local_deconstruction_declaration_prologue();
+      } else {
+        local_variable_type();
+        space();
+        identifier("as the variable in a foreach loop");
+      }
       space();
       token(TOKEN_KW_IN, "in a foreach loop");
       line();
