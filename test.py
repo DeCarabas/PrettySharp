@@ -134,6 +134,6 @@ for result in results:
 if failures > 0:
     print("{} test{} failed.".format(failures, "s" if failures > 1 else ""))
 else:
-    print("All tests passed.")
+    print("All {} test{} passed.".format(len(results), "s" if len(results) > 1 else ""))
 
 sys.exit(-1 if failures > 0 else 0)
