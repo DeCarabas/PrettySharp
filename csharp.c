@@ -3320,9 +3320,22 @@ static void accessor_declarations() {
       token(TOKEN_KW_SET, "or get at the beginning of a property accessor");
     }
     if (!match(TOKEN_SEMICOLON)) {
-      line();
-      inline_block("or semicolon at the beginning of the body of a property "
-                   "accessor");
+      if (check(TOKEN_EQUALS_GREATERTHAN)) {
+        space();
+        token(TOKEN_EQUALS_GREATERTHAN,
+              "in the expression body of a property accessor");
+        {
+          line_indent();
+          expression("in the expression body of a property accessor");
+          token(TOKEN_SEMICOLON,
+                "at the end of the expression body of a property accessor");
+          dedent();
+        }
+      } else {
+        line();
+        inline_block("=>, or semicolon at the beginning of the body of a "
+                     "property accessor");
+      }
     }
     end();
   }
