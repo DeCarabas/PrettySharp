@@ -117,18 +117,23 @@ for path, dirs, files in os.walk(args.root):
             )
 
 print()
-failed = False
+failures = 0
 for result in results:
     if not result.passed:
         print("FAILED {}:\n{}\n\n".format(result.path, result.message))
-        failed = True
+        failures += 1
         if args.rebase:
             yn = input("Re-write baseline? (yN) ")
             if len(yn) > 0 and yn[0] in ("Y", "y"):
                 baseline_file(result.path)
                 print("Wrote new baseline for {}".format(result.path))
-                failed = False
+                failures -= 1
             print()
 
 
-sys.exit(-1 if failed else 0)
+if failures > 0:
+    print("{} test{} failed.".format(failures, "s" if failures > 1 else ""))
+else:
+    print("All tests passed.")
+
+sys.exit(-1 if failures > 0 else 0)
