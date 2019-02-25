@@ -843,8 +843,26 @@ static void null_member_access() {
   optional_type_argument_list();
 }
 
-static bool check_local_variable_declaration();
 static void local_variable_type();
+
+static bool check_out_variable_declaration() {
+  int index = parser.index;
+  struct Token token = parser.current;
+
+  if (token.type == TOKEN_KW_VAR) {
+    token = next_significant_token(&index);
+  } else if (token.type == TOKEN_KW_AWAIT) {
+    return false;
+  } else if (!check_is_type(&index, &token, /*array*/ true)) {
+    return false;
+  }
+
+  if (!is_identifier_token(token.type)) {
+    return false;
+  }
+
+  return true;
+}
 
 static void argument_list_inner(enum TokenType closing_type) {
   if (!check(closing_type)) {
@@ -858,7 +876,7 @@ static void argument_list_inner(enum TokenType closing_type) {
 
     if (match(TOKEN_KW_OUT)) {
       space();
-      if (check_local_variable_declaration()) {
+      if (check_out_variable_declaration()) {
         local_variable_type();
         space();
         identifier("in an inline out parameter declaration");
@@ -886,7 +904,7 @@ static void argument_list_inner(enum TokenType closing_type) {
 
       if (match(TOKEN_KW_OUT)) {
         space();
-        if (check_local_variable_declaration()) {
+        if (check_out_variable_declaration()) {
           local_variable_type();
           space();
           identifier("in an inline out parameter declaration");
@@ -2050,8 +2068,8 @@ static bool check_local_deconstruction_declaration() {
     token = next_significant_token(&index);
     for (;;) {
       // N.B.: Much of this complexity is to keep from confusing a
-      // deconstruction with a cast or a function call or something. We need to
-      // be very careful in what we allow here.
+      // deconstruction with a cast or a function call or something. We need
+      // to be very careful in what we allow here.
       if (token.type == TOKEN_KW_VAR) {
         token = next_significant_token(&index);
         if (!is_identifier_token(token.type)) {
@@ -2198,18 +2216,106 @@ static void local_deconstruction_declaration() {
   end();
 }
 
+static bool check_local_function_declaration() {
+  int index = parser.index;
+  struct Token token = parser.current;
+  if (token.type == TOKEN_KW_ASYNC) {
+    return true;
+  } else if (token.type == TOKEN_KW_UNSAFE) {
+    token = next_significant_token(&index);
+  }
+
+  if (token.type == TOKEN_KW_VOID) {
+    return true;
+  } else if (token.type == TOKEN_KW_AWAIT) {
+    // Just like with local variables, no types named 'await', please.
+    return false;
+  } else if (!check_is_type(&index, &token, /*array*/ true)) {
+    return false;
+  }
+
+  if (!is_identifier_token(token.type)) {
+    return false;
+  }
+
+  token = next_significant_token(&index);
+  if (token.type != TOKEN_OPENPAREN) {
+    return false;
+  }
+
+  return true;
+}
+
+// Because a local function declaration looks so much like a method we need
+// these things to help us here, which are defined down with the rest of the
+// member declaration stuff.
+static void return_type();
+static void member_name();
+static void optional_type_parameter_list();
+static void type_parameter_constraint_clauses();
+
+static void local_function_declaration() {
+  group();
+  {
+    group();
+    {
+      group();
+      if (match(TOKEN_KW_ASYNC) || match(TOKEN_KW_UNSAFE)) {
+        line();
+      }
+
+      {
+        group();
+        return_type();
+        line();
+        member_name("in the name of a local function");
+        end();
+      }
+
+      optional_type_parameter_list();
+      end();
+    }
+
+    formal_parameter_list("in a local function");
+
+    if (check(TOKEN_KW_WHERE)) {
+      line_indent();
+      type_parameter_constraint_clauses();
+      dedent();
+    }
+    end();
+  }
+
+  if (check(TOKEN_EQUALS_GREATERTHAN)) {
+    space();
+    token(TOKEN_EQUALS_GREATERTHAN,
+          "in the expression body of a local function");
+    {
+      line_indent();
+      expression("in the expression body of a local function");
+      token(TOKEN_SEMICOLON,
+            "at the end of the expression body of a local function");
+      dedent();
+    }
+  } else {
+    line();
+    block("at the beginning of the body of a local function");
+  }
+  end();
+}
+
 static bool check_local_variable_declaration() {
   int index = parser.index;
   struct Token token = parser.current;
   if (token.type == TOKEN_KW_VAR) {
     token = next_significant_token(&index);
   } else if (token.type == TOKEN_KW_AWAIT) {
-    // So technically this is wrong: in a non-async method you can have a local
-    // variable declaration where the type is named "await" and that's OK.
-    // Fixing this properly means that we need to actually attempt to parse a
-    // non-declaration statement before we parse a declaration statement, and
-    // that's slow and expensive and I don't want to do it right now. So uh:
-    // don't name types "await".
+    // So technically this is wrong: in a non-async method you can have a
+    // local variable declaration where the type is named "await" and that's
+    // OK. Fixing this properly means that we need to actually attempt to
+    // parse a non-declaration statement before we parse a declaration
+    // statement, and that's slow and expensive and I don't want to do it
+    // right now. So uh: don't name types "await".
     DEBUG(("Check local variable declaration: await"));
     return false;
   } else if (!check_is_type(&index, &token, /*array*/ true)) {
@@ -2219,14 +2325,24 @@ static bool check_local_variable_declaration() {
     return false;
   }
 
-  if (is_identifier_token(token.type)) {
-    DEBUG(("Check local variable declaration: true (type and identifier)"));
-    return true;
-  } else {
+  if (!is_identifier_token(token.type)) {
     DEBUG(("Check local variable declaration: %s not identifier",
            token_text(token.type)));
     return false;
   }
+
+  // Following a local variable declaration is an assignment or a comma or a
+  // semicolon.
+  token = next_significant_token(&index);
+  if (token.type != TOKEN_EQUALS && token.type != TOKEN_COMMA &&
+      token.type != TOKEN_SEMICOLON) {
+    DEBUG(("Check local variable declaration: invalid next token: %s",
+           token_text(token.type)));
+    return false;
+  }
+
+  DEBUG(("Check local variable declaration: true (type and identifier)"));
+  return true;
 }
 
 static void local_variable_declaration() {
@@ -2725,6 +2841,10 @@ static void statement() {
   if (check_local_variable_declaration()) {
     local_variable_declaration();
     token(TOKEN_SEMICOLON, "at the end of a local variable declaration");
+  } else if (check_local_function_declaration()) {
+    // NOTE: We check for local function before we check for tuple
+    // deconstruction because they can look very similar in certain situations.
+    local_function_declaration();
   } else if (check_local_deconstruction_declaration()) {
     local_deconstruction_declaration();
     token(TOKEN_SEMICOLON, "at the end of a local deconstruction declaration");
@@ -3432,10 +3552,10 @@ static void operator_declaration() {
             (parser.buffer.tokens[parser.index].type == TOKEN_GREATERTHAN) &&
             (parser.buffer.tokens[parser.index + 1].type ==
              TOKEN_GREATERTHAN)) {
-          // NOTE: This is a bit weird here but we don't tokenize >> as a right
-          // shift because it would make parsing generic types difficult. We
-          // rely on the fact that we can see trivia in our parser to
-          // disambiguate this.
+          // NOTE: This is a bit weird here but we don't tokenize >> as a
+          // right shift because it would make parsing generic types
+          // difficult. We rely on the fact that we can see trivia in our
+          // parser to disambiguate this.
           token(TOKEN_GREATERTHAN,
                 "in an overloaded right shift declaration (1)");
           token(TOKEN_GREATERTHAN,
@@ -3639,7 +3759,9 @@ static enum MemberKind check_member() {
 
   if (!check_is_type(&index, &token, /*array*/ true)) {
     if (token.type == TOKEN_KW_VOID) {
-      token = next_significant_token(&index);
+      // Only methods can return void.
+      DEBUG(("void -> MEMBERKIND_METHOD"));
+      return MEMBERKIND_METHOD;
     } else {
       DEBUG(("No type while determining member"));
       return MEMBERKIND_NONE;
