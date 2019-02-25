@@ -1,0 +1,6 @@
+class Foo {
+    void Bar() {
+        int from = 0;
+        what(from);
+    }
+}

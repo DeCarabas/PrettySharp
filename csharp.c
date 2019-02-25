@@ -1718,13 +1718,44 @@ static void query_body() {
   } while (more_query);
 }
 
+static bool check_is_query_expression() {
+  // "For this purpose, a query expression is any expression that starts with
+  // `from identifier` followed by any token except ';', '=' or ','."
+  // http://dotyl.ink/l/dlwnchgaui
+  int index = parser.index;
+  struct Token token = parser.current;
+  if (token.type != TOKEN_KW_FROM) {
+    return false;
+  }
+
+  token = next_significant_token(&index);
+  if (!is_identifier_token(token.type)) {
+    return false;
+  }
+
+  token = next_significant_token(&index);
+  if (token.type == TOKEN_SEMICOLON || token.type == TOKEN_EQUALS ||
+      token.type == TOKEN_COMMA) {
+    return false;
+  }
+
+  return true;
+}
+
 static void query_expression() {
-  breakparent();
-  // TODO: Set the indent right here, somehow!
-  from_clause();
-  line();
-  query_body();
-  // TODO: Reset the indent right here!
+  // OK This happens if we're looking at the 'from' keyword, but this might not
+  // *actually* be a query. Let's make sure!
+  if (check_is_query_expression()) {
+    breakparent();
+    // TODO: Set the indent right here, somehow!
+    from_clause();
+    line();
+    query_body();
+    // TODO: Reset the indent right here!
+  } else {
+    // Just pretend we're looking at a normal identifier.
+    primary();
+  }
 }
 
 static void binary() {
