@@ -2006,6 +2006,12 @@ static void conditional() {
   dedent();
 }
 
+static void throw_expression() {
+  token(TOKEN_KW_THROW, "at the beginning of a throw expression");
+  parse_precedence(PREC_NULL_COALESCING,
+                   "as the argument of a throw expression");
+}
+
 const static struct ParseRule rules[] = {
 #define TKN(id, txt, is_id, prefix, infix, prec) {prefix, infix, prec},
 #include "token.inc"
