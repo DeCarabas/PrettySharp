@@ -2587,26 +2587,29 @@ static void switch_statement() {
       space();
       {
         indent();
+        group();
         if (check_type(TYPE_FLAGS_NONE)) {
-          group();
           type(TYPE_FLAGS_NONE, "in the type in a case pattern");
-          if (check_identifier()) {
+          if (check_identifier() && !check(TOKEN_KW_WHEN)) {
             line();
             identifier("after the type in a case pattern");
-            if (check(TOKEN_KW_WHEN)) {
-              line_indent();
-              group();
-              token(TOKEN_KW_WHEN, "after the identifier in a case pattern");
-              space();
-              expression("after 'when' in a pattern case pattern");
-              end();
-              dedent();
-            }
           }
-          end();
         } else {
           expression("in the label of a switch case");
         }
+
+        if (check(TOKEN_KW_WHEN)) {
+          space();
+          group();
+          token(TOKEN_KW_WHEN, "after the identifier in a case pattern");
+          {
+            line_indent();
+            expression("after 'when' in a pattern case pattern");
+            dedent();
+          }
+          end();
+        }
+        end();
         dedent();
       }
     } else {

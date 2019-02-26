@@ -21,4 +21,23 @@ class Foo
             break;
         }
     }
+
+    private CSharpSyntaxNode CheckRecursivePatternFeature(CSharpSyntaxNode node)
+    {
+        switch (node.Kind)
+        {
+        case SyntaxKind.RecursivePattern:
+        case SyntaxKind.DiscardPattern:
+        case SyntaxKind.VarPattern when
+                ((VarPatternSyntax)node).Designation.Kind ==
+                SyntaxKind.ParenthesizedVariableDesignation:
+            return this.CheckFeatureAvailability(
+                node,
+                MessageID.IDS_FeatureRecursivePatterns
+            );
+
+        default:
+            return node;
+        }
+    }
 }
