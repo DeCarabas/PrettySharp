@@ -3920,6 +3920,10 @@ static enum MemberKind check_member() {
     token = next_significant_token(&index);
   }
 
+  if (token.type == TOKEN_KW_PARTIAL) {
+    token = next_significant_token(&index);
+  }
+
   if (token.type == TOKEN_KW_FIXED) {
     // Blah blah, yeah, technically this is special and has all kinds of
     // restrictions but have you seen the rest of this parser? :D
