@@ -1990,8 +1990,7 @@ static void conditional() {
     group();
     token(TOKEN_QUESTION, "at the beginning of a ternary expression");
     space();
-    parse_precedence((enum Precedence)(rule->precedence + 1),
-                     "after the question mark in a ternary expression");
+    expression("after the question mark in a ternary expression");
     end();
   }
   line();
@@ -1999,8 +1998,7 @@ static void conditional() {
     group();
     token(TOKEN_COLON, "in ternary expression");
     space();
-    parse_precedence((enum Precedence)(rule->precedence + 1),
-                     "after the colon in a ternary expression");
+    expression("after the colon in a ternary expression");
     end();
   }
   dedent();
