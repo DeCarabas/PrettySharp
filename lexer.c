@@ -255,7 +255,9 @@ static struct Token scan_string_literal(char open) {
       // N.B.: If I were actually interpreting string literals I would work
       // harder, translate characters, report errors, &c. But I'm not. Most
       // important is to skip over the potential closing character.
-      match(open);
+      if (!match('\\')) {
+        match(open);
+      }
     } else if (is_at_end() || match('\n') || match('\r')) {
       // TODO: NEWLINES: C# technically has 5 newline characters.
       return error_token("Unterminated string constant.");
