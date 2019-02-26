@@ -20,6 +20,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "token.h"
 
 // #define BREAK_ON_STUCK
+// #define PRINT_DEBUG_ENABLED
 
 struct Parser {
   struct DocBuilder *builder;
@@ -67,7 +68,6 @@ static void parser_init(struct DocBuilder *builder, struct TokenBuffer buffer) {
 // ============================================================================
 // Error Reporting
 // ============================================================================
-// #define PRINT_DEBUG_ENABLED
 
 #ifdef PRINT_DEBUG_ENABLED
 
@@ -266,6 +266,10 @@ static void softline_indent() {
   indent();
   softline();
 }
+static void softline_dedent() {
+  dedent();
+  softline();
+}
 static void breakparent() { doc_breakparent(parser.builder); }
 static void space() { doc_text(parser.builder, " ", 1); }
 
@@ -424,8 +428,10 @@ static bool match_any(const enum TokenType *types, int count) {
   return false;
 }
 
-static bool check_expensive(void (*parse_func)(), struct Token *token,
-                            int *index) {
+typedef void (*CheckParseFn)(const void *);
+
+static bool check_expensive(CheckParseFn parse_func, const void *context,
+                            struct Token *token, int *index) {
   struct Parser saved_parser = parser;
   parser.had_error = false;
   parser.check_only = true;
@@ -435,7 +441,7 @@ static bool check_expensive(void (*parse_func)(), struct Token *token,
   // TODO: Probably core should give me a way to save and restore builders.
   struct DocBuilder saved_builder = *parser.builder;
 
-  parse_func();
+  parse_func(context);
 
   bool success = !parser.had_error;
   *token = parser.current;
@@ -476,8 +482,32 @@ static void name_equals(const char *where) {
   token(TOKEN_EQUALS, where);
 }
 
-static bool check_is_type(int *index, struct Token *token, bool array);
-static void type(const char *where);
+// These are all the modes the official C# parser considers for processing
+// types. They affect parsing in very subtle ways. (I tried to find a better way
+// of describing the rules and I just can't, I'm sorry. If an official C# 7.x
+// spec every comes out then maybe I can learn from it, although this mode
+// incorporates some rules that appear to be in C# 6.0 but not documented
+// anywhere.)
+enum TypeFlags {
+  TYPE_FLAGS_NONE = 0x00,
+
+  // These flags are about the position of the type in the grammar, and affect
+  // what tokens are recognized as part of the type.
+  TYPE_FLAGS_PARAMETER = 0x01,
+  TYPE_FLAGS_AFTER_IS = 0x02,
+  TYPE_FLAGS_DEFINITE_PATTERN = 0x03,
+  TYPE_FLAGS_AFTER_OUT = 0x04,
+  TYPE_FLAGS_AFTER_TUPLE_COMMA = 0x05,
+  TYPE_FLAGS_AS_EXPRESSION = 0x06,
+  TYPE_FLAGS_NEW_EXPRESSION = 0x07,
+  TYPE_FLAGS_FIRST_ELEMENT_OF_POSSIBLE_TUPLE_LITERAL = 0x08,
+
+  TYPE_FLAGS_NO_ARRAY = 0x10,
+};
+
+static bool check_is_type(int *index, struct Token *token,
+                          enum TypeFlags flags);
+static void type(enum TypeFlags flags, const char *where);
 
 static bool check_type_argument_list() {
   int index = parser.index;
@@ -488,13 +518,13 @@ static bool check_type_argument_list() {
 
   token = next_significant_token(&index);
   while (token.type != TOKEN_GREATERTHAN) {
-    if (!check_is_type(&index, &token, /*array*/ true)) {
+    if (!check_is_type(&index, &token, TYPE_FLAGS_NONE)) {
       return false;
     }
 
     while (token.type == TOKEN_COMMA) {
       token = next_significant_token(&index);
-      if (!check_is_type(&index, &token, /*array*/ true)) {
+      if (!check_is_type(&index, &token, TYPE_FLAGS_NONE)) {
         return false;
       }
     }
@@ -513,10 +543,10 @@ static void optional_type_argument_list() {
     token(TOKEN_LESSTHAN, "at the beginnign of a type argument list");
     if (!check(TOKEN_GREATERTHAN)) {
       softline_indent();
-      type("in an optional type argument list");
+      type(TYPE_FLAGS_NONE, "in an optional type argument list");
       while (match(TOKEN_COMMA)) {
         line();
-        type("in an optional type argument list");
+        type(TYPE_FLAGS_NONE, "in an optional type argument list");
       }
       dedent();
     }
@@ -538,10 +568,20 @@ static void namespace_or_type_name(const char *where) {
   }
 }
 
+// ============================================================================
+// Types
+// ============================================================================
 static void type_name(const char *where) { namespace_or_type_name(where); }
 
-static bool check_name_equals() {
-  return check_identifier() && check_next(TOKEN_EQUALS);
+static void tuple_element_type() {
+  group();
+  type(TYPE_FLAGS_NONE, "in the element type of a tuple element");
+  if (check_identifier()) {
+    line_indent();
+    identifier("as the name in a tuple type");
+    dedent();
+  }
+  end();
 }
 
 const static enum TokenType builtin_type_tokens[] = {
@@ -551,18 +591,20 @@ const static enum TokenType builtin_type_tokens[] = {
     TOKEN_KW_BOOL,  TOKEN_KW_OBJECT, TOKEN_KW_DYNAMIC, TOKEN_KW_STRING,
 };
 
-static void tuple_element_type() {
-  group();
-  type("in the element type of a tuple element");
-  if (check_identifier()) {
-    line_indent();
-    identifier("as the name in a tuple type");
-    dedent();
+static void rank_specifier() {
+  if (!match(TOKEN_QUESTION_OPENBRACKET)) {
+    token(TOKEN_OPENBRACKET, "in array rank specifier");
   }
-  end();
+
+  while (match(TOKEN_COMMA)) {
+    ;
+  }
+  token(TOKEN_CLOSEBRACKET, "in array rank specifier");
 }
 
-static void non_array_type(const char *where) {
+static bool can_start_expression(enum TokenType type);
+
+static void type(enum TypeFlags flags, const char *where) {
   if (match(TOKEN_OPENPAREN)) {
     softline_indent();
     tuple_element_type();
@@ -572,34 +614,11 @@ static void non_array_type(const char *where) {
       tuple_element_type();
     } while (check(TOKEN_COMMA));
 
-    dedent();
-    softline();
+    softline_dedent();
     token(TOKEN_CLOSEPAREN, "at the end of a tuple type");
   } else if (!match_any(builtin_type_tokens, ARRAY_SIZE(builtin_type_tokens))) {
     type_name(where);
   }
-
-  while (check(TOKEN_QUESTION) || check(TOKEN_ASTERISK)) {
-    // Nullable.
-    match(TOKEN_QUESTION);
-
-    // Pointer.
-    match(TOKEN_ASTERISK);
-  }
-}
-
-static void rank_specifier() {
-  if (!match(TOKEN_QUESTION_OPENBRACKET)) {
-    token(TOKEN_OPENBRACKET, "in array rank specifier");
-  }
-  while (match(TOKEN_COMMA)) {
-    ;
-  }
-  token(TOKEN_CLOSEBRACKET, "in array rank specifier");
-}
-
-static void type(const char *where) {
-  non_array_type(where);
 
   // Handle all the stuff at the end.
   // N.B.: TOKEN_QUESTION_OPENBRACKET is the result of a design decision that
@@ -611,39 +630,89 @@ static void type(const char *where) {
   //   (⌐■_■)
   //
   //       *questionable*.
-  while (check(TOKEN_OPENBRACKET) || check(TOKEN_QUESTION) ||
-         check(TOKEN_QUESTION_OPENBRACKET) || check(TOKEN_ASTERISK)) {
-
-    // Array ranks.
-    if (check(TOKEN_OPENBRACKET) || check(TOKEN_QUESTION_OPENBRACKET)) {
-      rank_specifier();
+  //
+  bool arrays_ok = !(flags & TYPE_FLAGS_NO_ARRAY);
+  bool nullable_ok = true;
+  for (;;) {
+    if (arrays_ok) {
+      if (check(TOKEN_OPENBRACKET) || check(TOKEN_QUESTION_OPENBRACKET)) {
+        rank_specifier();
+        nullable_ok = true;
+        continue;
+      }
     }
 
-    // Nullable.
-    match(TOKEN_QUESTION);
+    if (check(TOKEN_QUESTION)) {
+      if (flags & TYPE_FLAGS_NEW_EXPRESSION) {
+        if (!check_next(TOKEN_OPENPAREN) && !check_next(TOKEN_OPENBRACKET) &&
+            !check_next(TOKEN_OPENBRACE)) {
+          // Quoth Roslyn:
+          //
+          //     A nullable qualifier is permitted as part of the type in a
+          //     `new` expression. e.g. `new int?()` is allowed.  It creates a
+          //     null value of type `Nullable<int>`. But the object initializer
+          //     syntax `new int? {}` is not permitted.
+          //
+          nullable_ok = false;
+        }
+      }
 
-    // Pointer.
-    match(TOKEN_ASTERISK);
+      if ((flags & TYPE_FLAGS_AFTER_IS) || (flags & TYPE_FLAGS_AS_EXPRESSION)) {
+        int i = parser.index;
+        struct Token token = next_significant_token(&i);
+        if (can_start_expression(token.type)) {
+          // Quoth Roslyn:
+          //
+          //     These contexts might be a type that is at the end of an
+          //     expression. In these contexts we only permit the nullable
+          //     qualifier if it is followed by a token that could not start
+          //     an expression, because for backward compatibility we want to
+          //     consider a `?` token as part of the `?:` operator if
+          //     possible.
+          //
+          nullable_ok = false;
+        }
+      }
+
+      if (nullable_ok) {
+        token(TOKEN_QUESTION, where);
+        nullable_ok = false;
+        continue;
+      }
+    }
+
+    if (match(TOKEN_ASTERISK)) {
+      nullable_ok = false;
+      continue;
+    }
+
+    break;
   }
 }
 
-static bool check_is_type(int *index, struct Token *token, bool array) {
+struct CheckIsTypeContext {
+  enum TypeFlags flags;
+};
+
+static void check_is_type_impl(const void *ctx) {
+  struct CheckIsTypeContext *context = (struct CheckIsTypeContext *)ctx;
+  type(context->flags, "checking for a type");
+}
+
+static bool check_is_type(int *index, struct Token *token,
+                          enum TypeFlags flags) {
   DEBUG(("Checking For Type...."));
-  bool result = check_expensive(array ? type : non_array_type, token, index);
+  struct CheckIsTypeContext context;
+  context.flags = flags;
+  bool result = check_expensive(check_is_type_impl, &context, token, index);
   DEBUG(("      ... check for type: %s", result ? "true" : "false"));
   return result;
 }
 
-static bool check_type() {
+static bool check_type(enum TypeFlags flags) {
   int index = parser.index;
   struct Token token = parser.current;
-  return check_is_type(&index, &token, /*array*/ true);
-}
-
-static bool check_non_array_type() {
-  int index = parser.index;
-  struct Token token = parser.current;
-  return check_is_type(&index, &token, /*array*/ false);
+  return check_is_type(&index, &token, flags);
 }
 
 // ============================================================================
@@ -853,7 +922,7 @@ static bool check_out_variable_declaration() {
     token = next_significant_token(&index);
   } else if (token.type == TOKEN_KW_AWAIT) {
     return false;
-  } else if (!check_is_type(&index, &token, /*array*/ true)) {
+  } else if (!check_is_type(&index, &token, TYPE_FLAGS_NONE)) {
     return false;
   }
 
@@ -1069,7 +1138,7 @@ static bool check_parenthesized_explicitly_typed_lambda() {
     requires_scan = false;
   }
 
-  if (!check_is_type(&index, &token, /*array*/ true)) {
+  if (!check_is_type(&index, &token, TYPE_FLAGS_NONE)) {
     DEBUG(("explicit paren lambda: no type -> false"));
     return false;
   }
@@ -1191,7 +1260,7 @@ static bool check_cast() {
 
   int index = parser.index;
   struct Token token = next_significant_token(&index);
-  if (!check_is_type(&index, &token, /*array*/ true)) {
+  if (!check_is_type(&index, &token, TYPE_FLAGS_NONE)) {
     DEBUG(("Check cast: false (not is type)"));
     return false;
   }
@@ -1214,7 +1283,7 @@ static bool check_cast() {
 
 static void cast() {
   token(TOKEN_OPENPAREN, "at the beginning of a type cast");
-  type("in a type cast expression");
+  type(TYPE_FLAGS_NONE, "in a type cast expression");
   token(TOKEN_CLOSEPAREN, "after the type in a type cast");
   parse_precedence(PREC_UNARY, "after a type cast");
 }
@@ -1295,7 +1364,7 @@ static void typeof_expression() {
         "at the beginning of the argument to a typeof expression");
   {
     softline_indent();
-    type("in the type of a typeof expression");
+    type(TYPE_FLAGS_NONE, "in the type of a typeof expression");
     dedent();
   }
   softline();
@@ -1434,9 +1503,9 @@ static void object_creation() {
   token(TOKEN_KW_NEW, "in object creation");
 
   bool had_type = false;
-  if (check_non_array_type()) {
+  if (check_type(TYPE_FLAGS_NO_ARRAY)) {
     space();
-    non_array_type("in an object creation expression");
+    type(TYPE_FLAGS_NO_ARRAY, "in an object creation expression");
     had_type = true;
 
     if (check(TOKEN_OPENPAREN)) {
@@ -1488,6 +1557,48 @@ static void object_creation() {
   }
 }
 
+static void stackalloc() {
+  group();
+  token(TOKEN_KW_STACKALLOC, "at the beginning of a stackalloc expression");
+  if (match(TOKEN_OPENBRACKET)) {
+    softline_indent();
+    {
+      group();
+      bool first = true;
+      while (first || match(TOKEN_COMMA)) {
+        if (!first) {
+          end();
+          line();
+          group();
+        }
+        first = false;
+        expression(
+            "in the array rank of an implicitly-typed stackalloc expression");
+      }
+      end();
+    }
+    dedent();
+    softline();
+    token(TOKEN_CLOSEBRACKET,
+          "at the end of an implicitly typed stackalloc expression");
+    line();
+    array_initializer();
+  } else {
+    line();
+    type(TYPE_FLAGS_NO_ARRAY, "in the element type of a stackalloc expression");
+    token(TOKEN_OPENBRACKET, "before the size of a stackalloc expression");
+    softline_indent();
+    expression("in the size of a stackalloc expression");
+    softline_dedent();
+    token(TOKEN_CLOSEBRACKET, "after the size of a stackalloc expression");
+    if (check(TOKEN_OPENBRACE)) {
+      line();
+      array_initializer();
+    }
+  }
+  end();
+}
+
 static void from_clause() {
   group();
   token(TOKEN_KW_FROM, "at the beginning of a from clause");
@@ -1496,7 +1607,7 @@ static void from_clause() {
     {
       group();
       if (!(check_identifier() && check_next(TOKEN_KW_IN))) {
-        type("in the type of the variable in a from clause");
+        type(TYPE_FLAGS_NONE, "in the type of the variable in a from clause");
         line();
       }
       identifier("in the variable of a from clause");
@@ -1568,7 +1679,7 @@ static void join_clause() {
     {
       group();
       if (!(check_identifier() && check_next(TOKEN_KW_IN))) {
-        type("in the type of the variable in a join clause");
+        type(TYPE_FLAGS_NONE, "in the type of the variable in a join clause");
         line();
       }
       identifier("in the variable of a join clause");
@@ -1848,8 +1959,8 @@ static void is() {
   if (match(TOKEN_KW_VAR)) {
     space();
     identifier("after 'var' in an 'is' expression");
-  } else if (check_type()) {
-    type("in the type in an 'is' expression");
+  } else if (check_type(TYPE_FLAGS_AFTER_IS)) {
+    type(TYPE_FLAGS_AFTER_IS, "in the type in an 'is' expression");
     if (check_identifier()) {
       space();
       identifier("in the pattern matching part of an 'is' expression");
@@ -1867,23 +1978,31 @@ static void as() {
   space();
   token(TOKEN_KW_AS, "in relational expression (as)");
   line();
-  type("in the type in an 'as' expression");
+  type(TYPE_FLAGS_NONE, "in the type in an 'as' expression");
   end();
 }
 
 static void conditional() {
   const struct ParseRule *rule = get_rule(TOKEN_QUESTION);
 
-  space();
-  token(TOKEN_QUESTION, "at the beginning of a ternary expression");
   line_indent();
-  parse_precedence((enum Precedence)(rule->precedence + 1),
-                   "after the question mark in a ternary expression");
+  {
+    group();
+    token(TOKEN_QUESTION, "at the beginning of a ternary expression");
+    space();
+    parse_precedence((enum Precedence)(rule->precedence + 1),
+                     "after the question mark in a ternary expression");
+    end();
+  }
   line();
-  token(TOKEN_COLON, "in ternary expression");
-  space();
-  parse_precedence((enum Precedence)(rule->precedence + 1),
-                   "after the colon in a ternary expression");
+  {
+    group();
+    token(TOKEN_COLON, "in ternary expression");
+    space();
+    parse_precedence((enum Precedence)(rule->precedence + 1),
+                     "after the colon in a ternary expression");
+    end();
+  }
   dedent();
 }
 
@@ -1899,6 +2018,50 @@ static const struct ParseRule *get_rule(enum TokenType type) {
 
 static void expression(const char *where) {
   parse_precedence(PREC_ASSIGNMENT, where);
+}
+
+static enum TokenType can_start_expression_tokens[] = {
+    TOKEN_CHARACTER_LITERAL,
+    TOKEN_IDENTIFIER,
+    TOKEN_INTERPOLATED_STRING,
+    TOKEN_KW_ARGLIST,
+    TOKEN_KW_BASE,
+    TOKEN_KW_CHECKED,
+    TOKEN_KW_DEFAULT,
+    TOKEN_KW_DELEGATE,
+    TOKEN_KW_FALSE,
+    TOKEN_KW_FROM,
+    TOKEN_KW_NEW,
+    TOKEN_KW_NULL,
+    TOKEN_KW_REF,
+    TOKEN_KW_SIZEOF,
+    TOKEN_KW_STACKALLOC,
+    TOKEN_KW_THIS,
+    TOKEN_KW_THROW,
+    TOKEN_KW_TRUE,
+    TOKEN_KW_TYPEOF,
+    TOKEN_KW_UNCHECKED,
+    TOKEN_NUMERIC_LITERAL,
+    TOKEN_OPENPAREN,
+    TOKEN_STRING_LITERAL,
+};
+
+static bool can_start_expression(enum TokenType type) {
+  if (check_is_any(type, can_start_expression_tokens,
+                   ARRAY_SIZE(can_start_expression_tokens))) {
+    return true;
+  }
+
+  if (check_is_any(type, builtin_type_tokens,
+                   ARRAY_SIZE(builtin_type_tokens))) {
+    return true;
+  }
+
+  if (get_rule(type)->prefix) {
+    return true;
+  }
+
+  return false;
 }
 
 // ============================================================================
@@ -2000,16 +2163,6 @@ static void variable_declarators(const char *where) {
       line_indent();
       if (check(TOKEN_OPENBRACE)) {
         array_initializer();
-      } else if (match(TOKEN_KW_STACKALLOC)) {
-        // Technically we can only do this in variable initializers, but...?
-        line_indent();
-        non_array_type("in the type of a stackalloc array initializer");
-        if (match(TOKEN_OPENBRACKET)) {
-          expression("between the brackets in a stackalloc array initializer");
-          token(TOKEN_CLOSEBRACKET,
-                "at the end of a stackalloc array initializer");
-        }
-        dedent();
       } else {
         // N.B.: This is technically a "fixed_poiner_initializer", not a real
         // initializer, but we fold it in because it's pretty harmless (this
@@ -2036,17 +2189,6 @@ static void variable_declarators(const char *where) {
         line_indent();
         if (check(TOKEN_OPENBRACE)) {
           array_initializer();
-        } else if (match(TOKEN_KW_STACKALLOC)) {
-          // Technically we can only do this in variable initializers, but...?
-          line_indent();
-          non_array_type("in the type of a stackalloc array initializer");
-          if (match(TOKEN_OPENBRACKET)) {
-            expression(
-                "between the brackets in a stackalloc array initializer");
-            token(TOKEN_CLOSEBRACKET,
-                  "at the end of a stackalloc array initializer");
-          }
-          dedent();
         } else {
           // ("fixed_pointer_initializer", See above.)
           match(TOKEN_AMPERSAND);
@@ -2060,7 +2202,7 @@ static void variable_declarators(const char *where) {
 
 static void local_variable_type() {
   if (!match(TOKEN_KW_VAR)) {
-    type("in the type of a local variable");
+    type(TYPE_FLAGS_NONE, "in the type of a local variable");
   }
 }
 
@@ -2121,7 +2263,7 @@ static bool check_local_deconstruction_declaration() {
             token = t2;
           } else {
             // It was an identifier but must be the start of a type...
-            if (!check_is_type(&index, &token, /*array*/ true)) {
+            if (!check_is_type(&index, &token, TYPE_FLAGS_NONE)) {
               DEBUG(("Check local decon: false (id not type)"));
               return false;
             }
@@ -2134,7 +2276,7 @@ static bool check_local_deconstruction_declaration() {
           }
         } else {
           // It was not an identifier so must be the start of a type...
-          if (!check_is_type(&index, &token, /*array*/ true)) {
+          if (!check_is_type(&index, &token, TYPE_FLAGS_NONE)) {
             DEBUG(("Check local decon: false (not type)"));
             return false;
           }
@@ -2261,7 +2403,7 @@ static bool check_local_function_declaration() {
   } else if (token.type == TOKEN_KW_AWAIT) {
     // Just like with local variables, no types named 'await', please.
     return false;
-  } else if (!check_is_type(&index, &token, /*array*/ true)) {
+  } else if (!check_is_type(&index, &token, TYPE_FLAGS_NONE)) {
     return false;
   }
 
@@ -2349,7 +2491,7 @@ static bool check_local_variable_declaration() {
     // right now. So uh: don't name types "await".
     DEBUG(("Check local variable declaration: await"));
     return false;
-  } else if (!check_is_type(&index, &token, /*array*/ true)) {
+  } else if (!check_is_type(&index, &token, TYPE_FLAGS_NONE)) {
     // This leaves index and token on the next token after the end of the
     // type.
     DEBUG(("Check local variable declaration: not a type"));
@@ -2441,9 +2583,9 @@ static void switch_statement() {
       space();
       {
         indent();
-        if (check_type()) {
+        if (check_type(TYPE_FLAGS_NONE)) {
           group();
-          type("in the type in a case pattern");
+          type(TYPE_FLAGS_NONE, "in the type in a case pattern");
           if (check_identifier()) {
             line();
             identifier("after the type in a case pattern");
@@ -2628,7 +2770,7 @@ static void try_statement() {
       if (check(TOKEN_OPENPAREN)) {
         space();
         token(TOKEN_OPENPAREN, "at the beginning of a catch block");
-        type("in the type of the exception in a catch block");
+        type(TYPE_FLAGS_NONE, "in the type of the exception in a catch block");
         if (check_identifier()) {
           space();
           identifier("in the variable declaration in a catch block");
@@ -2892,6 +3034,10 @@ static void statement() {
 
 static void attribute_name() { type_name("in an attribute name"); }
 
+static bool check_name_equals() {
+  return check_identifier() && check_next(TOKEN_EQUALS);
+}
+
 static void attribute_argument() {
   group();
   bool indented = false;
@@ -3053,7 +3199,7 @@ static void const_declaration() {
     declaration_modifiers();
     token(TOKEN_KW_CONST, "at the beginning of a const declaration");
     space();
-    type("in the type of a const");
+    type(TYPE_FLAGS_NONE, "in the type of a const");
     {
       line_indent();
       bool first = true;
@@ -3091,7 +3237,7 @@ static void field_declaration() {
     declaration_modifiers();
     {
       group();
-      type("in the type of a field");
+      type(TYPE_FLAGS_NONE, "in the type of a field");
       variable_declarators("in a field declaration");
       token(TOKEN_SEMICOLON, "at the end of a field declaration");
       end();
@@ -3102,7 +3248,7 @@ static void field_declaration() {
 
 static void return_type() {
   if (!match(TOKEN_KW_VOID)) {
-    type("in the return type of a method");
+    type(TYPE_FLAGS_NONE, "in the return type of a method");
   }
 }
 
@@ -3114,7 +3260,7 @@ static bool check_formal_parameter() {
   return check(TOKEN_OPENBRACKET) ||
          check_any(parameter_modifier_tokens,
                    ARRAY_SIZE(parameter_modifier_tokens)) ||
-         check_type() || check(TOKEN_COMMA);
+         check_type(TYPE_FLAGS_NONE) || check(TOKEN_COMMA);
 }
 
 static void formal_parameter() {
@@ -3124,7 +3270,7 @@ static void formal_parameter() {
                 ARRAY_SIZE(parameter_modifier_tokens))) {
     space();
   }
-  type("in the type of a formal parameter");
+  type(TYPE_FLAGS_NONE, "in the type of a formal parameter");
   space();
   identifier("in a parameter name");
   if (check(TOKEN_EQUALS)) {
@@ -3174,7 +3320,7 @@ static void type_constraint() {
   } else {
     if (!match(TOKEN_KW_CLASS)) {
       if (!match(TOKEN_KW_STRUCT)) {
-        type("in the type of a type constraint");
+        type(TYPE_FLAGS_NONE, "in the type of a type constraint");
       }
     }
   }
@@ -3379,7 +3525,7 @@ static void property_declaration() {
   {
     group();
     declaration_modifiers();
-    type("in the type of a property");
+    type(TYPE_FLAGS_NONE, "in the type of a property");
     space();
     member_name("in the name of a property");
     end();
@@ -3440,7 +3586,7 @@ static void event_declaration() {
     declaration_modifiers();
     token(TOKEN_KW_EVENT, "at the beginning of an event declaration");
     space();
-    type("in the type of an event");
+    type(TYPE_FLAGS_NONE, "in the type of an event");
 
     if (check_next(TOKEN_OPENBRACE)) {
       space();
@@ -3491,7 +3637,7 @@ static void indexer_declaration() {
   {
     group();
     declaration_modifiers();
-    type("in the type of an indexer");
+    type(TYPE_FLAGS_NONE, "in the type of an indexer");
     space();
     if (check_identifier()) {
       member_name("in the interface name of an indexer");
@@ -3576,7 +3722,7 @@ static void operator_declaration() {
     if (match(TOKEN_KW_EXPLICIT) || match(TOKEN_KW_IMPLICIT)) {
       token(TOKEN_KW_OPERATOR, "in conversion operator");
       line();
-      type("in the type of a conversion operator");
+      type(TYPE_FLAGS_NONE, "in the type of a conversion operator");
       token(TOKEN_OPENPAREN, "before the argument in a conversion operator");
       {
         softline_indent();
@@ -3588,7 +3734,7 @@ static void operator_declaration() {
     } else {
       {
         group();
-        type("in the return type of an operator");
+        type(TYPE_FLAGS_NONE, "in the return type of an operator");
         line();
         token(TOKEN_KW_OPERATOR, "after the type in an operator declaration");
         line();
@@ -3675,7 +3821,7 @@ static void fixed_size_buffer_declaration() {
     group();
     token(TOKEN_KW_FIXED, "at the beginning of a fixed buffer declaration");
     line();
-    type("in the type of a fixed size buffer");
+    type(TYPE_FLAGS_NONE, "in the type of a fixed size buffer");
 
     {
       line_indent();
@@ -3801,7 +3947,7 @@ static enum MemberKind check_member() {
     return MEMBERKIND_OPERATOR;
   }
 
-  if (!check_is_type(&index, &token, /*array*/ true)) {
+  if (!check_is_type(&index, &token, TYPE_FLAGS_NONE)) {
     if (token.type == TOKEN_KW_VOID) {
       // Only methods can return void.
       DEBUG(("void -> MEMBERKIND_METHOD"));
@@ -4066,7 +4212,7 @@ static void enum_declaration() {
 
   if (match(TOKEN_COLON)) {
     line_indent();
-    type("in the base type of an enum");
+    type(TYPE_FLAGS_NONE, "in the base type of an enum");
     dedent();
   }
 

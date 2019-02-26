@@ -738,8 +738,8 @@ namespace Comments.XmlComments.UndocumentedKeywords
                  + 4 // bar
                  + 5; // qux
             i =
-                strValue != null ?
-                    6
+                strValue != null
+                    ? 6
                     :  // bar
                     7; // qux
         }
