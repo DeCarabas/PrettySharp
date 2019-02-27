@@ -944,7 +944,7 @@ static bool check_out_variable_declaration() {
 
   if (token.type == TOKEN_KW_VAR) {
     token = next_significant_token(&index);
-  } else if (token.type == TOKEN_KW_AWAIT) {
+  } else if (token.type == TOKEN_KW_AWAIT && in_async()) {
     return false;
   } else if (!check_is_type(&index, &token, TYPE_FLAGS_NONE)) {
     return false;
@@ -1347,14 +1347,16 @@ static void argument_list() {
 
 static void invocation() { argument_list(); }
 
-static void pointer_indirection() {
-  token(TOKEN_ASTERISK, "to dereference a pointer");
-  parse_precedence(PREC_UNARY, "to the right of pointer indirection");
-}
-
 static void unary_prefix() {
   single_token();
-  expression("to the right of a unary operator");
+  parse_precedence(PREC_UNARY, "to the right of a unary operator");
+}
+
+static void ref() {
+  token(TOKEN_KW_REF, "at the beginning of a ref expression");
+  line_indent();
+  parse_precedence(PREC_UNARY, "to the right of a ref expression");
+  dedent();
 }
 
 static void unary_postfix() { single_token(); }
@@ -1391,13 +1393,9 @@ static void await_expression() {
   if (in_async()) {
     group();
     token(TOKEN_KW_AWAIT, "in await expression");
-    if (check(TOKEN_DOT)) {
-      // Fuck nope, this just doesn't work, we need to do this right.
-    } else {
-      line_indent();
-      parse_precedence(PREC_UNARY, "to the right of await");
-      dedent();
-    }
+    line_indent();
+    parse_precedence(PREC_UNARY, "to the right of await");
+    dedent();
     end();
   } else {
     primary();
@@ -2276,7 +2274,7 @@ static void variable_declarators(const char *where) {
         // indentation & formatting logic is complex and needs to be kept the
         // same.
         match(TOKEN_AMPERSAND);
-        expression(" or array initializer in the initial value of a variable");
+        expression("or array initializer in the initial value of a variable");
       }
       dedent();
     }
@@ -2506,8 +2504,7 @@ static bool check_local_function_declaration() {
 
   if (token.type == TOKEN_KW_VOID) {
     return true;
-  } else if (token.type == TOKEN_KW_AWAIT) {
-    // Just like with local variables, no types named 'await', please.
+  } else if (token.type == TOKEN_KW_AWAIT && in_async()) {
     return false;
   } else if (!check_is_type(&index, &token, TYPE_FLAGS_NONE)) {
     return false;
@@ -2591,15 +2588,14 @@ static void local_function_declaration() {
 static bool check_local_variable_declaration() {
   int index = parser.index;
   struct Token token = parser.current;
+  if (token.type == TOKEN_KW_REF) {
+    DEBUG(("Check local variable declaration: ref"));
+    return true;
+  }
+
   if (token.type == TOKEN_KW_VAR) {
     token = next_significant_token(&index);
-  } else if (token.type == TOKEN_KW_AWAIT) {
-    // So technically this is wrong: in a non-async method you can have a
-    // local variable declaration where the type is named "await" and that's
-    // OK. Fixing this properly means that we need to actually attempt to
-    // parse a non-declaration statement before we parse a declaration
-    // statement, and that's slow and expensive and I don't want to do it
-    // right now. So uh: don't name types "await".
+  } else if (token.type == TOKEN_KW_AWAIT && in_async()) {
     DEBUG(("Check local variable declaration: await"));
     return false;
   } else if (!check_is_type(&index, &token, TYPE_FLAGS_NONE)) {
@@ -2631,6 +2627,9 @@ static bool check_local_variable_declaration() {
 
 static void local_variable_declaration() {
   group();
+  if (match(TOKEN_KW_REF)) {
+    space();
+  }
   local_variable_type();
   variable_declarators("in local variable declaration");
   end();
@@ -3272,10 +3271,10 @@ static void global_attributes() {
 // them everywhere, even though it doesn't make sense to have e.g. `async
 // struct`.
 const static enum TokenType modifier_tokens[] = {
-    TOKEN_KW_ABSTRACT, TOKEN_KW_ASYNC,    TOKEN_KW_EXTERN,   TOKEN_KW_INTERNAL,
-    TOKEN_KW_NEW,      TOKEN_KW_OVERRIDE, TOKEN_KW_PRIVATE,  TOKEN_KW_PROTECTED,
-    TOKEN_KW_PUBLIC,   TOKEN_KW_READONLY, TOKEN_KW_SEALED,   TOKEN_KW_STATIC,
-    TOKEN_KW_UNSAFE,   TOKEN_KW_VIRTUAL,  TOKEN_KW_VOLATILE,
+    TOKEN_KW_ABSTRACT, TOKEN_KW_ASYNC,    TOKEN_KW_EXTERN,  TOKEN_KW_INTERNAL,
+    TOKEN_KW_NEW,      TOKEN_KW_OVERRIDE, TOKEN_KW_PRIVATE, TOKEN_KW_PROTECTED,
+    TOKEN_KW_PUBLIC,   TOKEN_KW_READONLY, TOKEN_KW_REF,     TOKEN_KW_SEALED,
+    TOKEN_KW_STATIC,   TOKEN_KW_UNSAFE,   TOKEN_KW_VIRTUAL, TOKEN_KW_VOLATILE,
 };
 
 static bool check_is_modifier(enum TokenType token) {
