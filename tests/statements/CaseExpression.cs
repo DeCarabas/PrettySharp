@@ -27,6 +27,14 @@ class Foo {
         case SyntaxKind.DiscardPattern:
         case SyntaxKind.VarPattern when ((VarPatternSyntax)node).Designation.Kind == SyntaxKind.ParenthesizedVariableDesignation:
             return this.CheckFeatureAvailability(node, MessageID.IDS_FeatureRecursivePatterns);
+
+            // Haha this too!
+        case DeclarationModifiers.Protected | DeclarationModifiers.Internal:
+            // the two keywords "protected" and "internal" together are treated as one modifier.
+            result &= ~DeclarationModifiers.AccessibilityMask;
+            result |= DeclarationModifiers.ProtectedInternal;
+            break;
+
         default:
             return node;
         }

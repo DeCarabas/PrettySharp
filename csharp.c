@@ -571,6 +571,7 @@ static void namespace_or_type_name(const char *where) {
 // ============================================================================
 // Types
 // ============================================================================
+
 static void type_name(const char *where) { namespace_or_type_name(where); }
 
 static void tuple_element_type() {
@@ -657,7 +658,9 @@ static void type(enum TypeFlags flags, const char *where) {
         }
       }
 
-      if ((flags & TYPE_FLAGS_AFTER_IS) || (flags & TYPE_FLAGS_AS_EXPRESSION)) {
+      if ((flags & TYPE_FLAGS_AFTER_IS) ||
+          (flags & TYPE_FLAGS_DEFINITE_PATTERN) ||
+          (flags & TYPE_FLAGS_AS_EXPRESSION)) {
         int i = parser.index;
         struct Token token = next_significant_token(&i);
         if (can_start_expression(token.type)) {
@@ -718,15 +721,15 @@ static bool check_type(enum TypeFlags flags) {
 // ============================================================================
 // Expressions
 // ============================================================================
-static void expression(const char *where);
 
+static void expression(const char *where);
 static const struct ParseRule *get_rule(enum TokenType type);
 
 enum Precedence {
   PREC_NONE,
 
   // NOTE: These are from lowest precedence to highest precedence.
-  // https://docs.microsoft.com/en-us/dotnet/csharp/language-reference/language-specification/expressions#operator-precedence-and-associativity
+  // http://dotyl.ink/l/3i56j3gpwm
   PREC_ASSIGNMENT,
   PREC_CONDITIONAL,
   PREC_NULL_COALESCING,
@@ -1949,26 +1952,18 @@ static void greater_than() {
   end();
 }
 
-static void is() {
-  const struct ParseRule *rule = get_rule(TOKEN_KW_IS);
+static bool check_pattern();
+static void pattern();
 
+static void is() {
   group();
   space();
   token(TOKEN_KW_IS, "in relational expression (is)");
   line();
-  if (match(TOKEN_KW_VAR)) {
-    space();
-    identifier("after 'var' in an 'is' expression");
-  } else if (check_type(TYPE_FLAGS_AFTER_IS)) {
-    type(TYPE_FLAGS_AFTER_IS, "in the type in an 'is' expression");
-    if (check_identifier()) {
-      space();
-      identifier("in the pattern matching part of an 'is' expression");
-    }
+  if (check_pattern()) {
+    pattern();
   } else {
-    parse_precedence(
-        (enum Precedence)(rule->precedence + 1),
-        "as the constant expression pattern in an 'is' expression");
+    type(TYPE_FLAGS_AFTER_IS, "in the type in an 'is' expression");
   }
   end();
 }
@@ -2066,6 +2061,57 @@ static bool can_start_expression(enum TokenType type) {
   }
 
   return false;
+}
+
+// ============================================================================
+// Patterns
+// ============================================================================
+
+static void simple_designation(const char *where) { identifier(where); }
+
+static bool check_declaration_pattern() {
+  int index = parser.index;
+  struct Token token = parser.current;
+  if (!check_is_type(&index, &token, TYPE_FLAGS_DEFINITE_PATTERN)) {
+    return false;
+  }
+
+  return is_identifier_token(token.type) && token.type != TOKEN_KW_WHEN;
+}
+
+static void pattern() {
+  group();
+  if (match(TOKEN_KW_VAR)) {
+    line();
+    simple_designation("after 'var' in a pattern");
+  } else if (check_declaration_pattern()) {
+    type(TYPE_FLAGS_DEFINITE_PATTERN, "in a declaration pattern");
+    line();
+    simple_designation("after the type in a pattern");
+  } else {
+    // Actually..... if this is an identifier or a simple name then we should
+    // fall back to the default parsing.
+    parse_precedence(PREC_SHIFT, "or declaration in a pattern");
+  }
+  end();
+}
+
+static void pattern_(const void *ctx) {
+  UNUSED(ctx);
+  pattern();
+}
+
+static bool check_is_pattern(int *index, struct Token *token) {
+  DEBUG(("Checking for pattern..."));
+  bool result = check_expensive(pattern_, NULL, token, index);
+  DEBUG(("    ....is pattern: %s", result ? "true" : "false"));
+  return result;
+}
+
+static bool check_pattern() {
+  int index = parser.index;
+  struct Token token = parser.current;
+  return check_is_pattern(&index, &token);
 }
 
 // ============================================================================
@@ -2562,6 +2608,16 @@ const static enum TokenType switch_section_end_tokens[] = {
     TOKEN_EOF,
 };
 
+static bool check_switch_case_pattern() {
+  int index = parser.index;
+  struct Token token = parser.current;
+  if (!check_is_pattern(&index, &token)) {
+    return false;
+  }
+
+  return token.type == TOKEN_COLON || token.type == TOKEN_KW_WHEN;
+}
+
 static void switch_statement() {
   token(TOKEN_KW_SWITCH, "at the beginning of a switch statement");
   space();
@@ -2588,12 +2644,8 @@ static void switch_statement() {
       {
         indent();
         group();
-        if (check_type(TYPE_FLAGS_NONE)) {
-          type(TYPE_FLAGS_NONE, "in the type in a case pattern");
-          if (check_identifier() && !check(TOKEN_KW_WHEN)) {
-            line();
-            identifier("after the type in a case pattern");
-          }
+        if (check_switch_case_pattern()) {
+          pattern();
         } else {
           expression("in the label of a switch case");
         }
