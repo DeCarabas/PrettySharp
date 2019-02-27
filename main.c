@@ -25,7 +25,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "csharp.h"
 #include "lexer.h"
 
-void print_version_string() {
+static void print_version_string(void) {
   printf("prettysharp C# Source Code Formatter 0.9.1\n"
          "Copyright (c) 2019 John Doty\n"
          "https://github.com/DeCarabas/PrettySharp\n\n"
@@ -34,7 +34,7 @@ void print_version_string() {
          "later.\n");
 }
 
-void print_usage_message() {
+static void print_usage_message(void) {
   print_version_string();
   printf("\n"
          "Usage: prettysharp [options] [<input file>]\n\n"
@@ -48,7 +48,7 @@ void print_usage_message() {
          "                 from stdin.\n");
 }
 
-char *read_file(FILE *input) {
+static char *read_file(FILE *input) {
   const int chunk_size = 4 * 1024 * 1024;
 
   size_t buffer_size = chunk_size;
@@ -89,7 +89,7 @@ char *read_file(FILE *input) {
   return buffer;
 }
 
-FILE *open_input_file(const char *fname) {
+static FILE *open_input_file(const char *fname) {
   if (fname) {
     FILE *input = fopen(fname, "r");
     if (!input) {

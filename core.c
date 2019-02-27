@@ -172,8 +172,6 @@ static struct OutputDoc *output_add(struct OutputBuilder *builder) {
 
 static void output_push_string(struct OutputBuilder *result, size_t length,
                                const char *string) {
-  assert(length >= 0);
-
   struct OutputDoc *doc = output_add(result);
   doc->type = OUT_TEXT;
   doc->length = length;
@@ -189,8 +187,8 @@ static void output_push_line(struct OutputBuilder *result, int margin) {
   doc->string = NULL;
 }
 
-static void best_rep(struct OutputBuilder *result, int width, struct Doc *docs,
-                     int length) {
+static void best_rep(struct OutputBuilder *result, size_t width,
+                     struct Doc *docs, int length) {
   struct Doc *saved_it = NULL;
   int saved_result_count = 0;
   size_t saved_used = 0;
@@ -283,7 +281,7 @@ static void layout(FILE *file, struct OutputDoc *docs, int length) {
       // it's ugly.
       struct OutputDoc *next = it + 1;
       if (next != end && next->type != OUT_LINE) {
-        for (int i = 0; i < it->length; i++) {
+        for (size_t i = 0; i < it->length; i++) {
           fputc(' ', file);
         }
       }
@@ -293,7 +291,7 @@ static void layout(FILE *file, struct OutputDoc *docs, int length) {
   }
 }
 
-void pretty(FILE *file, int width, struct Doc *docs, int length) {
+void pretty(FILE *file, size_t width, struct Doc *docs, int length) {
   struct OutputBuilder builder;
   output_init(&builder);
 

@@ -5,8 +5,16 @@ PYTHON?=python3
 
 .PHONY: test clean install
 
+# Warnings taken from http://dotyl.ink/l/i6unii6vgm except
+# - No -switch-enum because the token type is just too big.
+WARNINGS=\
+	-Wall -Wextra -Wcast-qual -Wcast-align -Wstrict-aliasing -Wpointer-arith \
+	-Winit-self -Wshadow -Wredundant-decls -Wfloat-equal -Wundef -Wformat=2 \
+	-Wvla -Wstrict-prototypes -Wmissing-prototypes
+
+
 prettysharp: $(SOURCES) $(HEADERS)
-	$(CC) -std=c99 -o prettysharp -Werror $(SOURCES)
+	$(CC) -std=c99 -o prettysharp -Werror $(WARNINGS) $(SOURCES)
 
 test: prettysharp
 	$(PYTHON) ./test.py

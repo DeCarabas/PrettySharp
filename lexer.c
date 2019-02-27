@@ -161,15 +161,15 @@ static void LEX_DEBUG_(const char *format, ...) {
 // ============================================================================
 // Basic character motion and checking
 // ============================================================================
-static char advance() {
+static char advance(void) {
   lexer.current++;
   return lexer.current[-1];
 }
 
-static bool is_at_end() { return *lexer.current == '\0'; }
+static bool is_at_end(void) { return *lexer.current == '\0'; }
 
-static char peek() { return *lexer.current; }
-static char peek_next() {
+static char peek(void) { return *lexer.current; }
+static char peek_next(void) {
   if (is_at_end()) {
     return '\0';
   }
@@ -213,23 +213,23 @@ static struct Token error_token(const char *message) {
 // ============================================================================
 // Whitespace
 // ============================================================================
-static void eat_whitespace() {
+static void eat_whitespace(void) {
   while (match(' ') || match('\t') || match('\r')) {
   }
 }
 
-static struct Token scan_whitespace() {
+static struct Token scan_whitespace(void) {
   eat_whitespace();
   return make_token(TOKEN_TRIVIA_WHITESPACE);
 }
 
-static struct Token scan_end_of_line() {
+static struct Token scan_end_of_line(void) {
   struct Token token = make_token(TOKEN_TRIVIA_EOL);
   lexer.line++;
   return token;
 }
 
-static void eat_to_end_of_line() {
+static void eat_to_end_of_line(void) {
   for (;;) {
     if (is_at_end()) {
       return;
@@ -272,7 +272,7 @@ static struct Token scan_string_literal(char open) {
                                 : TOKEN_CHARACTER_LITERAL);
 }
 
-static struct Token scan_verbatim_string_literal() {
+static struct Token scan_verbatim_string_literal(void) {
   for (;;) {
     if (match('"')) {
       if (!match('"')) {
@@ -291,7 +291,7 @@ static struct Token scan_verbatim_string_literal() {
   return make_token(TOKEN_STRING_LITERAL);
 }
 
-static struct Token scan_token();
+static struct Token scan_token(void);
 
 static const char *scan_format_specifier(bool verbatim) {
   for (;;) {
@@ -484,7 +484,7 @@ static bool is_id_char(char c) {
          c == '_';
 }
 
-static struct Token scan_identifier_or_keyword() {
+static struct Token scan_identifier_or_keyword(void) {
   for (;;) {
     if (is_at_end()) {
       break;
@@ -515,12 +515,12 @@ static struct Token scan_identifier_or_keyword() {
 // ============================================================================
 // Comments
 // ============================================================================
-static struct Token scan_line_comment() {
+static struct Token scan_line_comment(void) {
   eat_to_end_of_line();
   return make_token(TOKEN_TRIVIA_LINE_COMMENT);
 }
 
-static struct Token scan_block_comment() {
+static struct Token scan_block_comment(void) {
   int end_line = lexer.line;
   for (;;) {
     if (is_at_end()) {
@@ -545,6 +545,7 @@ static struct Token scan_block_comment() {
         lexer.line = end_line;
         return result;
       }
+      break;
 
     default:
       advance();
@@ -587,9 +588,9 @@ static bool is_symbol_defined(const char *id_start, const char *id_end) {
   return ret;
 }
 
-static bool scan_and_eval_pp_expression();
+static bool scan_and_eval_pp_expression(void);
 
-static bool scan_and_eval_pp_primary_expression() {
+static bool scan_and_eval_pp_primary_expression(void) {
   if (match('(')) {
     eat_whitespace();
     bool result = scan_and_eval_pp_expression();
@@ -616,7 +617,7 @@ static bool scan_and_eval_pp_primary_expression() {
   }
 }
 
-static bool scan_and_eval_pp_unary_expression() {
+static bool scan_and_eval_pp_unary_expression(void) {
   bool negate = false;
   while (match('!')) {
     eat_whitespace();
@@ -627,7 +628,7 @@ static bool scan_and_eval_pp_unary_expression() {
   return negate ? !result : result;
 }
 
-static bool scan_and_eval_pp_equality_expression() {
+static bool scan_and_eval_pp_equality_expression(void) {
   bool result = scan_and_eval_pp_unary_expression();
   eat_whitespace();
   for (;;) {
@@ -650,7 +651,7 @@ static bool scan_and_eval_pp_equality_expression() {
   return result;
 }
 
-static bool scan_and_eval_pp_and_expression() {
+static bool scan_and_eval_pp_and_expression(void) {
   bool result = scan_and_eval_pp_equality_expression();
   eat_whitespace();
   while (CHECK_STR("||")) {
@@ -663,7 +664,7 @@ static bool scan_and_eval_pp_and_expression() {
   return result;
 }
 
-static bool scan_and_eval_pp_or_expression() {
+static bool scan_and_eval_pp_or_expression(void) {
   bool result = scan_and_eval_pp_and_expression();
   eat_whitespace();
   while (CHECK_STR("||")) {
@@ -676,14 +677,14 @@ static bool scan_and_eval_pp_or_expression() {
   return result;
 }
 
-static bool scan_and_eval_pp_expression() {
+static bool scan_and_eval_pp_expression(void) {
   eat_whitespace();
   bool result = scan_and_eval_pp_or_expression();
   eat_whitespace();
   return result;
 }
 
-static struct Token scan_disabled_text() {
+static struct Token scan_disabled_text(void) {
   // We're in a disabled part of the text here because we failed a preprocessor
   // conditional. We need to scan and deal with nesting and stuff until we find
   // the next #elif or #else or #something. We'll count everything here as one
@@ -715,7 +716,7 @@ static struct Token scan_disabled_text() {
   return make_token(TOKEN_TRIVIA_DIRECTIVE);
 }
 
-static struct Token scan_directive() {
+static struct Token scan_directive(void) {
   // This is its own dorky little language with its own state table.  We
   // actually want to handle it here because skipped source text is allowed to
   // be *lexically incorrect*. (http://dotyl.ink/l/n5u7nwelyi) So we have no
@@ -818,7 +819,7 @@ static struct Token scan_directive() {
 // ============================================================================
 // Main
 // ============================================================================
-static struct Token scan_token() {
+static struct Token scan_token(void) {
   lexer.start = lexer.current;
   if (is_at_end()) {
     return make_token(TOKEN_EOF);

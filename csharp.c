@@ -70,15 +70,15 @@ static void parser_init(struct DocBuilder *builder, struct TokenBuffer buffer) {
   parser.in_async = false;
 }
 
-bool push_in_async(bool in_async) {
+static bool push_in_async(bool in_async) {
   bool prev_in_async = parser.in_async;
   parser.in_async = in_async;
   return prev_in_async;
 }
 
-void pop_in_async(bool in_async) { parser.in_async = in_async; }
+static void pop_in_async(bool in_async) { parser.in_async = in_async; }
 
-bool in_async() { return parser.in_async; }
+static bool in_async(void) { return parser.in_async; }
 
 // ============================================================================
 // Error Reporting
@@ -256,43 +256,43 @@ static void text(struct Token token) {
   parser.last_was_line = false;
   doc_text(parser.builder, token.start, token.length);
 }
-static void group() {
+static void group(void) {
   flush_trivia(/*next_is_line*/ false);
   doc_group(parser.builder);
 }
-static void end() { doc_end(parser.builder); }
-static void indent() { doc_indent(parser.builder); }
-static void dedent() { doc_dedent(parser.builder); }
-static void line() {
+static void end(void) { doc_end(parser.builder); }
+static void indent(void) { doc_indent(parser.builder); }
+static void dedent(void) { doc_dedent(parser.builder); }
+static void line(void) {
   flush_trivia(/*next_is_line*/ true);
   doc_line(parser.builder);
   parser.last_was_line = true;
 }
-static void line_indent() {
+static void line_indent(void) {
   indent();
   line();
 }
-static void softline() {
+static void softline(void) {
   flush_trivia(/*next_is_line*/ true);
   doc_softline(parser.builder);
   parser.last_was_line = true;
 }
-static void softline_indent() {
+static void softline_indent(void) {
   indent();
   softline();
 }
-static void softline_dedent() {
+static void softline_dedent(void) {
   dedent();
   softline();
 }
-static void breakparent() { doc_breakparent(parser.builder); }
-static void space() { doc_text(parser.builder, " ", 1); }
+static void breakparent(void) { doc_breakparent(parser.builder); }
+static void space(void) { doc_text(parser.builder, " ", 1); }
 
 // ============================================================================
 // Checking and Consuming Tokens
 // ============================================================================
 
-static void advance() {
+static void advance(void) {
 #ifdef BREAK_ON_STUCK
   parser.loop_count = 0;
 #endif
@@ -358,13 +358,13 @@ static bool check_next(enum TokenType type) {
   return token.type == type;
 }
 
-/* static bool check_next_identifier() { */
+/* static bool check_next_identifier(void) { */
 /*   int i = parser.index; */
 /*   struct Token token = next_significant_token(&i); */
 /*   return is_identifier_token(token.type); */
 /* } */
 
-static void single_token() {
+static void single_token(void) {
   text(parser.current);
   advance();
 }
@@ -443,9 +443,9 @@ static bool match_any(const enum TokenType *types, int count) {
   return false;
 }
 
-typedef void (*CheckParseFn)(const void *);
+typedef void (*CheckParseFn)(void *);
 
-static bool check_expensive(CheckParseFn parse_func, const void *context,
+static bool check_expensive(CheckParseFn parse_func, void *context,
                             struct Token *token, int *index) {
   struct Parser saved_parser = parser;
   parser.had_error = false;
@@ -475,7 +475,7 @@ static bool check_expensive(CheckParseFn parse_func, const void *context,
 // Names
 // ============================================================================
 
-static bool check_identifier() {
+static bool check_identifier(void) {
   bool result = is_identifier_token(parser.current.type);
   DEBUG(("Check identifier %s == %s", token_text(parser.current.type),
          result ? "true" : "false"));
@@ -524,7 +524,7 @@ static bool check_is_type(int *index, struct Token *token,
                           enum TypeFlags flags);
 static void type(enum TypeFlags flags, const char *where);
 
-static bool check_type_argument_list() {
+static bool check_type_argument_list(void) {
   int index = parser.index;
   struct Token token = parser.current;
   if (token.type != TOKEN_LESSTHAN) {
@@ -552,7 +552,7 @@ static bool check_type_argument_list() {
   return true;
 }
 
-static void optional_type_argument_list() {
+static void optional_type_argument_list(void) {
   if (check_type_argument_list()) {
     group();
     token(TOKEN_LESSTHAN, "at the beginnign of a type argument list");
@@ -589,7 +589,7 @@ static void namespace_or_type_name(const char *where) {
 
 static void type_name(const char *where) { namespace_or_type_name(where); }
 
-static void tuple_element_type() {
+static void tuple_element_type(void) {
   group();
   type(TYPE_FLAGS_NONE, "in the element type of a tuple element");
   if (check_identifier()) {
@@ -600,14 +600,14 @@ static void tuple_element_type() {
   end();
 }
 
-const static enum TokenType builtin_type_tokens[] = {
+static const enum TokenType builtin_type_tokens[] = {
     TOKEN_KW_SBYTE, TOKEN_KW_BYTE,   TOKEN_KW_SHORT,   TOKEN_KW_USHORT,
     TOKEN_KW_INT,   TOKEN_KW_UINT,   TOKEN_KW_LONG,    TOKEN_KW_ULONG,
     TOKEN_KW_CHAR,  TOKEN_KW_FLOAT,  TOKEN_KW_DOUBLE,  TOKEN_KW_DECIMAL,
     TOKEN_KW_BOOL,  TOKEN_KW_OBJECT, TOKEN_KW_DYNAMIC, TOKEN_KW_STRING,
 };
 
-static void rank_specifier() {
+static void rank_specifier(void) {
   if (!match(TOKEN_QUESTION_OPENBRACKET)) {
     token(TOKEN_OPENBRACKET, "in array rank specifier");
   }
@@ -712,7 +712,7 @@ struct CheckIsTypeContext {
   enum TypeFlags flags;
 };
 
-static void check_is_type_impl(const void *ctx) {
+static void check_is_type_impl(void *ctx) {
   struct CheckIsTypeContext *context = (struct CheckIsTypeContext *)ctx;
   type(context->flags, "checking for a type");
 }
@@ -763,15 +763,13 @@ enum Precedence {
   PREC_PRIMARY,
 };
 
-typedef void (*ParseFn)();
+typedef void (*ParseFn)(void);
 
 struct ParseRule {
   ParseFn prefix;
   ParseFn infix;
   enum Precedence precedence;
 };
-
-static const struct ParseRule *get_rule(enum TokenType type);
 
 static void parse_precedence(enum Precedence precedence, const char *where) {
   group();
@@ -792,7 +790,7 @@ static void parse_precedence(enum Precedence precedence, const char *where) {
 
 static void inline_block(const char *where);
 
-static bool check_implicitly_typed_lambda() {
+static bool check_implicitly_typed_lambda(void) {
   int index = parser.index;
   struct Token token = parser.current;
   if (token.type == TOKEN_KW_ASYNC) {
@@ -810,7 +808,7 @@ static bool check_implicitly_typed_lambda() {
   return true;
 }
 
-static void implicitly_typed_lambda() {
+static void implicitly_typed_lambda(void) {
   bool async = false;
   group();
   {
@@ -841,7 +839,7 @@ static void implicitly_typed_lambda() {
   end();
 }
 
-static void primary() {
+static void primary(void) {
   if (check_implicitly_typed_lambda()) {
     implicitly_typed_lambda();
   } else if (check_identifier()) {
@@ -853,7 +851,7 @@ static void primary() {
 
 // This comes up all the time, both here in expression land and down in
 // statement land.
-static void parenthesized_expression() {
+static void parenthesized_expression(void) {
   group();
   token(TOKEN_OPENPAREN, "in parenthesized expression");
   {
@@ -902,7 +900,7 @@ static void parenthesized_expression() {
   end();
 }
 
-static void checked_expression() {
+static void checked_expression(void) {
   group();
   token(TOKEN_KW_CHECKED, "at the beginning of a checked expression");
   token(TOKEN_OPENPAREN, "after 'checked' in a checked expression");
@@ -916,7 +914,7 @@ static void checked_expression() {
   end();
 }
 
-static void unchecked_expression() {
+static void unchecked_expression(void) {
   group();
   token(TOKEN_KW_UNCHECKED, "at the beginning of a checked expression");
   token(TOKEN_OPENPAREN, "after 'checked' in a checked expression");
@@ -930,15 +928,15 @@ static void unchecked_expression() {
   end();
 }
 
-static void null_member_access() {
+static void null_member_access(void) {
   token(TOKEN_QUESTION_DOT, "in null conditional member access expression");
   identifier("in null conditional member access expression");
   optional_type_argument_list();
 }
 
-static void local_variable_type();
+static void local_variable_type(void);
 
-static bool check_out_variable_declaration() {
+static bool check_out_variable_declaration(void) {
   int index = parser.index;
   struct Token token = parser.current;
 
@@ -1017,7 +1015,7 @@ static void argument_list_inner(enum TokenType closing_type) {
   }
 }
 
-static void null_element_access() {
+static void null_element_access(void) {
   token(TOKEN_QUESTION_OPENBRACKET,
         "in null conditional element access expression");
   argument_list_inner(TOKEN_CLOSEBRACKET);
@@ -1025,13 +1023,13 @@ static void null_element_access() {
         "at the end of a null conditional element access expression");
 }
 
-static void element_access() {
+static void element_access(void) {
   token(TOKEN_OPENBRACKET, "in an element access expression");
   argument_list_inner(TOKEN_CLOSEBRACKET);
   token(TOKEN_CLOSEBRACKET, "at the end of an element access expression");
 }
 
-static bool check_parenthesized_implicitly_typed_lambda() {
+static bool check_parenthesized_implicitly_typed_lambda(void) {
   // Case 1: ( x ,
   // Case 2: ( x ) =>
   // Case 3: ( ) =>
@@ -1079,7 +1077,7 @@ static bool check_parenthesized_implicitly_typed_lambda() {
   return false;
 }
 
-static void parenthesized_implicitly_typed_lambda() {
+static void parenthesized_implicitly_typed_lambda(void) {
   bool async = false;
   group();
   {
@@ -1131,7 +1129,7 @@ static enum TokenType anon_func_param_modifier[] = {
     TOKEN_KW_IN,
 };
 
-static bool check_parenthesized_explicitly_typed_lambda() {
+static bool check_parenthesized_explicitly_typed_lambda(void) {
   // do we have the following:
   //   case 1: ( T x , ... ) =>
   //   case 2: ( T x ) =>
@@ -1205,7 +1203,7 @@ static bool check_parenthesized_explicitly_typed_lambda() {
 
 static void formal_parameter_list(const char *where);
 
-static void parenthesized_explicitly_typed_lambda() {
+static void parenthesized_explicitly_typed_lambda(void) {
   bool async = false;
 
   group();
@@ -1238,7 +1236,7 @@ static void parenthesized_explicitly_typed_lambda() {
   end();
 }
 
-const static enum TokenType cannot_follow_cast_tokens[] = {
+static const enum TokenType cannot_follow_cast_tokens[] = {
     TOKEN_KW_AS,
     TOKEN_KW_IS,
     TOKEN_SEMICOLON,
@@ -1287,7 +1285,7 @@ const static enum TokenType cannot_follow_cast_tokens[] = {
     TOKEN_EOF,
 };
 
-static bool check_cast() {
+static bool check_cast(void) {
   // This allows a lot of nonsense but if it makes sense we should provide the
   // right answer.
   if (parser.current.type != TOKEN_OPENPAREN) {
@@ -1318,14 +1316,14 @@ static bool check_cast() {
   return true;
 }
 
-static void cast() {
+static void cast(void) {
   token(TOKEN_OPENPAREN, "at the beginning of a type cast");
   type(TYPE_FLAGS_NONE, "in a type cast expression");
   token(TOKEN_CLOSEPAREN, "after the type in a type cast");
   parse_precedence(PREC_UNARY, "after a type cast");
 }
 
-static void grouping() {
+static void grouping(void) {
   if (check_parenthesized_implicitly_typed_lambda()) {
     parenthesized_implicitly_typed_lambda();
   } else if (check_cast()) {
@@ -1337,7 +1335,7 @@ static void grouping() {
   }
 }
 
-static void argument_list() {
+static void argument_list(void) {
   group();
   token(TOKEN_OPENPAREN, "at the beginning of an argument list");
   argument_list_inner(TOKEN_CLOSEPAREN);
@@ -1345,23 +1343,23 @@ static void argument_list() {
   end();
 }
 
-static void invocation() { argument_list(); }
+static void invocation(void) { argument_list(); }
 
-static void unary_prefix() {
+static void unary_prefix(void) {
   single_token();
   parse_precedence(PREC_UNARY, "to the right of a unary operator");
 }
 
-static void ref() {
+static void ref(void) {
   token(TOKEN_KW_REF, "at the beginning of a ref expression");
   line_indent();
   parse_precedence(PREC_UNARY, "to the right of a ref expression");
   dedent();
 }
 
-static void unary_postfix() { single_token(); }
+static void unary_postfix(void) { single_token(); }
 
-static void anonymous_method_expression() {
+static void anonymous_method_expression(void) {
   token(TOKEN_KW_DELEGATE, "at the beginning of an anonymous method");
   if (check(TOKEN_OPENPAREN)) {
     space();
@@ -1371,7 +1369,7 @@ static void anonymous_method_expression() {
   inline_block("at the beginning of the body of an anonymous method");
 }
 
-static void async_lambda_or_delegate() {
+static void async_lambda_or_delegate(void) {
   if (check_next(TOKEN_KW_DELEGATE)) {
     bool prev_async = push_in_async(true);
     token(TOKEN_KW_ASYNC, "before an async delegate expression");
@@ -1389,7 +1387,7 @@ static void async_lambda_or_delegate() {
   }
 }
 
-static void await_expression() {
+static void await_expression(void) {
   if (in_async()) {
     group();
     token(TOKEN_KW_AWAIT, "in await expression");
@@ -1402,7 +1400,7 @@ static void await_expression() {
   }
 }
 
-static void typeof_expression() {
+static void typeof_expression(void) {
   group();
   token(TOKEN_KW_TYPEOF, "at the beginning of a typeof expression");
   token(TOKEN_OPENPAREN,
@@ -1418,7 +1416,7 @@ static void typeof_expression() {
   end();
 }
 
-static void default_expression() {
+static void default_expression(void) {
   group();
   token(TOKEN_KW_DEFAULT, "at the beginning of a default expression");
   if (match(TOKEN_OPENPAREN)) {
@@ -1466,15 +1464,15 @@ static void array_initializer_inner(const char *where) {
   end();
 }
 
-static void collection_initializer() {
+static void collection_initializer(void) {
   array_initializer_inner("in collection initializer");
 }
 
-static void array_initializer() {
+static void array_initializer(void) {
   array_initializer_inner("in array initializer");
 }
 
-static void object_initializer() {
+static void object_initializer(void) {
   group();
   token(TOKEN_OPENBRACE, "at the beginning of an object initializer");
   if (check(TOKEN_CLOSEBRACE)) {
@@ -1556,15 +1554,12 @@ static void array_sizes(const char *where) {
   token(TOKEN_CLOSEBRACKET, where);
 }
 
-static void object_creation() {
+static void object_creation(void) {
   token(TOKEN_KW_NEW, "in object creation");
 
-  bool had_type = false;
   if (check_type(TYPE_FLAGS_NO_ARRAY)) {
     space();
     type(TYPE_FLAGS_NO_ARRAY, "in an object creation expression");
-    had_type = true;
-
     if (check(TOKEN_OPENPAREN)) {
       // Object or delegate creation.
       argument_list();
@@ -1614,7 +1609,7 @@ static void object_creation() {
   }
 }
 
-static void stackalloc() {
+static void stackalloc(void) {
   group();
   token(TOKEN_KW_STACKALLOC, "at the beginning of a stackalloc expression");
   if (match(TOKEN_OPENBRACKET)) {
@@ -1656,7 +1651,7 @@ static void stackalloc() {
   end();
 }
 
-static void from_clause() {
+static void from_clause(void) {
   group();
   token(TOKEN_KW_FROM, "at the beginning of a from clause");
   {
@@ -1684,7 +1679,7 @@ static void from_clause() {
   end();
 }
 
-static void let_clause() {
+static void let_clause(void) {
   group();
   {
     group();
@@ -1712,7 +1707,7 @@ static void let_clause() {
   end();
 }
 
-static void where_clause() {
+static void where_clause(void) {
   group();
   token(TOKEN_KW_WHERE, "at the beginning of a where clause");
   {
@@ -1727,7 +1722,7 @@ static void where_clause() {
   end();
 }
 
-static void join_clause() {
+static void join_clause(void) {
   group();
   token(TOKEN_KW_JOIN, "at the beginning of a join clause");
   line_indent();
@@ -1781,7 +1776,7 @@ static void join_clause() {
   end();
 }
 
-static void orderby_clause() {
+static void orderby_clause(void) {
   group();
   token(TOKEN_KW_ORDERBY, "at the beginning of an orderby clause");
   {
@@ -1805,7 +1800,7 @@ static void orderby_clause() {
   end();
 }
 
-static void select_clause() {
+static void select_clause(void) {
   group();
   token(TOKEN_KW_SELECT, "at the beginning of a select clause");
   {
@@ -1816,7 +1811,7 @@ static void select_clause() {
   end();
 }
 
-static void group_clause() {
+static void group_clause(void) {
   group();
   token(TOKEN_KW_GROUP, "at the beginning of a group clause");
   {
@@ -1836,7 +1831,7 @@ static void group_clause() {
   end();
 }
 
-static void select_or_group_clause() {
+static void select_or_group_clause(void) {
   if (check(TOKEN_KW_SELECT)) {
     select_clause();
   } else if (check(TOKEN_KW_GROUP)) {
@@ -1846,7 +1841,7 @@ static void select_or_group_clause() {
   }
 }
 
-static void query_body() {
+static void query_body(void) {
   bool more_query;
   do {
     more_query = false;
@@ -1886,7 +1881,7 @@ static void query_body() {
   } while (more_query);
 }
 
-static bool check_is_query_expression() {
+static bool check_is_query_expression(void) {
   // "For this purpose, a query expression is any expression that starts with
   // `from identifier` followed by any token except ';', '=' or ','."
   // http://dotyl.ink/l/dlwnchgaui
@@ -1910,7 +1905,7 @@ static bool check_is_query_expression() {
   return true;
 }
 
-static void query_expression() {
+static void query_expression(void) {
   // OK This happens if we're looking at the 'from' keyword, but this might not
   // *actually* be a query. Let's make sure!
   if (check_is_query_expression()) {
@@ -1926,7 +1921,7 @@ static void query_expression() {
   }
 }
 
-static void binary() {
+static void binary(void) {
   group();
   enum TokenType op = parser.current.type;
 
@@ -1965,7 +1960,7 @@ static void binary() {
   end();
 }
 
-static void member_access() {
+static void member_access(void) {
   if (!match(TOKEN_DOT)) {
     if (!match(TOKEN_COLON_COLON)) {
       token(TOKEN_MINUS_GREATERTHAN,
@@ -1976,7 +1971,7 @@ static void member_access() {
   optional_type_argument_list();
 }
 
-static void greater_than() {
+static void greater_than(void) {
   // This one is weird because it *might* be a shift operator, but might also
   // be a less than operator. Good thing our lexer doesn't discard whitespace,
   // right?
@@ -2006,10 +2001,10 @@ static void greater_than() {
   end();
 }
 
-static bool check_pattern();
-static void pattern();
+static bool check_pattern(void);
+static void pattern(void);
 
-static void is() {
+static void is(void) {
   group();
   space();
   token(TOKEN_KW_IS, "in relational expression (is)");
@@ -2022,7 +2017,7 @@ static void is() {
   end();
 }
 
-static void as() {
+static void as(void) {
   group();
   space();
   token(TOKEN_KW_AS, "in relational expression (as)");
@@ -2031,9 +2026,7 @@ static void as() {
   end();
 }
 
-static void conditional() {
-  const struct ParseRule *rule = get_rule(TOKEN_QUESTION);
-
+static void conditional(void) {
   line_indent();
   {
     group();
@@ -2053,13 +2046,13 @@ static void conditional() {
   dedent();
 }
 
-static void throw_expression() {
+static void throw_expression(void) {
   token(TOKEN_KW_THROW, "at the beginning of a throw expression");
   parse_precedence(PREC_NULL_COALESCING,
                    "as the argument of a throw expression");
 }
 
-const static struct ParseRule rules[] = {
+static const struct ParseRule rules[] = {
 #define TKN(id, txt, is_id, prefix, infix, prec) {prefix, infix, prec},
 #include "token.inc"
 #undef TKN
@@ -2123,7 +2116,7 @@ static bool can_start_expression(enum TokenType type) {
 
 static void simple_designation(const char *where) { identifier(where); }
 
-static bool check_declaration_pattern() {
+static bool check_declaration_pattern(void) {
   int index = parser.index;
   struct Token token = parser.current;
   if (!check_is_type(&index, &token, TYPE_FLAGS_DEFINITE_PATTERN)) {
@@ -2133,7 +2126,7 @@ static bool check_declaration_pattern() {
   return is_identifier_token(token.type) && token.type != TOKEN_KW_WHEN;
 }
 
-static void pattern() {
+static void pattern(void) {
   group();
   if (match(TOKEN_KW_VAR)) {
     line();
@@ -2150,7 +2143,7 @@ static void pattern() {
   end();
 }
 
-static void pattern_(const void *ctx) {
+static void pattern_(void *ctx) {
   UNUSED(ctx);
   pattern();
 }
@@ -2162,7 +2155,7 @@ static bool check_is_pattern(int *index, struct Token *token) {
   return result;
 }
 
-static bool check_pattern() {
+static bool check_pattern(void) {
   int index = parser.index;
   struct Token token = parser.current;
   return check_is_pattern(&index, &token);
@@ -2172,10 +2165,10 @@ static bool check_pattern() {
 // Statements
 // ============================================================================
 
-static void statement();
+static void statement(void);
 static void embedded_statement(bool embedded);
 
-static void inter_statement_space() {
+static void inter_statement_space(void) {
   const enum TokenType prev = parser.previous.type;
   if (prev != TOKEN_SEMICOLON && prev != TOKEN_COLON) {
     line();
@@ -2304,13 +2297,13 @@ static void variable_declarators(const char *where) {
   }
 }
 
-static void local_variable_type() {
+static void local_variable_type(void) {
   if (!match(TOKEN_KW_VAR)) {
     type(TYPE_FLAGS_NONE, "in the type of a local variable");
   }
 }
 
-static bool check_local_deconstruction_declaration() {
+static bool check_local_deconstruction_declaration(void) {
   int index = parser.index;
   struct Token token = parser.current;
 
@@ -2421,7 +2414,7 @@ static bool check_local_deconstruction_declaration() {
   return true;
 }
 
-static void local_deconstruction_declaration_prologue() {
+static void local_deconstruction_declaration_prologue(void) {
   group();
   if (match(TOKEN_KW_VAR)) {
     line();
@@ -2478,7 +2471,7 @@ static void local_deconstruction_declaration_prologue() {
   end();
 }
 
-static void local_deconstruction_declaration() {
+static void local_deconstruction_declaration(void) {
   group();
   local_deconstruction_declaration_prologue();
   line_indent();
@@ -2493,7 +2486,7 @@ static void local_deconstruction_declaration() {
   end();
 }
 
-static bool check_local_function_declaration() {
+static bool check_local_function_declaration(void) {
   int index = parser.index;
   struct Token token = parser.current;
   if (token.type == TOKEN_KW_ASYNC) {
@@ -2525,12 +2518,12 @@ static bool check_local_function_declaration() {
 // Because a local function declaration looks so much like a method we need
 // these things to help us here, which are defined down with the rest of the
 // member declaration stuff.
-static void return_type();
-static void member_name();
-static void optional_type_parameter_list();
-static void type_parameter_constraint_clauses();
+static void return_type(void);
+static void member_name(const char *where);
+static void optional_type_parameter_list(void);
+static void type_parameter_constraint_clauses(void);
 
-static void local_function_declaration() {
+static void local_function_declaration(void) {
   bool async = false;
   group();
   {
@@ -2585,7 +2578,7 @@ static void local_function_declaration() {
   end();
 }
 
-static bool check_local_variable_declaration() {
+static bool check_local_variable_declaration(void) {
   int index = parser.index;
   struct Token token = parser.current;
   if (token.type == TOKEN_KW_REF) {
@@ -2625,7 +2618,7 @@ static bool check_local_variable_declaration() {
   return true;
 }
 
-static void local_variable_declaration() {
+static void local_variable_declaration(void) {
   group();
   if (match(TOKEN_KW_REF)) {
     space();
@@ -2635,14 +2628,14 @@ static void local_variable_declaration() {
   end();
 }
 
-static void local_const_declaration() {
+static void local_const_declaration(void) {
   token(TOKEN_KW_CONST, "in constant declaration");
   space();
   local_variable_declaration();
   token(TOKEN_SEMICOLON, "at the end of a local const declaration");
 }
 
-static void if_statement() {
+static void if_statement(void) {
   token(TOKEN_KW_IF, "at the beginning of an if statement");
   space();
   parenthesized_expression();
@@ -2661,14 +2654,14 @@ static void if_statement() {
   }
 }
 
-const static enum TokenType switch_section_end_tokens[] = {
+static const enum TokenType switch_section_end_tokens[] = {
     TOKEN_KW_CASE,
     TOKEN_KW_DEFAULT,
     TOKEN_CLOSEBRACE,
     TOKEN_EOF,
 };
 
-static bool check_switch_case_pattern() {
+static bool check_switch_case_pattern(void) {
   int index = parser.index;
   struct Token token = parser.current;
   if (!check_is_pattern(&index, &token)) {
@@ -2678,7 +2671,7 @@ static bool check_switch_case_pattern() {
   return token.type == TOKEN_COLON || token.type == TOKEN_KW_WHEN;
 }
 
-static void switch_statement() {
+static void switch_statement(void) {
   token(TOKEN_KW_SWITCH, "at the beginning of a switch statement");
   space();
   parenthesized_expression();
@@ -2748,14 +2741,14 @@ static void switch_statement() {
   token(TOKEN_CLOSEBRACE, "at the end of the case block");
 }
 
-static void while_statement() {
+static void while_statement(void) {
   token(TOKEN_KW_WHILE, "at the beginning of a while loop");
   space();
   parenthesized_expression();
   embedded_statement(/*embedded*/ true);
 }
 
-static void do_statement() {
+static void do_statement(void) {
   token(TOKEN_KW_DO, "at the beginning of a do loop");
   embedded_statement(/*embedded*/ true);
   line();
@@ -2773,7 +2766,7 @@ static void statement_expression_list(const char *where) {
   }
 }
 
-static void for_initializer() {
+static void for_initializer(void) {
   if (check_local_variable_declaration()) {
     local_variable_declaration();
   } else {
@@ -2781,15 +2774,15 @@ static void for_initializer() {
   }
   token(TOKEN_SEMICOLON, "at the end of the initializer of a for loop");
 }
-static void for_condition() {
+static void for_condition(void) {
   expression("in the condition of a for loop");
   token(TOKEN_SEMICOLON, "between sections of a for loop");
 }
-static void for_iterator() {
+static void for_iterator(void) {
   statement_expression_list("in the iterator of a for loop");
 }
 
-static void for_statement() {
+static void for_statement(void) {
   token(TOKEN_KW_FOR, "at the beginning of a for loop");
   space();
   {
@@ -2819,7 +2812,7 @@ static void for_statement() {
   embedded_statement(/*embedded*/ true);
 }
 
-static void foreach_statement() {
+static void foreach_statement(void) {
   token(TOKEN_KW_FOREACH, "at the beginning of a foreach loop");
   space();
   {
@@ -2847,7 +2840,7 @@ static void foreach_statement() {
   embedded_statement(/*embedded*/ true);
 }
 
-static void goto_statement() {
+static void goto_statement(void) {
   token(TOKEN_KW_GOTO, "at the beginning of a goto statement");
   space();
   if (match(TOKEN_KW_CASE)) {
@@ -2859,7 +2852,7 @@ static void goto_statement() {
   token(TOKEN_SEMICOLON, "at the end of a goto statement");
 }
 
-static void return_statement() {
+static void return_statement(void) {
   token(TOKEN_KW_RETURN, "at the beginning of a return statement");
   if (!check(TOKEN_SEMICOLON)) {
     space();
@@ -2868,7 +2861,7 @@ static void return_statement() {
   token(TOKEN_SEMICOLON, "at the end of a return statement");
 }
 
-static void throw_statement() {
+static void throw_statement(void) {
   token(TOKEN_KW_THROW, "at the beginning of a throw statement");
   if (!check(TOKEN_SEMICOLON)) {
     space();
@@ -2877,7 +2870,7 @@ static void throw_statement() {
   token(TOKEN_SEMICOLON, "at the end of a throw statement");
 }
 
-static void try_statement() {
+static void try_statement(void) {
   token(TOKEN_KW_TRY, "at the beginning of a try block");
   line();
   block("at the beginning of the body of a try block");
@@ -2917,7 +2910,7 @@ static void try_statement() {
   }
 }
 
-static void checked_statement() {
+static void checked_statement(void) {
   if (check_next(TOKEN_OPENPAREN)) {
     checked_expression();
     token(TOKEN_SEMICOLON,
@@ -2929,7 +2922,7 @@ static void checked_statement() {
   }
 }
 
-static void unchecked_statement() {
+static void unchecked_statement(void) {
   if (check_next(TOKEN_OPENPAREN)) {
     unchecked_expression();
     token(TOKEN_SEMICOLON,
@@ -2941,14 +2934,14 @@ static void unchecked_statement() {
   }
 }
 
-static void lock_statement() {
+static void lock_statement(void) {
   token(TOKEN_KW_LOCK, "at the beginning of a lock statement");
   space();
   parenthesized_expression();
   embedded_statement(/*embedded*/ true);
 }
 
-static void using_statement() {
+static void using_statement(void) {
   // Here we intentionally stack nested using statements at the same level of
   // indent because that's how lots of people like to use them.
   bool first = true;
@@ -2980,7 +2973,7 @@ static void using_statement() {
   embedded_statement(/*embedded*/ true);
 }
 
-static void yield_statement() {
+static void yield_statement(void) {
   group();
   token(TOKEN_KW_YIELD, "at the beginning of a yield statement");
   space();
@@ -2996,13 +2989,13 @@ static void yield_statement() {
   end();
 }
 
-static void unsafe_statement() {
+static void unsafe_statement(void) {
   token(TOKEN_KW_UNSAFE, "at the beginning of an unsafe block");
   line();
   block("in the body of an unsafe block");
 }
 
-static void fixed_statement() {
+static void fixed_statement(void) {
   token(TOKEN_KW_FIXED, "at the beginning of a fixed block");
   space();
   {
@@ -3120,7 +3113,7 @@ static void embedded_statement(bool embedded) {
   }
 }
 
-static void statement() {
+static void statement(void) {
   // Label.
   if (check_identifier() && check_next(TOKEN_COLON)) {
     dedent();
@@ -3151,13 +3144,13 @@ static void statement() {
 // Member Declarations
 // ============================================================================
 
-static void attribute_name() { type_name("in an attribute name"); }
+static void attribute_name(void) { type_name("in an attribute name"); }
 
-static bool check_name_equals() {
+static bool check_name_equals(void) {
   return check_identifier() && check_next(TOKEN_EQUALS);
 }
 
-static void attribute_argument() {
+static void attribute_argument(void) {
   group();
   bool indented = false;
   if (check_name_equals()) {
@@ -3182,7 +3175,7 @@ static void attribute_argument() {
   end();
 }
 
-static void opt_attribute_arguments() {
+static void opt_attribute_arguments(void) {
   if (match(TOKEN_OPENPAREN)) {
     if (!check(TOKEN_CLOSEPAREN)) {
       softline_indent();
@@ -3198,14 +3191,14 @@ static void opt_attribute_arguments() {
   }
 }
 
-static void attribute() {
+static void attribute(void) {
   group();
   attribute_name();
   opt_attribute_arguments();
   end();
 }
 
-static void attribute_list() {
+static void attribute_list(void) {
   attribute();
   while (match(TOKEN_COMMA) && !check(TOKEN_CLOSEBRACKET)) {
     line();
@@ -3219,19 +3212,19 @@ static enum TokenType attribute_target_tokens[] = {
     TOKEN_KW_EVENT,
 };
 
-static bool check_attribute_target() {
+static bool check_attribute_target(void) {
   return check_identifier() || check_any(attribute_target_tokens,
                                          ARRAY_SIZE(attribute_target_tokens));
 }
 
-static void attribute_target() {
+static void attribute_target(void) {
   if (!match_any(attribute_target_tokens,
                  ARRAY_SIZE(attribute_target_tokens))) {
     identifier("in an attribute target");
   }
 }
 
-static void attribute_section() {
+static void attribute_section(void) {
   group();
   token(TOKEN_OPENBRACKET, "at the beginning of an attribute section");
   {
@@ -3250,7 +3243,7 @@ static void attribute_section() {
   end();
 }
 
-static bool attributes() {
+static bool attributes(void) {
   if (check(TOKEN_OPENBRACKET)) {
     while (check(TOKEN_OPENBRACKET)) {
       attribute_section();
@@ -3261,7 +3254,7 @@ static bool attributes() {
   return false;
 }
 
-static void global_attributes() {
+static void global_attributes(void) {
   if (attributes()) {
     line();
   }
@@ -3270,7 +3263,7 @@ static void global_attributes() {
 // These are shared through lots of different declarations; we allow all of
 // them everywhere, even though it doesn't make sense to have e.g. `async
 // struct`.
-const static enum TokenType modifier_tokens[] = {
+static const enum TokenType modifier_tokens[] = {
     TOKEN_KW_ABSTRACT, TOKEN_KW_ASYNC,    TOKEN_KW_EXTERN,  TOKEN_KW_INTERNAL,
     TOKEN_KW_NEW,      TOKEN_KW_OVERRIDE, TOKEN_KW_PRIVATE, TOKEN_KW_PROTECTED,
     TOKEN_KW_PUBLIC,   TOKEN_KW_READONLY, TOKEN_KW_REF,     TOKEN_KW_SEALED,
@@ -3281,18 +3274,18 @@ static bool check_is_modifier(enum TokenType token) {
   return check_is_any(token, modifier_tokens, ARRAY_SIZE(modifier_tokens));
 }
 
-static bool check_modifier() {
+static bool check_modifier(void) {
   return check_any(modifier_tokens, ARRAY_SIZE(modifier_tokens));
 }
 
-static bool match_modifier() {
+static bool match_modifier(void) {
   return match_any(modifier_tokens, ARRAY_SIZE(modifier_tokens));
 }
 
 static bool is_type_keyword(enum TokenType token);
-static void type_declaration();
+static void type_declaration(void);
 
-static bool async_declaration_modifiers() {
+static bool async_declaration_modifiers(void) {
   bool async = false;
 
   group();
@@ -3317,9 +3310,9 @@ static bool async_declaration_modifiers() {
   return async;
 }
 
-static void declaration_modifiers() { async_declaration_modifiers(); }
+static void declaration_modifiers(void) { async_declaration_modifiers(); }
 
-static void const_declaration() {
+static void const_declaration(void) {
   attributes();
 
   {
@@ -3357,7 +3350,7 @@ static void const_declaration() {
   token(TOKEN_SEMICOLON, "at the end of a const member declaration");
 }
 
-static void field_declaration() {
+static void field_declaration(void) {
   attributes();
 
   {
@@ -3374,24 +3367,24 @@ static void field_declaration() {
   }
 }
 
-static void return_type() {
+static void return_type(void) {
   if (!match(TOKEN_KW_VOID)) {
     type(TYPE_FLAGS_NONE, "in the return type of a method");
   }
 }
 
-const static enum TokenType parameter_modifier_tokens[] = {
+static const enum TokenType parameter_modifier_tokens[] = {
     TOKEN_KW_IN, TOKEN_KW_OUT, TOKEN_KW_REF, TOKEN_KW_THIS, TOKEN_KW_PARAMS,
 };
 
-static bool check_formal_parameter() {
+static bool check_formal_parameter(void) {
   return check(TOKEN_OPENBRACKET) ||
          check_any(parameter_modifier_tokens,
                    ARRAY_SIZE(parameter_modifier_tokens)) ||
          check_type(TYPE_FLAGS_NONE) || check(TOKEN_COMMA);
 }
 
-static void formal_parameter() {
+static void formal_parameter(void) {
   group();
   attributes();
   if (match_any(parameter_modifier_tokens,
@@ -3413,7 +3406,7 @@ static void formal_parameter() {
   end();
 }
 
-static void formal_parameter_list_inner() {
+static void formal_parameter_list_inner(void) {
   // N.B. __arglist is massively undocumented so shrug.
   if (!match(TOKEN_KW_ARGLIST)) {
     bool first = true;
@@ -3441,7 +3434,7 @@ static void formal_parameter_list(const char *where) {
   end();
 }
 
-static void type_constraint() {
+static void type_constraint(void) {
   if (match(TOKEN_KW_NEW)) {
     token(TOKEN_OPENPAREN, "in constructor type constraint");
     token(TOKEN_CLOSEPAREN, "in constructor type constraint");
@@ -3454,7 +3447,7 @@ static void type_constraint() {
   }
 }
 
-static void optional_type_parameter_list() {
+static void optional_type_parameter_list(void) {
   group();
   if (match(TOKEN_LESSTHAN)) {
     {
@@ -3481,7 +3474,7 @@ static void optional_type_parameter_list() {
   end();
 }
 
-static void type_parameter_constraint() {
+static void type_parameter_constraint(void) {
   group();
   token(TOKEN_KW_WHERE, "at the beginning of a type parameter constraint");
   space();
@@ -3499,7 +3492,7 @@ static void type_parameter_constraint() {
   end();
 }
 
-static void type_parameter_constraint_clauses() {
+static void type_parameter_constraint_clauses(void) {
   type_parameter_constraint();
   if (check(TOKEN_KW_WHERE)) {
     // MORE THAN ONE, UGH.
@@ -3519,7 +3512,7 @@ static void member_name(const char *where) {
   namespace_or_type_name(where);
 }
 
-static void method_declaration() {
+static void method_declaration(void) {
   // method header
   bool async = false;
   attributes();
@@ -3598,19 +3591,19 @@ static void method_declaration() {
   end();
 }
 
-const static enum TokenType accessor_modifiers[] = {
+static const enum TokenType accessor_modifiers[] = {
     TOKEN_KW_PROTECTED,
     TOKEN_KW_INTERNAL,
     TOKEN_KW_PRIVATE,
 };
 
-static bool check_accessor() {
+static bool check_accessor(void) {
   return check(TOKEN_OPENBRACKET) ||
          check_any(accessor_modifiers, ARRAY_SIZE(accessor_modifiers)) ||
          check(TOKEN_KW_GET) || check(TOKEN_KW_SET);
 }
 
-static void accessor_declarations() {
+static void accessor_declarations(void) {
   // accessor_declarations
   bool first = true;
   while (check_accessor()) {
@@ -3650,7 +3643,7 @@ static void accessor_declarations() {
   }
 }
 
-static void property_declaration() {
+static void property_declaration(void) {
   attributes();
 
   group();
@@ -3710,7 +3703,7 @@ static void property_declaration() {
   end();
 }
 
-static void event_declaration() {
+static void event_declaration(void) {
   attributes();
 
   {
@@ -3762,7 +3755,7 @@ static void event_declaration() {
   }
 }
 
-static void indexer_declaration() {
+static void indexer_declaration(void) {
   attributes();
 
   group();
@@ -3844,7 +3837,7 @@ static enum TokenType overloadable_operator_tokens[] = {
     TOKEN_TILDE,
 };
 
-static void operator_declaration() {
+static void operator_declaration(void) {
   attributes();
 
   group();
@@ -3919,7 +3912,7 @@ static enum TokenType destructor_mod_tokens[] = {
     TOKEN_KW_UNSAFE,
 };
 
-static void destructor_declaration() {
+static void destructor_declaration(void) {
   // method header
   attributes();
   group();
@@ -3942,7 +3935,7 @@ static enum TokenType fixed_size_buffer_modifier_tokens[] = {
     TOKEN_KW_INTERNAL, TOKEN_KW_PRIVATE, TOKEN_KW_UNSAFE,
 };
 
-static void fixed_size_buffer_declaration() {
+static void fixed_size_buffer_declaration(void) {
   attributes();
   group();
   while (match_any(fixed_size_buffer_modifier_tokens,
@@ -4010,7 +4003,7 @@ enum MemberKind {
   MEMBERKIND_FIXED_SIZE_BUFFER,
 };
 
-static enum MemberKind check_member() {
+static enum MemberKind check_member(void) {
   // OK this one sucks because we need to scan forward through tokens to
   // figure out what we're actually looking at. If we don't appear to be
   // looking at a member, then we return MEMBERKIND_NONE.
@@ -4131,7 +4124,7 @@ static enum MemberKind check_member() {
   }
 }
 
-static void member_declarations() {
+static void member_declarations(void) {
   enum MemberKind last_member_kind = MEMBERKIND_NONE;
   for (;;) {
     // Before we parse *anything* scan ahead to figure out what we're looking
@@ -4209,7 +4202,7 @@ static void member_declarations() {
 // ============================================================================
 // Type Declarations
 // ============================================================================
-static void base_types() {
+static void base_types(void) {
   group();
   token(TOKEN_COLON, "before the list of base types");
   space();
@@ -4225,7 +4218,7 @@ static void base_types() {
   end();
 }
 
-static void class_declaration() {
+static void class_declaration(void) {
   {
     group();
     {
@@ -4263,7 +4256,7 @@ static void class_declaration() {
   match(TOKEN_SEMICOLON);
 }
 
-static void struct_declaration() {
+static void struct_declaration(void) {
   {
     group();
     {
@@ -4301,7 +4294,7 @@ static void struct_declaration() {
   match(TOKEN_SEMICOLON);
 }
 
-static void interface_declaration() {
+static void interface_declaration(void) {
   group();
   {
     group();
@@ -4341,7 +4334,7 @@ static void interface_declaration() {
   match(TOKEN_SEMICOLON);
 }
 
-static void enum_declaration() {
+static void enum_declaration(void) {
   token(TOKEN_KW_ENUM, "at the beginning of an enum declaration");
   space();
   identifier("in the name of an enum declaration");
@@ -4395,7 +4388,7 @@ static void enum_declaration() {
   match(TOKEN_SEMICOLON);
 }
 
-static void delegate_declaration() {
+static void delegate_declaration(void) {
   group();
   {
     group();
@@ -4419,12 +4412,12 @@ static void delegate_declaration() {
   end();
 }
 
-const static enum TokenType type_keyword_tokens[] = {
+static const enum TokenType type_keyword_tokens[] = {
     TOKEN_KW_CLASS, TOKEN_KW_STRUCT,   TOKEN_KW_INTERFACE,
     TOKEN_KW_ENUM,  TOKEN_KW_DELEGATE,
 };
 
-static bool check_type_keyword() {
+static bool check_type_keyword(void) {
   return check_any(type_keyword_tokens, ARRAY_SIZE(type_keyword_tokens));
 }
 
@@ -4437,12 +4430,12 @@ static bool is_type_keyword(enum TokenType token) {
   return false;
 }
 
-static bool check_type_declaration() {
+static bool check_type_declaration(void) {
   return check(TOKEN_OPENBRACKET) || check_modifier() || check_type_keyword() ||
          check(TOKEN_KW_PARTIAL);
 }
 
-static void type_declaration() {
+static void type_declaration(void) {
   attributes();
   {
     group();
@@ -4475,7 +4468,7 @@ static void type_declaration() {
 // Namespaces, Compilation Units
 // ============================================================================
 
-static void extern_alias() {
+static void extern_alias(void) {
   token(TOKEN_KW_EXTERN, "at the beginning of an extern alias");
   space();
   token(TOKEN_KW_ALIAS, "at the beginning of an extern alias");
@@ -4484,7 +4477,7 @@ static void extern_alias() {
   token(TOKEN_SEMICOLON, "at the end of an extern alias");
 }
 
-static void extern_alias_directives() {
+static void extern_alias_directives(void) {
   if (check(TOKEN_KW_EXTERN)) {
     while (check(TOKEN_KW_EXTERN)) {
       extern_alias();
@@ -4494,7 +4487,7 @@ static void extern_alias_directives() {
   }
 }
 
-static void using_directive() {
+static void using_directive(void) {
   group();
   token(TOKEN_KW_USING, "at the beginning of a using directive");
   space();
@@ -4520,7 +4513,7 @@ static void using_directive() {
   end();
 }
 
-static void using_directives() {
+static void using_directives(void) {
   if (check(TOKEN_KW_USING)) {
     while (check(TOKEN_KW_USING)) {
       using_directive();
@@ -4530,9 +4523,9 @@ static void using_directives() {
   }
 }
 
-static void namespace_declaration();
+static void namespace_declaration(void);
 
-static void namespace_members() {
+static void namespace_members(void) {
   bool first = true;
   for (;;) {
     if (check(TOKEN_KW_NAMESPACE)) {
@@ -4558,7 +4551,7 @@ static void namespace_members() {
   }
 }
 
-static void namespace_body() {
+static void namespace_body(void) {
   extern_alias_directives();
   using_directives();
   namespace_members();
@@ -4571,7 +4564,7 @@ static void qualified_identifier(const char *where) {
   }
 }
 
-static void namespace_declaration() {
+static void namespace_declaration(void) {
   token(TOKEN_KW_NAMESPACE, "at the beginning of a namespace declaration");
   space();
   qualified_identifier("in the name of a namespace declaration");
@@ -4589,7 +4582,7 @@ static void namespace_declaration() {
   match(TOKEN_SEMICOLON);
 }
 
-static void compilation_unit() {
+static void compilation_unit(void) {
   extern_alias_directives();
   using_directives();
   global_attributes();
