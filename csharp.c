@@ -41,6 +41,8 @@ struct Parser {
 
   bool check_only;
   bool had_error;
+
+  bool in_async;
 };
 
 struct Parser parser;
@@ -61,9 +63,22 @@ static void parser_init(struct DocBuilder *builder, struct TokenBuffer buffer) {
   parser.has_trivia = false;
 
   parser.last_was_line = true;
+
   parser.had_error = false;
   parser.check_only = false;
+
+  parser.in_async = false;
 }
+
+bool push_in_async(bool in_async) {
+  bool prev_in_async = parser.in_async;
+  parser.in_async = in_async;
+  return prev_in_async;
+}
+
+void pop_in_async(bool in_async) { parser.in_async = in_async; }
+
+bool in_async() { return parser.in_async; }
 
 // ============================================================================
 // Error Reporting
@@ -796,10 +811,12 @@ static bool check_implicitly_typed_lambda() {
 }
 
 static void implicitly_typed_lambda() {
+  bool async = false;
   group();
   {
     group();
     if (match(TOKEN_KW_ASYNC)) {
+      async = true;
       line();
     }
     identifier("in implicitly typed lambda");
@@ -807,6 +824,8 @@ static void implicitly_typed_lambda() {
     token(TOKEN_EQUALS_GREATERTHAN, "in implicitly typed lambda");
     end();
   }
+
+  bool prev_async = push_in_async(async);
   if (check(TOKEN_OPENBRACE)) {
     space();
     inline_block("at the beginning of the body of a lambda");
@@ -817,6 +836,8 @@ static void implicitly_typed_lambda() {
     end();
     dedent();
   }
+  pop_in_async(prev_async);
+
   end();
 }
 
@@ -1059,10 +1080,12 @@ static bool check_parenthesized_implicitly_typed_lambda() {
 }
 
 static void parenthesized_implicitly_typed_lambda() {
+  bool async = false;
   group();
   {
     group();
     if (match(TOKEN_KW_ASYNC)) {
+      async = true;
       line();
     }
     token(TOKEN_OPENPAREN, "in parenthesized lambda");
@@ -1085,6 +1108,8 @@ static void parenthesized_implicitly_typed_lambda() {
   }
   space();
   token(TOKEN_EQUALS_GREATERTHAN, "in parenthesized lambda");
+
+  bool prev_async = push_in_async(async);
   if (check(TOKEN_OPENBRACE)) {
     space();
     inline_block("at the beginning of the body of a lambda");
@@ -1095,6 +1120,8 @@ static void parenthesized_implicitly_typed_lambda() {
     end();
     dedent();
   }
+  pop_in_async(prev_async);
+
   end();
 }
 
@@ -1179,10 +1206,13 @@ static bool check_parenthesized_explicitly_typed_lambda() {
 static void formal_parameter_list(const char *where);
 
 static void parenthesized_explicitly_typed_lambda() {
+  bool async = false;
+
   group();
   {
     group();
     if (match(TOKEN_KW_ASYNC)) {
+      async = true;
       line();
     }
     formal_parameter_list(
@@ -1191,6 +1221,8 @@ static void parenthesized_explicitly_typed_lambda() {
     token(TOKEN_EQUALS_GREATERTHAN, "in parenthesized lambda");
     end();
   }
+
+  bool prev_async = push_in_async(async);
   if (check(TOKEN_OPENBRACE)) {
     space();
     inline_block("at the beginning of the body of an explicitly typed lambda");
@@ -1201,6 +1233,8 @@ static void parenthesized_explicitly_typed_lambda() {
     end();
     dedent();
   }
+  pop_in_async(prev_async);
+
   end();
 }
 
@@ -1337,9 +1371,11 @@ static void anonymous_method_expression() {
 
 static void async_lambda_or_delegate() {
   if (check_next(TOKEN_KW_DELEGATE)) {
-    token(TOKEN_KW_ASYNC, "in an async expression?");
+    bool prev_async = push_in_async(true);
+    token(TOKEN_KW_ASYNC, "before an async delegate expression");
     space();
     anonymous_method_expression();
+    pop_in_async(prev_async);
   } else if (check_implicitly_typed_lambda()) {
     implicitly_typed_lambda();
   } else if (check_parenthesized_implicitly_typed_lambda()) {
@@ -1352,12 +1388,20 @@ static void async_lambda_or_delegate() {
 }
 
 static void await_expression() {
-  group();
-  token(TOKEN_KW_AWAIT, "in await expression");
-  line_indent();
-  parse_precedence(PREC_UNARY, "to the right of await");
-  dedent();
-  end();
+  if (in_async()) {
+    group();
+    token(TOKEN_KW_AWAIT, "in await expression");
+    if (check(TOKEN_DOT)) {
+      // Fuck nope, this just doesn't work, we need to do this right.
+    } else {
+      line_indent();
+      parse_precedence(PREC_UNARY, "to the right of await");
+      dedent();
+    }
+    end();
+  } else {
+    primary();
+  }
 }
 
 static void typeof_expression() {
@@ -2490,12 +2534,14 @@ static void optional_type_parameter_list();
 static void type_parameter_constraint_clauses();
 
 static void local_function_declaration() {
+  bool async = false;
   group();
   {
     group();
     {
       group();
       if (match(TOKEN_KW_ASYNC) || match(TOKEN_KW_UNSAFE)) {
+        async = true;
         line();
       }
 
@@ -2521,6 +2567,7 @@ static void local_function_declaration() {
     end();
   }
 
+  bool prev_async = push_in_async(async);
   if (check(TOKEN_EQUALS_GREATERTHAN)) {
     space();
     token(TOKEN_EQUALS_GREATERTHAN,
@@ -2536,6 +2583,8 @@ static void local_function_declaration() {
     line();
     block("at the beginning of the body of a local function");
   }
+  pop_in_async(prev_async);
+
   end();
 }
 
@@ -3244,7 +3293,9 @@ static bool match_modifier() {
 static bool is_type_keyword(enum TokenType token);
 static void type_declaration();
 
-static void declaration_modifiers() {
+static bool async_declaration_modifiers() {
+  bool async = false;
+
   group();
   bool first = true;
   while (check_modifier()) {
@@ -3252,15 +3303,22 @@ static void declaration_modifiers() {
       line();
     }
     first = false;
-
-    match_modifier();
+    if (match(TOKEN_KW_ASYNC)) {
+      async = true;
+    } else {
+      match_modifier();
+    }
   }
   end();
 
   if (!first) {
     line();
   }
+
+  return async;
 }
+
+static void declaration_modifiers() { async_declaration_modifiers(); }
 
 static void const_declaration() {
   attributes();
@@ -3464,6 +3522,7 @@ static void member_name(const char *where) {
 
 static void method_declaration() {
   // method header
+  bool async = false;
   attributes();
   group();
   {
@@ -3471,7 +3530,7 @@ static void method_declaration() {
     group();
     {
       group();
-      declaration_modifiers();
+      async = async_declaration_modifiers();
       if (match(TOKEN_KW_PARTIAL)) {
         line();
       }
@@ -3519,6 +3578,7 @@ static void method_declaration() {
     end();
   }
 
+  bool prev_async = push_in_async(async);
   if (!match(TOKEN_SEMICOLON)) {
     if (check(TOKEN_EQUALS_GREATERTHAN)) {
       space();
@@ -3534,6 +3594,8 @@ static void method_declaration() {
       block("at the beginning of the body of a method");
     }
   }
+  pop_in_async(prev_async);
+
   end();
 }
 
