@@ -830,6 +830,18 @@ static void primary() {
   }
 }
 
+static void default_expr() {
+  group();
+  token(TOKEN_KW_DEFAULT, "at the beginning of a default expression");
+  if (match(TOKEN_OPENPAREN)) {
+    softline_indent();
+    type(TYPE_FLAGS_NONE, "after the parenthesis in a default expression");
+    softline_dedent();
+    token(TOKEN_CLOSEPAREN, "after the type in a default expression");
+  }
+  end();
+}
+
 // This comes up all the time, both here in expression land and down in
 // statement land.
 static void parenthesized_expression() {
