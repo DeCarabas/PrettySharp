@@ -87,6 +87,12 @@ static bool in_async(void) { return parser.in_async; }
 #ifdef PRINT_DEBUG_ENABLED
 
 int last_debug_line = -1;
+
+#if __has_attribute(format)
+static void vDEBUG(const char *format, va_list args)
+    __attribute__((format(printf, 1, 0)));
+#endif
+
 static void vDEBUG(const char *format, va_list args) {
   if (parser.current.line != last_debug_line) {
     fprintf(stderr, "%4d ", parser.current.line);
@@ -99,6 +105,11 @@ static void vDEBUG(const char *format, va_list args) {
   UNUSED(format);
   UNUSED(args);
 }
+
+#if __has_attribute(format)
+static void DEBUG_(const char *format, ...)
+    __attribute__((format(printf, 1, 2)));
+#endif
 
 static void DEBUG_(const char *format, ...) {
   va_list args;
@@ -113,6 +124,11 @@ static void DEBUG_(const char *format, ...) {
 
 #define DEBUG(x) ((void)0)
 
+#endif
+
+#if __has_attribute(format)
+static void verror_at(struct Token *token, const char *format, va_list args)
+    __attribute__((format(printf, 2, 0)));
 #endif
 
 static void verror_at(struct Token *token, const char *format, va_list args) {
@@ -145,9 +161,19 @@ static void verror_at(struct Token *token, const char *format, va_list args) {
   exit(ERR_PARSE_ERROR);
 }
 
+#if __has_attribute(format)
+static void verror(const char *format, va_list args)
+    __attribute__((format(printf, 1, 0)));
+#endif
+
 static void verror(const char *format, va_list args) {
   verror_at(&parser.current, format, args);
 }
+
+#if __has_attribute(format)
+static void error(const char *format, ...)
+    __attribute__((format(printf, 1, 2)));
+#endif
 
 static void error(const char *format, ...) {
   va_list args;

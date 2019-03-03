@@ -35,4 +35,8 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #define ERR_CANNOT_READ 3
 #define ERR_PARSE_ERROR 72
 
+#ifndef __has_attribute      // Optional of course.
+#define __has_attribute(x) 0 // Compatibility with non-clang compilers.
+#endif
+
 #endif
