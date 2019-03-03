@@ -510,8 +510,8 @@ static bool check_identifier(void) {
 
 static void identifier(const char *where) {
   if (check_identifier()) {
-    DEBUG(("Identifier '%.*s' %s", parser.current.length, parser.current.start,
-           where));
+    DEBUG(("Identifier '%.*s' %s", (int)parser.current.length,
+           parser.current.start, where));
     single_token();
   } else {
     error("Expected an identifier %s", where);
@@ -631,6 +631,7 @@ static const enum TokenType builtin_type_tokens[] = {
     TOKEN_KW_INT,   TOKEN_KW_UINT,   TOKEN_KW_LONG,    TOKEN_KW_ULONG,
     TOKEN_KW_CHAR,  TOKEN_KW_FLOAT,  TOKEN_KW_DOUBLE,  TOKEN_KW_DECIMAL,
     TOKEN_KW_BOOL,  TOKEN_KW_OBJECT, TOKEN_KW_DYNAMIC, TOKEN_KW_STRING,
+    TOKEN_KW_VOID,
 };
 
 static void rank_specifier(void) {
@@ -1433,7 +1434,9 @@ static void typeof_expression(void) {
         "at the beginning of the argument to a typeof expression");
   {
     softline_indent();
-    type(TYPE_FLAGS_NONE, "in the type of a typeof expression");
+    if (!match(TOKEN_KW_VOID)) {
+      type(TYPE_FLAGS_NONE, "in the type of a typeof expression");
+    }
     dedent();
   }
   softline();
@@ -3790,8 +3793,9 @@ static void indexer_declaration(void) {
     declaration_modifiers();
     type(TYPE_FLAGS_NONE, "in the type of an indexer");
     space();
-    if (check_identifier()) {
-      member_name("in the interface name of an indexer");
+
+    while (check_identifier()) {
+      identifier("in the interface name of an indexer");
       token(TOKEN_DOT, "between the interface name of the indexer and 'this'");
     }
     token(TOKEN_KW_THIS, "in an indexer");
