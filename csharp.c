@@ -1322,6 +1322,7 @@ static bool check_cast(void) {
 
   int index = parser.index;
   struct Token token = next_significant_token(&index);
+  enum TokenType first_type_token = token.type;
   if (!check_is_type(&index, &token, TYPE_FLAGS_NONE)) {
     DEBUG(("Check cast: false (not is type)"));
     return false;
@@ -1330,6 +1331,12 @@ static bool check_cast(void) {
   if (token.type != TOKEN_CLOSEPAREN) {
     DEBUG(("Check cast: false (not close paren)"));
     return false;
+  }
+
+  if (check_is_any(first_type_token, builtin_type_tokens,
+                   ARRAY_SIZE(builtin_type_tokens))) {
+    DEBUG(("Check cast: true (built in type)"));
+    return true;
   }
 
   token = next_significant_token(&index);
@@ -1434,6 +1441,7 @@ static void typeof_expression(void) {
         "at the beginning of the argument to a typeof expression");
   {
     softline_indent();
+    // TODO: DOTY: Can Remove, VOID is always type now.
     if (!match(TOKEN_KW_VOID)) {
       type(TYPE_FLAGS_NONE, "in the type of a typeof expression");
     }
@@ -3397,6 +3405,7 @@ static void field_declaration(void) {
 }
 
 static void return_type(void) {
+  // TODO: DOTY: Can Remove, VOID is always type now.
   if (!match(TOKEN_KW_VOID)) {
     type(TYPE_FLAGS_NONE, "in the return type of a method");
   }
@@ -4149,8 +4158,8 @@ static enum MemberKind check_member(void) {
     case TOKEN_KW_OPERATOR:
       DEBUG(("operator -> MEMBERKIND_OPERATOR"));
       return MEMBERKIND_OPERATOR;
-    case TOKEN_OPENBRACKET:
-      DEBUG(("[ -> MEMBERKIND_INDEXER"));
+    case TOKEN_KW_THIS:
+      DEBUG(("this -> MEMBERKIND_INDEXER"));
       return MEMBERKIND_INDEXER;
     case TOKEN_OPENPAREN:
       DEBUG(("( -> MEMBERKIND_METHOD"));
