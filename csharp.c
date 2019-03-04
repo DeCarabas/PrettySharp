@@ -3732,6 +3732,29 @@ static void property_declaration(void) {
   end();
 }
 
+static bool check_event_field_declaration(void) {
+  if (!check(TOKEN_IDENTIFIER)) {
+    DEBUG(("Identifier -> Not Event Field Decl"));
+    return false;
+  }
+
+  int index = parser.index;
+  struct Token token = next_significant_token(&index);
+
+  switch (token.type) {
+  case TOKEN_DOT:
+  case TOKEN_COLON_COLON:
+  case TOKEN_LESSTHAN:
+  case TOKEN_OPENBRACE:
+  case TOKEN_EQUALS_GREATERTHAN:
+    DEBUG(("%s -> Not Event Field Decl", token_text(token.type)));
+    return false;
+  default:
+    DEBUG(("%s -> Event Field Decl", token_text(token.type)));
+    return true;
+  }
+}
+
 static void event_declaration(void) {
   attributes();
 
@@ -3742,9 +3765,12 @@ static void event_declaration(void) {
     space();
     type(TYPE_FLAGS_NONE, "in the type of an event");
 
-    if (check_next(TOKEN_OPENBRACE)) {
+    if (check_event_field_declaration()) {
+      variable_declarators("in an event declaration");
+      token(TOKEN_SEMICOLON, "at the end of an event declaration");
+    } else {
       space();
-      identifier("in the name of an event declaration");
+      member_name("in the name of an event declaration");
       end();
       group();
 
@@ -3775,9 +3801,6 @@ static void event_declaration(void) {
       }
       line();
       token(TOKEN_CLOSEBRACE, "at the end of an event declaration");
-    } else {
-      variable_declarators("in an event declaration");
-      token(TOKEN_SEMICOLON, "at the end of an event declaration");
     }
 
     end();
@@ -3795,7 +3818,7 @@ static void indexer_declaration(void) {
     space();
 
     while (check_identifier()) {
-      identifier("in the interface name of an indexer");
+      simple_name("in the interface name of an indexer");
       token(TOKEN_DOT, "between the interface name of the indexer and 'this'");
     }
     token(TOKEN_KW_THIS, "in an indexer");
