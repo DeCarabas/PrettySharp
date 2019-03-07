@@ -1993,6 +1993,7 @@ static void binary(void) {
   case TOKEN_EXCLAMATION_EQUALS:
   case TOKEN_MINUS_EQUALS:
   case TOKEN_PERCENT_EQUALS:
+  case TOKEN_QUESTION_QUESTION:
   case TOKEN_QUESTION_QUESTION_EQUALS:
   case TOKEN_SLASH_EQUALS:
     line_indent();
@@ -2082,29 +2083,41 @@ static void as(void) {
 }
 
 static void conditional(void) {
-  line_indent();
-  {
-    group();
-    token(TOKEN_QUESTION, "at the beginning of a ternary expression");
-    space();
-    expression("after the question mark in a ternary expression");
-    end();
-  }
-  line();
-  {
-    group();
-    token(TOKEN_COLON, "in ternary expression");
-    space();
-    expression("after the colon in a ternary expression");
-    end();
-  }
-  dedent();
+  if (check_next(TOKEN_DOT)) {
+    token(TOKEN_QUESTION,
+          "at the beginning of a null conditional member access expression");
+    token(TOKEN_DOT,
+          "after '?' in a null conditional member access  expression");
+    identifier("in null conditional member access expression");
+    optional_type_argument_list();
+  } else {
+    line_indent();
+    {
+      group();
+      token(TOKEN_QUESTION, "at the beginning of a ternary expression");
+      space();
+      expression("after the question mark in a ternary expression");
+      end();
+    }
+    line();
+    {
+      group();
+      token(TOKEN_COLON, "in ternary expression");
+      space();
+      expression("after the colon in a ternary expression");
+      end();
+    }
+    dedent();
+  };
 }
 
 static void throw_expression(void) {
+  group();
   token(TOKEN_KW_THROW, "at the beginning of a throw expression");
+  line();
   parse_precedence(PREC_NULL_COALESCING,
                    "as the argument of a throw expression");
+  end();
 }
 
 static const struct ParseRule rules[] = {
@@ -2908,12 +2921,14 @@ static void goto_statement(void) {
 }
 
 static void return_statement(void) {
+  group();
   token(TOKEN_KW_RETURN, "at the beginning of a return statement");
-  if (!check(TOKEN_SEMICOLON)) {
+  if (!match(TOKEN_SEMICOLON)) {
     space();
     expression("in the value of a return statement");
+    token(TOKEN_SEMICOLON, "after the expression in a return statement");
   }
-  token(TOKEN_SEMICOLON, "at the end of a return statement");
+  end();
 }
 
 static void throw_statement(void) {

@@ -1,6 +1,6 @@
 // Format: id, text, is_identifier?, prefix, infix, precedence
 TKN(NONE, "<nothing>", false, NULL, NULL, PREC_NONE)
-TKN(AMPERSAND, "&", false, NULL, binary, PREC_LOGICAL_AND)
+TKN(AMPERSAND, "&", false, unary_prefix, binary, PREC_LOGICAL_AND)
 TKN(AMPERSAND_AMPERSAND, "&&", false, NULL, binary, PREC_CONDITIONAL_AND)
 TKN(AMPERSAND_EQUALS, "&=", false, NULL, binary, PREC_ASSIGNMENT)
 TKN(ASTERISK, "*", false, unary_prefix, binary, PREC_MULTIPLICATIVE)
