@@ -33,6 +33,8 @@ jobs:
   steps:
   - script: build.bat
     displayName: Build
+  - script: python.exe --version
+    displayName: Verify
   - script: python.exe test.py
     displayName: Test
   - script: make prettysharp.msi
