@@ -83,13 +83,13 @@ def test_file(path, compare):
     global test_count
     test_count += 1
     if test_count > 80:
-        end = "\n"
+        ending = "\n"
         test_count = 0
     else:
-        end = ""
+        ending = ""
 
     status = "." if result.passed else "F"
-    print(status, end=end)
+    print(status, end=ending)
     return result
 
 
