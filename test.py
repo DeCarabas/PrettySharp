@@ -88,7 +88,8 @@ def test_file(path, compare):
     else:
         end = ""
 
-    print("." if result.passed else "F", end=end)
+    status = "." if result.passed else "F"
+    print(status, end=end)
     return result
 
 
