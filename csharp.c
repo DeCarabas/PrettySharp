@@ -567,43 +567,58 @@ static bool check_is_type(int *index, struct Token *token,
 static void type(enum TypeFlags flags, const char *where);
 
 static bool check_type_argument_list(void) {
+  DEBUG(("Checking type arg list..."));
+
   int index = parser.index;
   struct Token token = parser.current;
   if (token.type != TOKEN_LESSTHAN) {
+    DEBUG(("Type Arg List: no <"));
     return false;
   }
 
   token = next_significant_token(&index);
   while (token.type != TOKEN_GREATERTHAN) {
-    if (!check_is_type(&index, &token, TYPE_FLAGS_NONE)) {
-      return false;
+    if (token.type != TOKEN_COMMA) {
+      if (!check_is_type(&index, &token, TYPE_FLAGS_NONE)) {
+        DEBUG(("Type Arg List: no type at %s", token_text(token.type)));
+        return false;
+      }
     }
 
     while (token.type == TOKEN_COMMA) {
       token = next_significant_token(&index);
-      if (!check_is_type(&index, &token, TYPE_FLAGS_NONE)) {
-        return false;
+      if (token.type != TOKEN_COMMA && token.type != TOKEN_GREATERTHAN) {
+        if (!check_is_type(&index, &token, TYPE_FLAGS_NONE)) {
+          DEBUG(("Type Arg List: no type at %s", token_text(token.type)));
+          return false;
+        }
       }
     }
   }
 
   if (token.type != TOKEN_GREATERTHAN) {
+    DEBUG(("Type Arg List: no >"));
     return false;
   }
 
+  DEBUG(("Type Arg List: yes"));
   return true;
 }
 
 static void optional_type_argument_list(void) {
   if (check_type_argument_list()) {
     group();
-    token(TOKEN_LESSTHAN, "at the beginnign of a type argument list");
+    token(TOKEN_LESSTHAN, "at the beginning of a type argument list");
     if (!check(TOKEN_GREATERTHAN)) {
       softline_indent();
-      type(TYPE_FLAGS_NONE, "in an optional type argument list");
+      if (!check(TOKEN_COMMA)) {
+        type(TYPE_FLAGS_NONE, "in an optional type argument list");
+      }
       while (match(TOKEN_COMMA)) {
         line();
-        type(TYPE_FLAGS_NONE, "in an optional type argument list");
+        if (!check(TOKEN_COMMA) && !check(TOKEN_GREATERTHAN)) {
+          type(TYPE_FLAGS_NONE, "in an optional type argument list");
+        }
       }
       dedent();
     }
@@ -1457,10 +1472,7 @@ static void typeof_expression(void) {
         "at the beginning of the argument to a typeof expression");
   {
     softline_indent();
-    // TODO: DOTY: Can Remove, VOID is always type now.
-    if (!match(TOKEN_KW_VOID)) {
-      type(TYPE_FLAGS_NONE, "in the type of a typeof expression");
-    }
+    type(TYPE_FLAGS_NONE, "in the type of a typeof expression");
     dedent();
   }
   softline();
