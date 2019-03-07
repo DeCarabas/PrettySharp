@@ -106,6 +106,8 @@ parser.add_argument(
 
 args = parser.parse_args()
 
+print(sys.version_info)
+
 results = []
 for path, dirs, files in os.walk(args.root):
     if "fuzzing" in path:
