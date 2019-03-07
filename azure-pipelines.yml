@@ -33,8 +33,13 @@ jobs:
   steps:
   - script: build.bat
     displayName: Build
+  - task: UsePythonVersion@0
+    inputs:
+      versionSpec: '3.x'
+      addToPath: true
+      architecture: 'x64'
   - script: python.exe --version
-    displayName: Verify
+    displayName: Verify Python Version
   - script: python.exe test.py
     displayName: Test
   - script: make prettysharp.msi
