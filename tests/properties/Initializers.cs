@@ -1,0 +1,4 @@
+class Foo {
+    int Foo { get; } = 23;
+    int[] Bar { get; } = { 1, 2, 3};
+}

@@ -3774,7 +3774,11 @@ static void property_declaration(void) {
             "at the beginning of a property initializer expression");
       {
         line_indent();
-        expression("in a property initializer");
+        if (check(TOKEN_OPENBRACE)) {
+          array_initializer();
+        } else {
+          expression("in a property initializer");
+        }
         token(TOKEN_SEMICOLON,
               "at the end of a property initializer expression");
         dedent();
