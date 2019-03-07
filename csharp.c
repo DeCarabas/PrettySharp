@@ -43,6 +43,7 @@ struct Parser {
   bool had_error;
 
   bool in_async;
+  bool in_query;
 };
 
 struct Parser parser;
@@ -68,6 +69,7 @@ static void parser_init(struct DocBuilder *builder, struct TokenBuffer buffer) {
   parser.check_only = false;
 
   parser.in_async = false;
+  parser.in_query = false;
 }
 
 static bool push_in_async(bool in_async) {
@@ -79,6 +81,16 @@ static bool push_in_async(bool in_async) {
 static void pop_in_async(bool in_async) { parser.in_async = in_async; }
 
 static bool in_async(void) { return parser.in_async; }
+
+static bool push_in_query(bool in_query) {
+  bool prev_in_query = parser.in_query;
+  parser.in_query = in_query;
+  return prev_in_query;
+}
+
+static void pop_in_query(bool in_query) { parser.in_query = in_query; }
+
+static bool in_query(void) { return parser.in_query; }
 
 // ============================================================================
 // Error Reporting
@@ -501,8 +513,12 @@ static bool check_expensive(CheckParseFn parse_func, void *context,
 // Names
 // ============================================================================
 
+static bool check_is_identifier(enum TokenType token) {
+  return is_identifier_token(token, in_query());
+}
+
 static bool check_identifier(void) {
-  bool result = is_identifier_token(parser.current.type);
+  bool result = check_is_identifier(parser.current.type);
   DEBUG(("Check identifier %s == %s", token_text(parser.current.type),
          result ? "true" : "false"));
   return result;
@@ -824,7 +840,7 @@ static bool check_implicitly_typed_lambda(void) {
     token = next_significant_token(&index);
   }
 
-  if (!is_identifier_token(token.type)) {
+  if (!check_is_identifier(token.type)) {
     return false;
   }
 
@@ -975,7 +991,7 @@ static bool check_out_variable_declaration(void) {
     return false;
   }
 
-  if (!is_identifier_token(token.type)) {
+  if (!check_is_identifier(token.type)) {
     return false;
   }
 
@@ -1071,12 +1087,12 @@ static bool check_parenthesized_implicitly_typed_lambda(void) {
   }
 
   token = next_significant_token(&index);
-  if (is_identifier_token(token.type)) {
+  if (check_is_identifier(token.type)) {
     token = next_significant_token(&index);
     if (token.type == TOKEN_COMMA) {
       // This scan is to disambiguate between a lambda and a tuple.
       token = next_significant_token(&index);
-      while (token.type == TOKEN_COMMA || is_identifier_token(token.type) ||
+      while (token.type == TOKEN_COMMA || check_is_identifier(token.type) ||
              check_is_any(token.type, builtin_type_tokens,
                           ARRAY_SIZE(builtin_type_tokens))) {
         token = next_significant_token(&index);
@@ -1198,7 +1214,7 @@ static bool check_parenthesized_explicitly_typed_lambda(void) {
     return false;
   }
 
-  if (!is_identifier_token(token.type)) {
+  if (!check_is_identifier(token.type)) {
     DEBUG(("explicit paren lambda: no variable identifier -> false"));
     return false;
   }
@@ -1929,7 +1945,7 @@ static bool check_is_query_expression(void) {
   }
 
   token = next_significant_token(&index);
-  if (!is_identifier_token(token.type)) {
+  if (!check_is_identifier(token.type)) {
     return false;
   }
 
@@ -1945,13 +1961,15 @@ static bool check_is_query_expression(void) {
 static void query_expression(void) {
   // OK This happens if we're looking at the 'from' keyword, but this might not
   // *actually* be a query. Let's make sure!
-  if (check_is_query_expression()) {
+  if (in_query() || check_is_query_expression()) {
+    bool prev_query = push_in_query(true);
     breakparent();
     // TODO: Set the indent right here, somehow!
     from_clause();
     line();
     query_body();
     // TODO: Reset the indent right here!
+    pop_in_query(prev_query);
   } else {
     // Just pretend we're looking at a normal identifier.
     primary();
@@ -2160,7 +2178,7 @@ static bool check_declaration_pattern(void) {
     return false;
   }
 
-  return is_identifier_token(token.type) && token.type != TOKEN_KW_WHEN;
+  return check_is_identifier(token.type) && token.type != TOKEN_KW_WHEN;
 }
 
 static void pattern(void) {
@@ -2354,7 +2372,7 @@ static bool check_local_deconstruction_declaration(void) {
 
     token = next_significant_token(&index);
     for (;;) {
-      if (!is_identifier_token(token.type)) {
+      if (!check_is_identifier(token.type)) {
         DEBUG(("Check local decon: false (tuple, not ident)"));
         return false;
       }
@@ -2379,13 +2397,13 @@ static bool check_local_deconstruction_declaration(void) {
       // to be very careful in what we allow here.
       if (token.type == TOKEN_KW_VAR) {
         token = next_significant_token(&index);
-        if (!is_identifier_token(token.type)) {
+        if (!check_is_identifier(token.type)) {
           DEBUG(("Check local decon: false (var not followed by ident)"));
           return false;
         }
         token = next_significant_token(&index);
       } else {
-        if (is_identifier_token(token.type)) {
+        if (check_is_identifier(token.type)) {
           // This could either be the start of a type or just a standalone
           // identifier. There's currently no way of knowing! So let's just
           // try...
@@ -2402,7 +2420,7 @@ static bool check_local_deconstruction_declaration(void) {
               return false;
             }
 
-            if (!is_identifier_token(token.type)) {
+            if (!check_is_identifier(token.type)) {
               DEBUG(("Check local decon: false (no id after type)"));
               return false;
             }
@@ -2415,7 +2433,7 @@ static bool check_local_deconstruction_declaration(void) {
             return false;
           }
 
-          if (!is_identifier_token(token.type)) {
+          if (!check_is_identifier(token.type)) {
             DEBUG(("Check local decon: false (no id after type')"));
             return false;
           }
@@ -2540,7 +2558,7 @@ static bool check_local_function_declaration(void) {
     return false;
   }
 
-  if (!is_identifier_token(token.type)) {
+  if (!check_is_identifier(token.type)) {
     return false;
   }
 
@@ -2635,7 +2653,7 @@ static bool check_local_variable_declaration(void) {
     return false;
   }
 
-  if (!is_identifier_token(token.type)) {
+  if (!check_is_identifier(token.type)) {
     DEBUG(("Check local variable declaration: %s not identifier",
            token_text(token.type)));
     return false;

@@ -34,7 +34,7 @@ const char *token_text(enum TokenType type) {
   }
 }
 
-bool is_identifier_token(enum TokenType type) {
+bool is_identifier_token(enum TokenType type, bool in_query) {
   switch (type) {
 
 #define TKN(id, txt, is_id, prefix, infix, prec)                               \

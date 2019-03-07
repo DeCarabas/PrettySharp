@@ -34,7 +34,7 @@ struct Token {
 };
 
 const char *token_text(enum TokenType type);
-bool is_identifier_token(enum TokenType type);
+bool is_identifier_token(enum TokenType type, bool in_query);
 enum TokenType keyword_type(const char *start, size_t len);
 
 const char *dbg_token_type(enum TokenType type);
