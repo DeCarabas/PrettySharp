@@ -2569,9 +2569,11 @@ static void local_deconstruction_declaration(void) {
 static bool check_local_function_declaration(void) {
   int index = parser.index;
   struct Token token = parser.current;
-  if (token.type == TOKEN_KW_ASYNC) {
-    return true;
-  } else if (token.type == TOKEN_KW_UNSAFE) {
+  while (token.type == TOKEN_KW_ASYNC || token.type == TOKEN_KW_UNSAFE ||
+         token.type == TOKEN_KW_STATIC) {
+    if (token.type == TOKEN_KW_ASYNC) {
+      return true;
+    }
     token = next_significant_token(&index);
   }
 
@@ -2603,6 +2605,12 @@ static void member_name(const char *where);
 static void optional_type_parameter_list(void);
 static void type_parameter_constraint_clauses(void);
 
+static const enum TokenType local_function_modifiers[] = {
+    TOKEN_KW_UNSAFE,
+    TOKEN_KW_ASYNC,
+    TOKEN_KW_STATIC,
+};
+
 static void local_function_declaration(void) {
   bool async = false;
   group();
@@ -2610,9 +2618,17 @@ static void local_function_declaration(void) {
     group();
     {
       group();
-      if (match(TOKEN_KW_ASYNC) || match(TOKEN_KW_UNSAFE)) {
-        async = true;
-        line();
+
+      {
+        group();
+        while (match_any(local_function_modifiers,
+                         ARRAY_SIZE(local_function_modifiers))) {
+          if (parser.previous.type == TOKEN_KW_ASYNC) {
+            async = true;
+          }
+          line();
+        }
+        end();
       }
 
       {
