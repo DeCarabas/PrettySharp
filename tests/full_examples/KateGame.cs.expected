@@ -23,8 +23,7 @@ namespace Garden
 
     class DrawingContext
     {
-        static readonly
-        VertexPositionColorTexture[] unitSquare =
+        static readonly VertexPositionColorTexture[] unitSquare =
             new[]
             {
                 new VertexPositionColorTexture(

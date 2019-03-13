@@ -2327,10 +2327,13 @@ static void block(const char *where) { block_impl(/*break*/ true, where); }
   } while (0);                                                                 \
   token(x)
 
-// I want the type and the first identifier to be grouped.
+// DANGER! This function expects to be called with two groups open, and when it
+// leaves it will have only one group open. This is because of how we want the
+// items before the variable_declarators to be grouped. (Sorry.)
 static void variable_declarators(const char *where) {
   line();
   identifier(where);
+  end();
   if (check(TOKEN_EQUALS)) {
     end();   // This is the end of the group with my type.
     group(); // Re-group, but just the value.
@@ -2716,11 +2719,12 @@ static bool check_local_variable_declaration(void) {
 
 static void local_variable_declaration(void) {
   group();
+  group();
   if (match(TOKEN_KW_REF)) {
     space();
   }
   local_variable_type();
-  variable_declarators("in local variable declaration");
+  variable_declarators("in local variable declaration"); // DANGER, see decl.
   end();
 }
 
@@ -3453,11 +3457,12 @@ static void field_declaration(void) {
 
   {
     group();
+    group();
     declaration_modifiers();
     {
       group();
       type(TYPE_FLAGS_NONE, "in the type of a field");
-      variable_declarators("in a field declaration");
+      variable_declarators("in a field declaration"); // DANGER, see decl.
       token(TOKEN_SEMICOLON, "at the end of a field declaration");
       end();
     }
@@ -3840,7 +3845,8 @@ static void event_declaration(void) {
     type(TYPE_FLAGS_NONE, "in the type of an event");
 
     if (check_event_field_declaration()) {
-      variable_declarators("in an event declaration");
+      group();
+      variable_declarators("in an event declaration"); // DANGER, see decl.
       token(TOKEN_SEMICOLON, "at the end of an event declaration");
     } else {
       space();
