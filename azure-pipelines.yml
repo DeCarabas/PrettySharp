@@ -47,13 +47,13 @@ jobs:
     inputs:
       rootFolderOrFile: 'prettysharp.exe'
       archiveType: 'zip'
-      archiveFile: '$(Build.ArtifactStagingDirectory)/prettysharp-0.9.1-win.zip'
+      archiveFile: '$(Build.ArtifactStagingDirectory)/prettysharp-0.9.2-win.zip'
       replaceExistingArchive: true
   - task: ArchiveFiles@2
     inputs:
       rootFolderOrFile: 'LICENSE'
       archiveType: 'zip'
-      archiveFile: '$(Build.ArtifactStagingDirectory)/prettysharp-0.9.1-win.zip'
+      archiveFile: '$(Build.ArtifactStagingDirectory)/prettysharp-0.9.2-win.zip'
       replaceExistingArchive: false
   - task: CopyFiles@2
     inputs:

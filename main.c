@@ -26,7 +26,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #include "lexer.h"
 
 static void print_version_string(void) {
-  printf("prettysharp C# Source Code Formatter 0.9.1\n"
+  printf("prettysharp C# Source Code Formatter 0.9.2\n"
          "Copyright (c) 2019 John Doty\n"
          "https://github.com/DeCarabas/PrettySharp\n\n"
          "This is free software; you are free to change and redistribute it\n"
