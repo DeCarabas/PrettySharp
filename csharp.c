@@ -533,6 +533,11 @@ static void identifier(const char *where) {
     error("Expected an identifier %s", where);
   }
 }
+
+static bool check_name_equals(void) {
+  return check_identifier() && check_next(TOKEN_EQUALS);
+}
+
 static void name_equals(const char *where) {
   identifier(where);
   space();
@@ -1567,7 +1572,26 @@ static void object_initializer(void) {
       } else if (!check(TOKEN_CLOSEBRACE)) {
         if (match(TOKEN_OPENBRACKET)) {
           argument_list_inner(TOKEN_CLOSEBRACKET);
-          token(TOKEN_CLOSEBRACKET, "at the end of an object initializer");
+          token(TOKEN_CLOSEBRACKET,
+                "at the end of the index in a dictionary initializer");
+          space();
+          token(TOKEN_EQUALS, "after the index in a dictionary initializer");
+          line_indent();
+          if (check(TOKEN_OPENBRACE)) {
+            object_initializer();
+          } else {
+            expression("in the value of a dictionary initializer");
+          }
+          dedent();
+        } else if (check_name_equals()) {
+          name_equals("in an object member initializer");
+          line_indent();
+          if (check(TOKEN_OPENBRACE)) {
+            object_initializer();
+          } else {
+            expression("in the value of an object member initializer");
+          }
+          dedent();
         } else {
           // In an object initializer this is technically only allowed to be
           // an identifier. But in a collection this can be anything. And in
@@ -1578,14 +1602,6 @@ static void object_initializer(void) {
           // can't be bothered. So. This allows more forms than it technically
           // should, but I'm not worried.
           expression("in the member name of an object initializer");
-        }
-        if (check(TOKEN_EQUALS)) {
-          space();
-          token(TOKEN_EQUALS, "between the member and the expression in an "
-                              "object initializer");
-          line_indent();
-          expression("in the member value of an object initializer");
-          dedent();
         }
       }
     }
@@ -3247,10 +3263,6 @@ static void statement(void) {
 // ============================================================================
 
 static void attribute_name(void) { type_name("in an attribute name"); }
-
-static bool check_name_equals(void) {
-  return check_identifier() && check_next(TOKEN_EQUALS);
-}
 
 static void attribute_argument(void) {
   group();
