@@ -71,9 +71,8 @@ namespace My.Moy
         {
             a.a.d().e().a->c.a++.b().a;
 
-            var x =
-                1 * 1 + 1 * 1 + (1 + (1 + 1)) + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 +
-                1 + 1 + 1 + 1 + 1;
+            var x = 1 * 1 + 1 * 1 + (1 + (1 + 1)) + 1 + 1 + 1 + 1 + 1 + 1 + 1 +
+                1 + 1 + 1 + 1 + 1 + 1;
 
             var y = a is Dictionary<string, object> dict ? 42 : 51;
         }
@@ -186,19 +185,24 @@ namespace My.Moy
 
             var o1 = new MyObject();
             var o2 = new MyObject(var);
-            var o3 = new MyObject {A = i};
-            var o4 = new MyObject(@dynamic) {A = 0, B = 0, C = 0};
-            var o5 = new{A = 0};
-            var dictionaryInitializer =
-                new Dictionary<int, string> {{1, ""}, {2, "a"}};
-            float[] a = new float[] {0f, 1.1f};
-            int[,,] cube =
-                {{{1111, 1121, }, {1211, 1221}}, {{2111, 2121}, {2211, 2221}}};
-            int[][] jagged = {{111}, {121, 122}};
+            var o3 = new MyObject { A = i };
+            var o4 = new MyObject(@dynamic) { A = 0, B = 0, C = 0 };
+            var o5 = new{ A = 0 };
+            var dictionaryInitializer = new Dictionary<int, string>
+                {
+                    { 1, "" },
+                    { 2, "a" }
+                };
+            float[] a = new float[] { 0f, 1.1f };
+            int[,,] cube = {
+                    { { 1111, 1121,  }, { 1211, 1221 } },
+                    { { 2111, 2121 }, { 2211, 2221 } }
+                };
+            int[][] jagged = { { 111 }, { 121, 122 } };
             int[][,] arr = new int[5][,]; // as opposed to new int[][5,5]
             arr[0] = new int[5, 5]; // as opposed to arr[0,0] = new int[5];
             arr[0][0, 0] = 47;
-            int[] arrayTypeInference = new[] {0, 1, };
+            int[] arrayTypeInference = new[] { 0, 1,  };
             switch (3)
             {
             }
@@ -332,9 +336,8 @@ namespace My.Moy
                 { }
             }
 
-            var anonymous = {A = 1, B = 2, C = 3, };
-            var query =
-                from c in customers
+            var anonymous = { A = 1, B = 2, C = 3,  };
+            var query = from c in customers
                 let d = c
                 where d != null
                 join c1 in customers on c1.GetHashCode() equals c.GetHashCode()
@@ -345,7 +348,7 @@ namespace My.Moy
                 group c by c.Country into g
                 orderby g.Count() ascending
                 orderby g.Key descending
-                select new{Country = g.Key, CustCount = g.Count()};
+                select new{ Country = g.Key, CustCount = g.Count() };
             query =
                 from c in customers
                 select c into d
@@ -551,8 +554,7 @@ namespace My.Moy
 
             void AsyncAnonymous() // C # 5 feature
             {
-                var task =
-                    Task.Factory.StartNew(
+                var task = Task.Factory.StartNew(
                         async () => {
                             return await
                                 new WebClient().DownloadStringTaskAsync(
@@ -614,8 +616,7 @@ namespace ConsoleApplication1
             var x = new Boo.Bar<int>.Foo<object>();
             x.Method<string, string>(" ", 5, new object());
 
-            var q =
-                from i in new int[] {1, 2, 3, 4}
+            var q = from i in new int[] { 1, 2, 3, 4 }
                 where i > 5
                 select i;
         }
@@ -681,8 +682,8 @@ namespace ConsoleApplication1
         public void Constants()
         {
             int i = 1 + 2 + 3 + 5;
-            global::System.String s =
-                "a" + (System.String)"a" + "a" + "a" + "a" + "A";
+            global::System.String s = "a" + (System.String)"a" + "a" + "a" + "a" +
+                "A";
         }
 
         public void ConstructedType()
@@ -729,8 +730,7 @@ namespace Comments.XmlComments.UndocumentedKeywords
             /*s*/
             MyClass c = new MyClass();
             string verbatimStr = /*s*/ @"\\\\";
-            int i =
-                0 // foo
+            int i = 0 // foo
                  + 1 // bar
                  + 2; // qux
             i =
@@ -790,7 +790,7 @@ namespace Comments.XmlComments.UndocumentedKeywords
         public partial void method()
         {
             int?[] a = new int?[5]; /*[] bug*/ // YES []
-            int[] var = {1, 2, 3, 4, 5}; /*,;*/
+            int[] var = { 1, 2, 3, 4, 5 }; /*,;*/
             int i = a[i]; /*[]*/
             Foo<T> f = new Foo<int>(); /*<> ()*/
             f.method(); /*().*/
@@ -907,9 +907,12 @@ namespace Comments.XmlComments.UndocumentedKeywords
             WriteLine(nameof(person.Address.ZipCode)); // prints "ZipCode"
 
             // Index initializers
-            var numbers =
-                new Dictionary<int, string>
-                {[7] = "seven", [9] = "nine", [13] = "thirteen"};
+            var numbers = new Dictionary<int, string>
+                {
+                    [7] = "seven",
+                    [9] = "nine",
+                    [13] = "thirteen"
+                };
 
             // Exception filters
             try

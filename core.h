@@ -34,6 +34,7 @@ struct DocBuilder {
   int margin;
   int indent;
   int group_depth;
+  int last_group_start;
 
   int capacity;
   struct Doc *contents;
@@ -53,6 +54,30 @@ void doc_group(struct DocBuilder *builder);
 void doc_end(struct DocBuilder *builder);
 void doc_bracket_open(struct DocBuilder *builder, const char *left);
 void doc_bracket_close(struct DocBuilder *builder, const char *right);
+
+/* doc_rotate_left rotates a tree left. `start` is the left node of the parent
+ * to rotate left.
+ *
+ * As an example, consider the following builder state, where '(' is a DOC_GROUP
+ * and ')' is a DOC_END:
+ *
+ *    ( x ( y z ) )
+ *      ^
+ *      +-- start
+ *
+ * If you call this function with start at the indicated place you will get:
+ *
+ *    ( ( x y ) z )
+ *
+ * Which is the tree rotated left one. This is useful if you want to make
+ * something on the left bind tightly to the thing on the right.
+ */
+int doc_rotate_left(struct DocBuilder *builder, int start);
+
+/* doc_rotate_left_deep is just like doc_rotate_left, except it rotates as
+ * deeply as it can.
+ */
+int doc_rotate_left_deep(struct DocBuilder *builder, int start);
 
 void pretty(FILE *file, size_t width, struct Doc *docs, int length);
 void dump_docs(struct Doc *docs, int length);

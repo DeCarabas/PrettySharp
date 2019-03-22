@@ -23,8 +23,7 @@ namespace Garden
 
     class DrawingContext
     {
-        static readonly VertexPositionColorTexture[] unitSquare =
-            new[]
+        static readonly VertexPositionColorTexture[] unitSquare = new[]
             {
                 new VertexPositionColorTexture(
                     new Vector3(-0.5f, -0.5f, 0),
@@ -100,8 +99,7 @@ namespace Garden
                 temp[i].Color = rgba;
             }
 
-            Matrix world =
-                Matrix.CreateScale(radius * 2) *
+            Matrix world = Matrix.CreateScale(radius * 2) *
                 Matrix.CreateTranslation(position);
             this.worldMatrix.SetValue(world);
             this.shapesEffect.CurrentTechnique = this.circleTechnique;
@@ -134,8 +132,7 @@ namespace Garden
                 temp[i].Color = rgba;
             }
 
-            Matrix world =
-                Matrix.CreateScale(radiusW * 2, radiusH * 2, 1) *
+            Matrix world = Matrix.CreateScale(radiusW * 2, radiusH * 2, 1) *
                 Matrix.CreateTranslation(position);
             this.worldMatrix.SetValue(world);
             this.shapesEffect.CurrentTechnique = this.circleTechnique;
@@ -278,8 +275,7 @@ namespace Garden
         static HSBColor makeIDColor(float[] dna, float depth)
         {
             float h = 3 + dna[HUE_START] + (0.1f * dna[HUE_DIFF] * depth);
-            float s =
-                (.7f + .3f * dna[SATURATION] * MathF.Sin(depth)) -
+            float s = (.7f + .3f * dna[SATURATION] * MathF.Sin(depth)) -
                 (dna[SATURATION] * depth * .08f);
             float b = .3f + .1f * depth;
             return new HSBColor(h % 1f, MathF.Unit(s), MathF.Unit(b));
@@ -315,8 +311,7 @@ namespace Garden
             float elapsed = (float)gameTime.TotalGameTime.TotalSeconds;
             if (this.parent != null)
             {
-                float angleOffset =
-                    .1f * (1.2f + this.depth) *
+                float angleOffset = .1f * (1.2f + this.depth) *
                     MathF.Sin(2 * elapsed + this.depth);
                 angleOffset += 0.2f * MathF.Sin(this.id);
 
@@ -343,8 +338,7 @@ namespace Garden
                 float length = child.branchLength;
                 float angle = (float)Math.Atan2(edge.Y, edge.X);
 
-                Matrix world =
-                    Matrix.CreateRotationZ(angle) *
+                Matrix world = Matrix.CreateRotationZ(angle) *
                     Matrix.CreateTranslation(this.position);
 
                 context.DrawSquare(
@@ -359,8 +353,7 @@ namespace Garden
                 var leafCount = (float)Math.Floor(this.dna[LEAF_COUNT] * 5);
                 for (var j = 0; j < (int)leafCount; j++)
                 {
-                    HSBColor leafColor =
-                        this.idColor.Alter(
+                    HSBColor leafColor = this.idColor.Alter(
                             shade: 0.3f * MathF.Sin(j + this.depth),
                             fade: -0.3f + 0.2f * MathF.Sin(j + this.depth)
                         );
@@ -404,8 +397,7 @@ namespace Garden
             context.DrawCircle(this.idColor, this.position, this.radius);
             if (this.children.Count == 0)
             {
-                Matrix world =
-                    Matrix.CreateRotationZ(this.angle) *
+                Matrix world = Matrix.CreateRotationZ(this.angle) *
                     Matrix.CreateTranslation(this.position);
 
                 var flowerCount = (float)Math.Round(8 * this.dna[FLOWER_COUNT]);
@@ -416,8 +408,7 @@ namespace Garden
                 var petalW = petalSize * (1 - aspect);
                 for (var i = 0; i < flowerCount; i++)
                 {
-                    var flowerColor =
-                        new HSBColor(
+                    var flowerColor = new HSBColor(
                             (this.dna[FLOWER_HUE] * 1.2f + .9f) % 1f,
                             this.dna[FLOWER_SATURATION],
                             MathF.Unit(.9f + .3f * MathF.Sin(i * 3)),
@@ -428,8 +419,7 @@ namespace Garden
                         Matrix.CreateRotationZ(MathHelper.TwoPi / flowerCount) *
                         world;
 
-                    var flowerCenter =
-                        Vector3.Transform(
+                    var flowerCenter = Vector3.Transform(
                             new Vector3(petalH * 1.5f, 0, 0),
                             world
                         );
@@ -520,8 +510,7 @@ namespace Garden
                 dna[i] = (float)Node.random.NextDouble();
             }
 
-            var node =
-                new Node(
+            var node = new Node(
                     dna,
                     Vector3.Zero,
                     -MathHelper.PiOver2,
@@ -542,14 +531,12 @@ namespace Garden
             GraphicsDevice.RasterizerState = RasterizerState.CullNone;
             GraphicsDevice.BlendState = BlendState.AlphaBlend;
 
-            Matrix view =
-                Matrix.CreateLookAt(
+            Matrix view = Matrix.CreateLookAt(
                     new Vector3(0, 0, -10),
                     new Vector3(0, 0, 0),
                     Vector3.UnitY
                 ) * Matrix.CreateScale(0.75f);
-            Matrix projection =
-                Matrix.CreateOrthographic(
+            Matrix projection = Matrix.CreateOrthographic(
                     GraphicsDevice.Viewport.Width,
                     GraphicsDevice.Viewport.Height,
                     0.0f,

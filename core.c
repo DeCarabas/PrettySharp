@@ -29,6 +29,7 @@ static void builder_init(struct DocBuilder *docs, int capacity) {
   docs->margin = 0;
   docs->indent = 4;
   docs->group_depth = 0;
+  docs->last_group_start = -1;
   docs->contents = malloc(sizeof(struct Doc) * docs->capacity);
 }
 
@@ -107,6 +108,10 @@ void doc_group(struct DocBuilder *builder) {
 
   struct Doc *result = builder_add(builder);
   result->type = DOC_GROUP;
+
+  // Because this is open, we just stash the previous group start in here.
+  result->length = builder->last_group_start;
+  builder->last_group_start = builder->count - 1;
 }
 
 void doc_end(struct DocBuilder *builder) {
@@ -115,6 +120,13 @@ void doc_end(struct DocBuilder *builder) {
 
   struct Doc *result = builder_add(builder);
   result->type = DOC_END;
+
+  // Patch up the length, so we can jump from the beginning of a group to the
+  // end if we want to.
+  struct Doc *group_start = &(builder->contents[builder->last_group_start]);
+  assert(group_start->type == DOC_GROUP);
+  builder->last_group_start = group_start->length;
+  group_start->length = (result - group_start) + 1;
 }
 
 void doc_bracket_open(struct DocBuilder *builder, const char *left) {
@@ -130,6 +142,82 @@ void doc_bracket_close(struct DocBuilder *builder, const char *right) {
   doc_softline(builder);
   doc_text(builder, right, strlen(right));
   doc_end(builder);
+}
+
+static int doc_node_length(struct DocBuilder *builder, int start) {
+  struct Doc *doc = &(builder->contents[start]);
+  assert(doc->type != DOC_END);
+  if (doc->type == DOC_GROUP) {
+    return doc->length;
+  } else {
+    return 1;
+  }
+}
+
+int doc_rotate_left(struct DocBuilder *builder, int start) {
+  int x_start = start;
+  int x_len = doc_node_length(builder, x_start);
+  int y_start = x_start + x_len;
+
+  if (y_start == builder->count) {
+    // Nothing to do: this node has no right sibling.
+    return x_start;
+  }
+  if (builder->contents[y_start].type != DOC_GROUP) {
+    // Nothing to do; x is nestled as deep in the tree as it can go.
+    return x_start;
+  }
+
+  // Z starts out as everything in the group....
+  assert(builder->contents[y_start].type == DOC_GROUP);
+  int z_len = builder->contents[y_start].length - 2;
+
+  // ...but Y is the first thing in the group...
+  y_start = y_start + 1;
+  int y_len = doc_node_length(builder, y_start);
+
+  // ...so Z is the remainder of stuff in the group.
+  int z_start = y_start + y_len;
+  z_len -= y_len;
+
+  // z_len might be zero, but it better not be negative!
+  assert(z_len >= 0);
+
+  // Shift x to the right one, displacing the previous group start. The end of x
+  // will clobber the group start between x and y.
+  memmove(builder->contents + x_start + 1, builder->contents + x_start,
+          sizeof(struct Doc) * x_len);
+
+  // Rewrite a group start where x used to start. (You can think of this as
+  // putting back the group start we clobbered.)
+  struct Doc *xy_group = &builder->contents[x_start];
+  xy_group->type = DOC_GROUP;
+  xy_group->length = 1 + x_len + y_len + 1; // GROUP + x + y + END
+
+  // Move z to the right by one, displacing the previous group end. The end of z
+  // will clobber what used to be the end of (y z)
+  memmove(builder->contents + z_start + 1, builder->contents + z_start,
+          sizeof(struct Doc) * z_len);
+
+  // Rewrite the corresponding group end where z used to start. (Again, think of
+  // this as restoring the group end we had at the end of z.
+  struct Doc *xy_end = &builder->contents[z_start];
+  xy_end->type = DOC_END;
+  xy_end->length = 0;
+  xy_end->string = NULL;
+
+  // Make sure we patched everything up properly!
+  assert(xy_group + xy_group->length - 1 == xy_end);
+  return x_start + 1;
+}
+
+int doc_rotate_left_deep(struct DocBuilder *builder, int start) {
+  int new_start = start;
+  do {
+    start = new_start;
+    new_start = doc_rotate_left(builder, start);
+  } while (start != new_start);
+  return new_start;
 }
 
 enum OutputDocType { OUT_TEXT, OUT_LINE };

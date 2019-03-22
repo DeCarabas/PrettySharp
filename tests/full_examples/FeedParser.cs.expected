@@ -36,9 +36,12 @@ namespace OnceAndFuture.Syndication
                     (rf, xe) =>
                         rf.With(feedTitle: SyndicationUtil.ParseBody(xe))
                 },
-                {XNames.RSS.Link, (rf, xe) => rf.With(websiteUrl: xe.Value)},
-                {XNames.RSS10.Link, (rf, xe) => rf.With(websiteUrl: xe.Value)},
-                {XNames.Atom.Link, (rf, xe) => HandleAtomLink(rf, xe)},
+                { XNames.RSS.Link, (rf, xe) => rf.With(websiteUrl: xe.Value) },
+                {
+                    XNames.RSS10.Link,
+                    (rf, xe) => rf.With(websiteUrl: xe.Value)
+                },
+                { XNames.Atom.Link, (rf, xe) => HandleAtomLink(rf, xe) },
                 {
                     XNames.RSS.Description,
                     (rf, xe) =>
@@ -75,11 +78,17 @@ namespace OnceAndFuture.Syndication
                     (ri, xe) =>
                         ri.With(link: SyndicationUtil.ParseLink(xe.Value, xe))
                 },
-                {XNames.RSS.Description, (ri, xe) => ri.With(description: xe)},
-                {XNames.RSS.Comments, (ri, xe) => ri.With(comments: xe.Value)},
-                {XNames.RSS.PubDate, (ri, xe) => HandlePubDate(ri, xe)},
-                {XNames.RSS.Guid, (ri, xe) => HandleGuid(ri, xe)},
-                {XNames.RSS.Enclosure, (ri, xe) => HandleEnclosure(ri, xe)},
+                {
+                    XNames.RSS.Description,
+                    (ri, xe) => ri.With(description: xe)
+                },
+                {
+                    XNames.RSS.Comments,
+                    (ri, xe) => ri.With(comments: xe.Value)
+                },
+                { XNames.RSS.PubDate, (ri, xe) => HandlePubDate(ri, xe) },
+                { XNames.RSS.Guid, (ri, xe) => HandleGuid(ri, xe) },
+                { XNames.RSS.Enclosure, (ri, xe) => HandleEnclosure(ri, xe) },
                 {
                     XNames.RSS10.Title,
                     (ri, xe) => ri.With(title: SyndicationUtil.ParseBody(xe))
@@ -89,22 +98,28 @@ namespace OnceAndFuture.Syndication
                     (ri, xe) =>
                         ri.With(link: SyndicationUtil.ParseLink(xe.Value, xe))
                 },
-                {XNames.RSS10.Description, (ri, xe) => ri.With(description: xe)},
-                {XNames.RSS10.Comments, (ri, xe) => ri.With(comments: xe.Value)},
-                {XNames.RSS10.PubDate, (ri, xe) => HandlePubDate(ri, xe)},
-                {XNames.RSS10.Guid, (ri, xe) => HandleGuid(ri, xe)},
-                {XNames.Content.Encoded, (ri, xe) => ri.With(content: xe)},
+                {
+                    XNames.RSS10.Description,
+                    (ri, xe) => ri.With(description: xe)
+                },
+                {
+                    XNames.RSS10.Comments,
+                    (ri, xe) => ri.With(comments: xe.Value)
+                },
+                { XNames.RSS10.PubDate, (ri, xe) => HandlePubDate(ri, xe) },
+                { XNames.RSS10.Guid, (ri, xe) => HandleGuid(ri, xe) },
+                { XNames.Content.Encoded, (ri, xe) => ri.With(content: xe) },
                 {
                     XNames.Atom.Title,
                     (ri, xe) => ri.With(title: SyndicationUtil.ParseBody(xe))
                 },
-                {XNames.Atom.Content, (ri, xe) => ri.With(content: xe)},
-                {XNames.Atom.Summary, (ri, xe) => ri.With(summary: xe)},
-                {XNames.Atom.Link, (ri, xe) => HandleAtomLink(ri, xe)},
-                {XNames.Atom.Id, (ri, xe) => ri.With(id: xe.Value)},
-                {XNames.Atom.Published, (ri, xe) => HandlePubDate(ri, xe)},
-                {XNames.Atom.Updated, (ri, xe) => HandlePubDate(ri, xe)},
-                {XNames.Media.Content, (ri, xe) => HandleThumbnail(ri, xe)},
+                { XNames.Atom.Content, (ri, xe) => ri.With(content: xe) },
+                { XNames.Atom.Summary, (ri, xe) => ri.With(summary: xe) },
+                { XNames.Atom.Link, (ri, xe) => HandleAtomLink(ri, xe) },
+                { XNames.Atom.Id, (ri, xe) => ri.With(id: xe.Value) },
+                { XNames.Atom.Published, (ri, xe) => HandlePubDate(ri, xe) },
+                { XNames.Atom.Updated, (ri, xe) => HandlePubDate(ri, xe) },
+                { XNames.Media.Content, (ri, xe) => HandleThumbnail(ri, xe) },
             };
 
         public static FeedSegment ParseFeed(
@@ -125,8 +140,10 @@ namespace OnceAndFuture.Syndication
             else if (element.Name == XNames.RDF.Rdf)
             {
                 format = FeedFormat.RDF;
-                var result =
-                    LoadFeed(feedUrl, element.Element(XNames.RSS10.Channel));
+                var result = LoadFeed(
+                        feedUrl,
+                        element.Element(XNames.RSS10.Channel)
+                    );
                 return result.With(
                     items: result.Items.AddRange(
                         element.Elements(XNames.RSS10.Item).Select(
@@ -268,8 +285,7 @@ namespace OnceAndFuture.Syndication
                 element.Attribute(XNames.Media.Medium)?.Value == "image"
             )
             {
-                Uri url =
-                    SyndicationUtil.TryParseUrl(
+                Uri url = SyndicationUtil.TryParseUrl(
                         element.Attribute(XNames.Media.Url)?.Value,
                         null,
                         element
@@ -412,8 +428,9 @@ namespace OnceAndFuture.Syndication
 
             if (guid.Length > 0)
             {
-                byte[] hash =
-                    SHA1.Create().ComputeHash(Encoding.UTF8.GetBytes(guid));
+                byte[] hash = SHA1.Create().ComputeHash(
+                        Encoding.UTF8.GetBytes(guid)
+                    );
                 guid = Convert.ToBase64String(hash);
             }
 

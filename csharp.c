@@ -294,9 +294,10 @@ static void text(struct Token token) {
   parser.last_was_line = false;
   doc_text(parser.builder, token.start, token.length);
 }
-static void group(void) {
+static int group(void) {
   flush_trivia(/*next_is_line*/ false);
   doc_group(parser.builder);
+  return parser.builder->count - 1;
 }
 static void end(void) { doc_end(parser.builder); }
 static void indent(void) { doc_indent(parser.builder); }
@@ -325,6 +326,10 @@ static void softline_dedent(void) {
 }
 static void breakparent(void) { doc_breakparent(parser.builder); }
 static void space(void) { doc_text(parser.builder, " ", 1); }
+
+static int rotate_left_deep(int start) {
+  return doc_rotate_left_deep(parser.builder, start);
+}
 
 // ============================================================================
 // Checking and Consuming Tokens
@@ -1499,12 +1504,9 @@ static void default_expression(void) {
 }
 
 static void array_initializer_inner(const char *where) {
-  group();
   token(TOKEN_OPENBRACE, where);
-  if (check(TOKEN_CLOSEBRACE)) {
-    space();
-  } else {
-    softline_indent();
+  if (!check(TOKEN_CLOSEBRACE)) {
+    line_indent();
     group();
 
     bool first = true;
@@ -1528,10 +1530,9 @@ static void array_initializer_inner(const char *where) {
 
     end();
     dedent();
-    softline();
+    line();
   }
   token(TOKEN_CLOSEBRACE, where);
-  end();
 }
 
 static void collection_initializer(void) {
@@ -1543,12 +1544,9 @@ static void array_initializer(void) {
 }
 
 static void object_initializer(void) {
-  group();
   token(TOKEN_OPENBRACE, "at the beginning of an object initializer");
-  if (check(TOKEN_CLOSEBRACE)) {
-    space();
-  } else {
-    softline_indent();
+  if (!check(TOKEN_CLOSEBRACE)) {
+    line_indent();
     group();
     bool first = true;
     while (first || check(TOKEN_COMMA)) {
@@ -1570,28 +1568,36 @@ static void object_initializer(void) {
         // to be an expression list just like in an array initializer.
         collection_initializer();
       } else if (!check(TOKEN_CLOSEBRACE)) {
-        if (match(TOKEN_OPENBRACKET)) {
+        if (check(TOKEN_OPENBRACKET)) {
+          int index_start = group();
+          token(TOKEN_OPENBRACKET,
+                "at the beginning of the index in a dictionary initializer");
           argument_list_inner(TOKEN_CLOSEBRACKET);
           token(TOKEN_CLOSEBRACKET,
                 "at the end of the index in a dictionary initializer");
           space();
           token(TOKEN_EQUALS, "after the index in a dictionary initializer");
           line_indent();
+          end();
           if (check(TOKEN_OPENBRACE)) {
             object_initializer();
           } else {
             expression("in the value of a dictionary initializer");
           }
           dedent();
+          rotate_left_deep(index_start);
         } else if (check_name_equals()) {
+          int name_start = group();
           name_equals("in an object member initializer");
           line_indent();
+          end();
           if (check(TOKEN_OPENBRACE)) {
             object_initializer();
           } else {
             expression("in the value of an object member initializer");
           }
           dedent();
+          rotate_left_deep(name_start);
         } else {
           // In an object initializer this is technically only allowed to be
           // an identifier. But in a collection this can be anything. And in
@@ -1608,9 +1614,8 @@ static void object_initializer(void) {
     end();
     dedent();
   }
-  softline();
+  line();
   token(TOKEN_CLOSEBRACE, "at the end of an object initializer");
-  end();
 }
 
 static void array_sizes(const char *where) {
@@ -2351,12 +2356,13 @@ static void variable_declarators(const char *where) {
   identifier(where);
   end();
   if (check(TOKEN_EQUALS)) {
-    end();   // This is the end of the group with my type.
-    group(); // Re-group, but just the value.
     space(); // No line break for the first variable.
     token(TOKEN_EQUALS, where);
     {
       line_indent();
+
+      end();   // This is the end of the group with my type.
+      group(); // Re-group, but just the value.
       if (check(TOKEN_OPENBRACE)) {
         array_initializer();
       } else {
@@ -2735,12 +2741,15 @@ static bool check_local_variable_declaration(void) {
 
 static void local_variable_declaration(void) {
   group();
-  group();
+  int local_type_start = group();
+
   if (match(TOKEN_KW_REF)) {
     space();
   }
   local_variable_type();
   variable_declarators("in local variable declaration"); // DANGER, see decl.
+
+  rotate_left_deep(local_type_start);
   end();
 }
 

@@ -2,8 +2,7 @@ class Foo
 {
     void Bar()
     {
-        ref LocalState stateToUpdate =
-            ref
+        ref LocalState stateToUpdate = ref
                 (op == BinaryOperatorKind.Equal)
                 ? ref this.StateWhenFalse
                 : ref this.StateWhenTrue;

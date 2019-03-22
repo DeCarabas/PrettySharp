@@ -16,9 +16,9 @@ public class FeedParser
                 XNames.Atom.Title,
                 (rf, xe) => rf.With(feedTitle: SyndicationUtil.ParseBody(xe))
             },
-            {XNames.RSS.Link, (rf, xe) => rf.With(websiteUrl: xe.Value)},
-            {XNames.RSS10.Link, (rf, xe) => rf.With(websiteUrl: xe.Value)},
-            {XNames.Atom.Link, (rf, xe) => HandleAtomLink(rf, xe)},
+            { XNames.RSS.Link, (rf, xe) => rf.With(websiteUrl: xe.Value) },
+            { XNames.RSS10.Link, (rf, xe) => rf.With(websiteUrl: xe.Value) },
+            { XNames.Atom.Link, (rf, xe) => HandleAtomLink(rf, xe) },
             {
                 XNames.RSS.Description,
                 (rf, xe) =>

@@ -51,18 +51,19 @@ namespace OnceAndFuture
             out string accessKeyId,
             out string secretAccessKey)
         {
-            string keyIdString =
-                Environment.GetEnvironmentVariable("AWS_ACCESS_KEY_ID");
-            string accessKeyString =
-                Environment.GetEnvironmentVariable("AWS_SECRET_ACCESS_KEY");
+            string keyIdString = Environment.GetEnvironmentVariable(
+                    "AWS_ACCESS_KEY_ID"
+                );
+            string accessKeyString = Environment.GetEnvironmentVariable(
+                    "AWS_SECRET_ACCESS_KEY"
+                );
 
             if (
                 String.IsNullOrWhiteSpace(keyIdString) ||
                 String.IsNullOrWhiteSpace(accessKeyString)
             )
             {
-                string credPath =
-                    Path.Combine(
+                string credPath = Path.Combine(
                         Environment.GetEnvironmentVariable("HOME"),
                         ".aws",
                         "credentials"
@@ -80,7 +81,7 @@ namespace OnceAndFuture
                             )
                         )
                         {
-                            keyIdString = line.Split(new[] {'='}, 2)[1].Trim();
+                            keyIdString = line.Split(new[] { '=' }, 2)[1].Trim();
                         }
 
                         if (
@@ -91,7 +92,7 @@ namespace OnceAndFuture
                         )
                         {
                             accessKeyString =
-                                line.Split(new[] {'='}, 2)[1].Trim();
+                                line.Split(new[] { '=' }, 2)[1].Trim();
                         }
                     }
                 }
@@ -111,10 +112,10 @@ namespace OnceAndFuture
             byte[] secretAccessKey)
         {
             string httpVerb = request.Method.ToString().ToUpperInvariant();
-            string contentMD5 =
-                request.Content?.Headers?.Value("Content-MD5") ?? String.Empty;
-            string contentType =
-                request.Content?.Headers?.Value("Content-Type") ?? String.Empty;
+            string contentMD5 = request.Content?.Headers?.Value("Content-MD5") ??
+                    String.Empty;
+            string contentType = request.Content?.Headers?.Value("Content-Type") ??
+                    String.Empty;
             string date = request.Headers.Value("Date");
 
             string canonicalizedAmzHeaders = "";
@@ -138,13 +139,12 @@ namespace OnceAndFuture
 
             string canonicalizedResource = request.RequestUri.AbsolutePath;
 
-            string stringToSign =
-                httpVerb + "\n" + contentMD5 + "\n" + contentType + "\n" + date +
-                "\n" + canonicalizedAmzHeaders + canonicalizedResource;
+            string stringToSign = httpVerb + "\n" + contentMD5 + "\n" +
+                contentType + "\n" + date + "\n" + canonicalizedAmzHeaders +
+                canonicalizedResource;
             using (var hmac = new HMACSHA1(secretAccessKey))
             {
-                string signature =
-                    Convert.ToBase64String(
+                string signature = Convert.ToBase64String(
                         hmac.ComputeHash(Encoding.UTF8.GetBytes(stringToSign))
                     );
                 return "AWS " + accessKeyId + ":" + signature;
@@ -178,14 +178,16 @@ namespace OnceAndFuture
                 request.Headers.Add("host", request.RequestUri.Host);
             }
 
-            List<KeyValuePair<string, string>> headers =
-                GetCanonicalHeaders(request);
+            List<KeyValuePair<string, string>> headers = GetCanonicalHeaders(
+                    request
+                );
 
             // Task 1: Build the 'canonical request'.
             var canonicalRequest = new StringBuilder();
             await BuildCanonicalRequest(request, headers, canonicalRequest);
-            byte[] requestBytes =
-                Encoding.UTF8.GetBytes(canonicalRequest.ToString());
+            byte[] requestBytes = Encoding.UTF8.GetBytes(
+                    canonicalRequest.ToString()
+                );
 
             // Task 2: Build the 'string to sign'
             var builder = new StringBuilder();
@@ -198,8 +200,12 @@ namespace OnceAndFuture
             BuildSHA256Digest(requestBytes, builder);
 
             // Task 3: Calculate the signature
-            byte[] signingKey =
-                GetSignatureKey(secretAccessKey, dateStamp, region, service);
+            byte[] signingKey = GetSignatureKey(
+                    secretAccessKey,
+                    dateStamp,
+                    region,
+                    service
+                );
             byte[] signatureBytes = HmacSHA256(builder.ToString(), signingKey);
 
             // Task 4: Build the header.
@@ -276,8 +282,7 @@ namespace OnceAndFuture
             )
             {
                 string name = header.Key.ToLowerInvariant().Trim();
-                string value =
-                    String.Join(
+                string value = String.Join(
                         ",",
                         header.Value.Select(v => v.Replace("  ", " "))
                     ).Trim();
@@ -440,8 +445,9 @@ namespace OnceAndFuture
             string region,
             string service)
         {
-            byte[] kSecret =
-                Encoding.UTF8.GetBytes(("AWS4" + key).ToCharArray());
+            byte[] kSecret = Encoding.UTF8.GetBytes(
+                    ("AWS4" + key).ToCharArray()
+                );
             byte[] kDate = HmacSHA256(dateStamp, kSecret);
             byte[] kRegion = HmacSHA256(region, kDate);
             byte[] kService = HmacSHA256(service, kRegion);
@@ -458,12 +464,13 @@ namespace OnceAndFuture
         const string OriginalLengthHeader = "x-amz-meta-original-length";
 
         static string ValidPathCharacters = DetermineValidPathCharacters();
-        static readonly Policy<HttpResponseMessage> HttpPolicy =
-            Policy.Handle<HttpRequestException>(Policies.ShouldRetryException).Or<
-                TaskCanceledException
-            >().Or<WebException>(Policies.ShouldRetryException).OrResult<
-                HttpResponseMessage
-            >(ShouldRetryFromResponse).WaitAndRetryAsync(
+        static readonly Policy<HttpResponseMessage> HttpPolicy = Policy.Handle<
+                HttpRequestException
+            >(Policies.ShouldRetryException).Or<TaskCanceledException>().Or<
+                WebException
+            >(Policies.ShouldRetryException).OrResult<HttpResponseMessage>(
+                ShouldRetryFromResponse
+            ).WaitAndRetryAsync(
                 retryCount: 3,
                 sleepDurationProvider: Policies.RetryTime
             );
@@ -492,8 +499,7 @@ namespace OnceAndFuture
         static HttpClient CreateHttpClient()
         {
             const int TenMegabytes = 10 * 1024 * 1024;
-            var handler =
-                new HttpClientHandler
+            var handler = new HttpClientHandler
                 {
                     AllowAutoRedirect = true,
                     UseCookies = false,
@@ -526,8 +532,10 @@ namespace OnceAndFuture
 
         public Uri GetObjectUri(ObjectKey key)
         {
-            string resourcePath =
-                UrlEncode(this.bucket + "/" + key.ToString(), path: true);
+            string resourcePath = UrlEncode(
+                    this.bucket + "/" + key.ToString(),
+                    path: true
+                );
             return new Uri("https://s3-us-west-2.amazonaws.com/" + resourcePath);
         }
 
@@ -547,14 +555,14 @@ namespace OnceAndFuture
         public async Task<byte[]> GetObject(ObjectKey key)
         {
             Stopwatch timer = Stopwatch.StartNew();
-            Func<HttpRequestMessage> request =
-                () =>
+            Func<HttpRequestMessage> request = () =>
                     new HttpRequestMessage
                     {
                         RequestUri = GetObjectUri(key),
                         Method = HttpMethod.Get,
-                        Headers =
-                            {{"Date", DateTimeOffset.UtcNow.ToString("r")}}
+                        Headers = {
+                                { "Date", DateTimeOffset.UtcNow.ToString("r") }
+                            }
                     };
 
             string contentType = null;
@@ -615,8 +623,7 @@ namespace OnceAndFuture
                 byte[] data = new byte[objectLength.Value];
                 if (isCompressed)
                 {
-                    var sourceStream =
-                        new GZipStream(
+                    var sourceStream = new GZipStream(
                             responseBuffer,
                             CompressionMode.Decompress
                         );
@@ -688,8 +695,7 @@ namespace OnceAndFuture
                 {
                     var tempStream = new MemoryStream();
                     using (
-                        var compressStream =
-                            new GZipStream(
+                        var compressStream = new GZipStream(
                                 tempStream,
                                 CompressionMode.Compress,
                                 leaveOpen: true
@@ -706,14 +712,12 @@ namespace OnceAndFuture
 
                 contentLength = sourceStream.Length;
 
-                Func<HttpRequestMessage> request =
-                    () =>
+                Func<HttpRequestMessage> request = () =>
                         new HttpRequestMessage
                         {
                             RequestUri = GetObjectUri(key),
                             Method = HttpMethod.Put,
-                            Headers =
-                                {
+                            Headers = {
                                     {
                                         "Date",
                                         DateTimeOffset.UtcNow.ToString("r")
@@ -723,13 +727,11 @@ namespace OnceAndFuture
                                         objectLength.ToString()
                                     },
                                 },
-                            Content =
-                                new StreamContent(sourceStream)
+                            Content = new StreamContent(sourceStream)
                                 {
-                                    Headers =
-                                        {
-                                            {"Content-Type", type},
-                                            {"Content-Encoding", encoding},
+                                    Headers = {
+                                            { "Content-Type", type },
+                                            { "Content-Encoding", encoding },
                                         },
                                 },
                         };
@@ -807,7 +809,7 @@ namespace OnceAndFuture
             XDocument doc = XDocument.Load(new StringReader(body));
             string code = doc.Root.Element("Code").Value;
 
-            return new S3Error {Code = code, ResponseBody = body};
+            return new S3Error { Code = code, ResponseBody = body };
         }
 
         static string DetermineValidPathCharacters()
@@ -855,8 +857,8 @@ namespace OnceAndFuture
             return HttpPolicy.ExecuteAsync(
                 async () => {
                     HttpRequestMessage message = AuthenticateRequest(request());
-                    HttpResponseMessage response =
-                        await Client.SendAsync(message);
+                    HttpResponseMessage response = await
+                            Client.SendAsync(message);
                     if (!response.IsSuccessStatusCode)
                     {
                         await response.Content.LoadIntoBufferAsync();
@@ -887,11 +889,9 @@ namespace OnceAndFuture
         static string UrlEncode(string data, bool path)
         {
             StringBuilder encoded = new StringBuilder(data.Length * 2);
-            const string validUrlCharacters =
-                "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_.~";
+            const string validUrlCharacters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_.~";
 
-            string unreservedChars =
-                String.Concat(
+            string unreservedChars = String.Concat(
                     validUrlCharacters,
                     (path ? ValidPathCharacters : "")
                 );
@@ -1163,8 +1163,7 @@ namespace OnceAndFuture
                     "write",
                     id,
                     async () => {
-                        string text =
-                            JsonConvert.SerializeObject(
+                        string text = JsonConvert.SerializeObject(
                                 document,
                                 Policies.SerializerSettings
                             );
