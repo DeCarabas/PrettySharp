@@ -294,7 +294,7 @@ static void text(struct Token token) {
   parser.last_was_line = false;
   doc_text(parser.builder, token.start, token.length);
 }
-static int group(void) {
+static size_t group(void) {
   flush_trivia(/*next_is_line*/ false);
   doc_group(parser.builder);
   return parser.builder->count - 1;
@@ -327,7 +327,7 @@ static void softline_dedent(void) {
 static void breakparent(void) { doc_breakparent(parser.builder); }
 static void space(void) { doc_text(parser.builder, " ", 1); }
 
-static int rotate_left_deep(int start) {
+static size_t rotate_left_deep(size_t start) {
   return doc_rotate_left_deep(parser.builder, start);
 }
 
@@ -1569,7 +1569,7 @@ static void object_initializer(void) {
         collection_initializer();
       } else if (!check(TOKEN_CLOSEBRACE)) {
         if (check(TOKEN_OPENBRACKET)) {
-          int index_start = group();
+          size_t index_start = group();
           token(TOKEN_OPENBRACKET,
                 "at the beginning of the index in a dictionary initializer");
           argument_list_inner(TOKEN_CLOSEBRACKET);
@@ -1587,7 +1587,7 @@ static void object_initializer(void) {
           dedent();
           rotate_left_deep(index_start);
         } else if (check_name_equals()) {
-          int name_start = group();
+          size_t name_start = group();
           name_equals("in an object member initializer");
           line_indent();
           end();
@@ -2741,7 +2741,7 @@ static bool check_local_variable_declaration(void) {
 
 static void local_variable_declaration(void) {
   group();
-  int local_type_start = group();
+  size_t local_type_start = group();
 
   if (match(TOKEN_KW_REF)) {
     space();

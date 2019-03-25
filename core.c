@@ -29,7 +29,7 @@ static void builder_init(struct DocBuilder *docs, int capacity) {
   docs->margin = 0;
   docs->indent = 4;
   docs->group_depth = 0;
-  docs->last_group_start = -1;
+  docs->last_group_start = (size_t)-1;
   docs->contents = malloc(sizeof(struct Doc) * docs->capacity);
 }
 
@@ -144,7 +144,7 @@ void doc_bracket_close(struct DocBuilder *builder, const char *right) {
   doc_end(builder);
 }
 
-static int doc_node_length(struct DocBuilder *builder, int start) {
+static size_t doc_node_length(struct DocBuilder *builder, size_t start) {
   struct Doc *doc = &(builder->contents[start]);
   assert(doc->type != DOC_END);
   if (doc->type == DOC_GROUP) {
@@ -154,10 +154,10 @@ static int doc_node_length(struct DocBuilder *builder, int start) {
   }
 }
 
-int doc_rotate_left(struct DocBuilder *builder, int start) {
-  int x_start = start;
-  int x_len = doc_node_length(builder, x_start);
-  int y_start = x_start + x_len;
+size_t doc_rotate_left(struct DocBuilder *builder, size_t start) {
+  size_t x_start = start;
+  size_t x_len = doc_node_length(builder, x_start);
+  size_t y_start = x_start + x_len;
 
   if (y_start == builder->count) {
     // Nothing to do: this node has no right sibling.
@@ -170,14 +170,14 @@ int doc_rotate_left(struct DocBuilder *builder, int start) {
 
   // Z starts out as everything in the group....
   assert(builder->contents[y_start].type == DOC_GROUP);
-  int z_len = builder->contents[y_start].length - 2;
+  size_t z_len = builder->contents[y_start].length - 2;
 
   // ...but Y is the first thing in the group...
   y_start = y_start + 1;
-  int y_len = doc_node_length(builder, y_start);
+  size_t y_len = doc_node_length(builder, y_start);
 
   // ...so Z is the remainder of stuff in the group.
-  int z_start = y_start + y_len;
+  size_t z_start = y_start + y_len;
   z_len -= y_len;
 
   // z_len might be zero, but it better not be negative!
@@ -211,8 +211,8 @@ int doc_rotate_left(struct DocBuilder *builder, int start) {
   return x_start + 1;
 }
 
-int doc_rotate_left_deep(struct DocBuilder *builder, int start) {
-  int new_start = start;
+size_t doc_rotate_left_deep(struct DocBuilder *builder, size_t start) {
+  size_t new_start = start;
   do {
     start = new_start;
     new_start = doc_rotate_left(builder, start);

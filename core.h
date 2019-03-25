@@ -34,7 +34,7 @@ struct DocBuilder {
   int margin;
   int indent;
   int group_depth;
-  int last_group_start;
+  size_t last_group_start;
 
   int capacity;
   struct Doc *contents;
@@ -72,12 +72,12 @@ void doc_bracket_close(struct DocBuilder *builder, const char *right);
  * Which is the tree rotated left one. This is useful if you want to make
  * something on the left bind tightly to the thing on the right.
  */
-int doc_rotate_left(struct DocBuilder *builder, int start);
+size_t doc_rotate_left(struct DocBuilder *builder, size_t start);
 
 /* doc_rotate_left_deep is just like doc_rotate_left, except it rotates as
  * deeply as it can.
  */
-int doc_rotate_left_deep(struct DocBuilder *builder, int start);
+size_t doc_rotate_left_deep(struct DocBuilder *builder, size_t start);
 
 void pretty(FILE *file, size_t width, struct Doc *docs, int length);
 void dump_docs(struct Doc *docs, int length);
