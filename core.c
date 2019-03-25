@@ -159,7 +159,7 @@ size_t doc_rotate_left(struct DocBuilder *builder, size_t start) {
   size_t x_len = doc_node_length(builder, x_start);
   size_t y_start = x_start + x_len;
 
-  if (y_start == builder->count) {
+  if (y_start == (size_t)(builder->count)) {
     // Nothing to do: this node has no right sibling.
     return x_start;
   }
@@ -178,10 +178,10 @@ size_t doc_rotate_left(struct DocBuilder *builder, size_t start) {
 
   // ...so Z is the remainder of stuff in the group.
   size_t z_start = y_start + y_len;
-  z_len -= y_len;
 
-  // z_len might be zero, but it better not be negative!
-  assert(z_len >= 0);
+  // z_len better encompass y_len.
+  assert(z_len >= y_len);
+  z_len -= y_len;
 
   // Shift x to the right one, displacing the previous group start. The end of x
   // will clobber the group start between x and y.
